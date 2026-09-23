@@ -14,9 +14,17 @@ Lokalny multiplayer 2–4 graczy na jednym ekranie: klawiatura **lub telefony ja
 
 ## 🚀 GitHub Pages
 
-Repozytorium zawiera workflow `.github/workflows/deploy.yml`, który przy każdym pushu na `main` buduje grę i publikuje ją na GitHub Pages.
+Gotowy workflow GitHub Actions leży w pliku **`deploy/github-pages.yml`**. Przy każdym pushu na `main` buduje grę i publikuje ją na GitHub Pages.
 
-Jednorazowo w ustawieniach repozytorium: **Settings → Pages → Build and deployment → Source: „GitHub Actions”**.
+Konfiguracja jednorazowa (2 kroki):
+
+1. Skopiuj plik do katalogu workflowów (bot nie ma uprawnień, żeby zrobić to sam):
+   ```bash
+   mkdir -p .github/workflows && cp deploy/github-pages.yml .github/workflows/deploy.yml
+   git add .github && git commit -m "Dodaj workflow GitHub Pages" && git push
+   ```
+   (albo w GitHub: **Add file → Create new file** → nazwa `.github/workflows/deploy.yml` → wklej zawartość `deploy/github-pages.yml`).
+2. W repozytorium: **Settings → Pages → Build and deployment → Source: „GitHub Actions”**.
 
 Gra będzie dostępna pod `https://<użytkownik>.github.io/StalowyFront/` (base URL jest ustawiany automatycznie z nazwy repozytorium).
 

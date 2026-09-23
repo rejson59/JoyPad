@@ -1,8 +1,9 @@
 import Peer, { type DataConnection } from 'peerjs';
 import {
-  ICE_SERVERS, PROTOCOL_VERSION, ZERO_INPUT, randomCode, roomIdFromCode,
+  PROTOCOL_VERSION, ZERO_INPUT, randomCode, roomIdFromCode,
   type HostMessage, type HostScreen, type PadFx, type PadInput, type PadMessage,
 } from './protocol';
+import { buildPeerOptions, signalingFromLocation, type SignalingConfig } from './signaling';
 
 export interface PadInfo {
   connId: string;
@@ -17,21 +18,42 @@ export interface SlotMeta { name: string; color: string; darkColor: string }
 
 export type HostStatus = 'idle' | 'connecting' | 'ready' | 'error';
 
+/** Łączność z serwerem sygnalizacji (brokerem). */
+export type SignalState = 'offline' | 'connecting' | 'online' | 'lost';
+
 export interface PadHostState {
   status: HostStatus;
   code: string;
   error: string | null;
   pads: PadInfo[];
+  signal: SignalState;
+  /** Liczba nieudanych prób rejestracji w serwerze. */
+  attempts: number;
+  /** Ostatni problem techniczny (pokazywany w panelu). */
+  lastError: string | null;
+  /** Dodatkowa informacja dla graczy, np. że kod został odświeżony. */
+  note: string | null;
+  signaling: string;
 }
 
 type Listener = (s: PadHostState) => void;
 
 const MAX_SLOTS = 4;
+/* Publiczny serwer bywa wolny — pierwsza rejestracja potrafi zająć kilkanaście sekund. */
+const REGISTER_TIMEOUT = 20_000;
+const MAX_ATTEMPTS_BEFORE_NOTICE = 3;
+/** Jak często sprawdzamy, czy pokój nadal widnieje na serwerze (czy telefony go znajdą). */
+const PROBE_INTERVAL = 30_000;
+/** Ile razy próbujemy tego samego kodu, zanim go zmienimy (QR). */
+const MAX_CONFLICT_RETRIES = 4;
 
 /**
  * Host (komputer): tworzy pokój w sieci PeerJS i przyjmuje telefony-pady.
  * Każdy telefon dostaje wolny slot gracza (0..3). Wejście z telefonu
  * przechowywane jest w `inputs` i czytane przez silnik gry co klatkę.
+ *
+ * Rejestracja w serwerze sygnalizacji jest ponawiana automatycznie i po cichu —
+ * kod pokoju (QR) zostaje ten sam, więc gracze nie muszą nic robić.
  */
 export class PadHost {
   private peer: Peer | null = null;
@@ -42,9 +64,22 @@ export class PadHost {
   private screen: HostScreen = 'menu';
   private hudTimers = new Map<string, number>();
 
+  private registerTimer = 0;
+  private retryTimer = 0;
+  private probeTimer = 0;
+  private probing = false;
+  private lastPadChangeAt = 0;
+  private attempts = 0;
+  private conflictRetries = 0;
+  private running = false;
+  private signaling: SignalingConfig = signalingFromLocation();
+
   status: HostStatus = 'idle';
   code = '';
   error: string | null = null;
+  signal: SignalState = 'offline';
+  lastError: string | null = null;
+  note: string | null = null;
 
   /** Aktualne wejście dla każdego slotu gracza. */
   readonly inputs: PadInput[] = Array.from({ length: MAX_SLOTS }, () => ({ ...ZERO_INPUT }));
@@ -60,7 +95,17 @@ export class PadHost {
   }
 
   snapshot(): PadHostState {
-    return { status: this.status, code: this.code, error: this.error, pads: [...this.pads.values()].sort((a, b) => a.slot - b.slot) };
+    return {
+      status: this.status,
+      code: this.code,
+      error: this.error,
+      pads: [...this.pads.values()].sort((a, b) => a.slot - b.slot),
+      signal: this.signal,
+      attempts: this.attempts,
+      lastError: this.lastError,
+      note: this.note,
+      signaling: this.signaling.label,
+    };
   }
 
   private emit() { const s = this.snapshot(); this.listeners.forEach(l => l(s)); }
@@ -104,64 +149,237 @@ export class PadHost {
   }
 
   start(preferredCode?: string) {
-    if (this.peer) return;
+    if (this.running) return;
+    this.running = true;
+    this.signaling = signalingFromLocation();
     this.status = 'connecting';
     this.error = null;
+    this.lastError = null;
+    this.note = null;
+    this.signal = 'connecting';
+    this.attempts = 0;
+    this.conflictRetries = 0;
     this.code = preferredCode || randomCode();
+    this.lastPadChangeAt = Date.now();
+    this.startProbe();
     this.emit();
-    this.openPeer(0);
+    this.openPeer();
   }
 
-  private openPeer(attempt: number) {
-    const peer = new Peer(roomIdFromCode(this.code), { debug: 0, config: { iceServers: ICE_SERVERS } });
+  private openPeer() {
+    const peer = new Peer(roomIdFromCode(this.code), buildPeerOptions(this.signaling));
     this.peer = peer;
+    this.armRegisterTimeout(peer);
+
     peer.on('open', () => {
+      if (this.peer !== peer) return;
+      clearTimeout(this.registerTimer);
+      this.registerTimer = 0;
+      this.signal = 'online';
       this.status = 'ready';
       this.error = null;
+      this.lastError = null;
+      this.attempts = 0;
+      this.conflictRetries = 0;
       this.emit();
     });
+
     peer.on('connection', (conn) => this.handleConn(conn));
+
     peer.on('disconnected', () => {
-      // Sygnalizacja padła (np. uśpienie) — spróbuj wrócić, istniejące połączenia WebRTC dalej żyją.
-      if (this.peer === peer && !peer.destroyed) {
-        setTimeout(() => { if (this.peer === peer && !peer.destroyed) peer.reconnect(); }, 1000);
-      }
-    });
-    peer.on('error', (err) => {
-      const type = (err as { type?: string }).type;
-      if (type === 'unavailable-id' && attempt < 3) {
-        peer.destroy();
-        this.code = randomCode();
-        this.emit();
-        this.openPeer(attempt + 1);
-        return;
-      }
-      if (type === 'peer-unavailable') return; // nie dotyczy hosta
-      this.status = 'error';
-      this.error = type === 'network' || type === 'server-error'
-        ? 'Brak połączenia z serwerem sygnalizacji. Sprawdź internet i spróbuj ponownie.'
-        : type === 'browser-incompatible'
-          ? 'Ta przeglądarka nie obsługuje WebRTC.'
-          : `Błąd sieci: ${type ?? err.message}`;
+      if (this.peer !== peer || peer.destroyed) return;
+      // Sygnalizacja padła (np. uśpienie komputera). Połączenia WebRTC z telefonami żyją dalej.
+      this.signal = 'lost';
       this.emit();
+      this.scheduleRetry('Utracono łączność z serwerem sygnalizacji.');
+    });
+
+    peer.on('error', (err) => {
+      if (this.peer !== peer) return;
+      this.handlePeerError(err);
     });
   }
 
+  private armRegisterTimeout(peer: Peer) {
+    clearTimeout(this.registerTimer);
+    // Publiczny serwer potrafi „myśleć” kilkanaście sekund — im więcej prób, tym dłużej czekamy.
+    const wait = Math.min(REGISTER_TIMEOUT + this.attempts * 5000, 35_000);
+    this.registerTimer = window.setTimeout(() => {
+      if (this.peer !== peer || peer.destroyed) return;
+      this.scheduleRetry('Serwer sygnalizacji nie odpowiedział w czasie rejestracji pokoju.');
+    }, wait);
+  }
+
+  private handlePeerError(err: unknown) {
+    const type = (err as { type?: string }).type;
+    if (type === 'peer-unavailable') return; // dotyczy tylko klientów, którzy nas szukali
+
+    if (type === 'browser-incompatible') {
+      this.running = false;
+      this.status = 'error';
+      this.signal = 'offline';
+      this.error = 'Ta przeglądarka nie obsługuje WebRTC — tryb „telefon jako pad” nie zadziała.';
+      this.emit();
+      this.destroyPeer();
+      return;
+    }
+
+    if (type === 'unavailable-id') {
+      // Ten kod jest już zarejestrowany — najczęściej przez nasze własne, „martwe” połączenie.
+      if (this.conflictRetries < MAX_CONFLICT_RETRIES) {
+        this.conflictRetries++;
+        this.scheduleRetry(`Kod ${this.code} jest chwilowo zajęty — próbuję ponownie.`, 2500);
+        return;
+      }
+      // Po kilku próbach zmieniamy kod (QR odświeży się automatycznie).
+      this.conflictRetries = 0;
+      this.code = randomCode();
+      this.note = 'Kod pokoju został odświeżony — na telefonach zeskanuj nowy QR.';
+      this.scheduleRetry('Kod pokoju był zajęty na serwerze.', 1200);
+      return;
+    }
+
+    const permanent = type === 'invalid-id' || type === 'invalid-key';
+    this.scheduleRetry(
+      type === 'network' || type === 'server-error' || type === 'socket-error' || type === 'socket-closed' || type === 'ssl-unavailable'
+        ? 'Brak łączności z serwerem sygnalizacji.'
+        : `Błąd serwera sygnalizacji${type ? ` (${type})` : ''}.`,
+      undefined,
+      permanent,
+    );
+  }
+
+  private scheduleRetry(reason: string, minDelay?: number, permanent = false) {
+    if (!this.running) return;
+    const peer = this.peer;
+    this.attempts++;
+    this.lastError = reason;
+    this.signal = this.attempts === 1 ? 'connecting' : 'lost';
+    if (this.attempts >= MAX_ATTEMPTS_BEFORE_NOTICE) {
+      this.error = 'Serwer sygnalizacji (broker) nie odpowiada — telefony nie zobaczą pokoju, dopóki połączenie nie wróci. Ponawiam automatycznie co kilka sekund.';
+    }
+    this.emit();
+
+    if (permanent) {
+      this.running = false;
+      this.status = 'error';
+      this.signal = 'offline';
+      this.error = reason;
+      this.destroyPeer();
+      this.emit();
+      return;
+    }
+
+    const wait = minDelay ?? Math.min(1800 * Math.pow(2, Math.min(this.attempts, 3) - 1), 10_000);
+    clearTimeout(this.retryTimer);
+    this.retryTimer = window.setTimeout(() => {
+      if (!this.running) return;
+      const padsConnected = this.conns.size > 0;
+      // Telefony grają? Nie zrywamy ich połączeń — wystarczy podnieść sygnalizację.
+      if (peer && this.peer === peer && !peer.destroyed && padsConnected && peer.disconnected) {
+        try {
+          peer.reconnect();
+          this.armRegisterTimeout(peer);
+          return;
+        } catch { /* nie da się wrócić na tym obiekcie — budujemy pokój od nowa */ }
+      }
+      this.destroyPeer();
+      this.openPeer();
+    }, wait);
+  }
+
+  private startProbe() {
+    clearInterval(this.probeTimer);
+    this.probeTimer = window.setInterval(() => this.checkRegistration(), PROBE_INTERVAL);
+  }
+
+  /**
+   * Sprawdza, czy pokój nadal jest widoczny na serwerze sygnalizacji.
+   * Zdarza się, że socket „umiera” po cichu (serwer pada, zmienia się sieć) i wtedy
+   * komputer dalej pokazuje kod, którego żaden telefon nie znajdzie.
+   */
+  private checkRegistration() {
+    if (!this.running || this.probing || this.status !== 'ready') return;
+    if (Date.now() - this.lastPadChangeAt < 8000) return; // chwila po dołączeniu/odejściu telefonu
+    this.probing = true;
+
+    const roomId = roomIdFromCode(this.code);
+    let probe: Peer | null = null;
+    let timer = 0;
+
+    const finish = (verdict: 'alive' | 'dead' | 'unknown') => {
+      if (!probe) return;
+      const peer = probe;
+      probe = null;
+      this.probing = false;
+      clearTimeout(timer);
+      try { peer.destroy(); } catch { /* ignore */ }
+      if (verdict === 'dead' && this.running && this.status === 'ready') {
+        this.lastError = 'Pokój zniknął z serwera sygnalizacji — odświeżam rejestrację.';
+        this.signal = 'lost';
+        this.emit();
+        this.scheduleRetry('Pokój zniknął z serwera sygnalizacji.', 800);
+      }
+    };
+
+    try {
+      probe = new Peer(`sf-check-${randomTag()}`, buildPeerOptions(this.signaling));
+    } catch {
+      this.probing = false;
+      return;
+    }
+    timer = window.setTimeout(() => finish('unknown'), 12_000);
+
+    probe.on('open', () => {
+      if (!probe) return;
+      const conn = probe.connect(roomId, { reliable: true });
+      conn.on('open', () => finish('alive'));
+      conn.on('error', () => { /* czekamy na jednoznaczne peer-unavailable */ });
+    });
+    probe.on('error', (err) => {
+      const type = (err as { type?: string }).type;
+      if (type === 'peer-unavailable') finish('dead');
+      else if (type === 'unavailable-id') finish('unknown');
+    });
+  }
+
+  /** Kasuje stan i próbuje jeszcze raz (np. po kliknięciu „Spróbuj ponownie”). */
   restart() {
+    const code = this.code || undefined;
     this.stop();
-    this.start();
+    this.start(code);
   }
 
   stop() {
+    this.running = false;
+    clearTimeout(this.registerTimer);
+    clearTimeout(this.retryTimer);
+    clearInterval(this.probeTimer);
+    this.registerTimer = 0;
+    this.retryTimer = 0;
+    this.probeTimer = 0;
+    this.probing = false;
     for (const c of this.conns.values()) { try { c.close(); } catch { /* ignore */ } }
     this.conns.clear();
     this.pads.clear();
     this.inputs.forEach((_, i) => { this.inputs[i] = { ...ZERO_INPUT }; });
-    this.peer?.destroy();
-    this.peer = null;
+    this.destroyPeer();
     this.status = 'idle';
+    this.signal = 'offline';
+    this.attempts = 0;
+    this.conflictRetries = 0;
+    this.error = null;
+    this.lastError = null;
+    this.note = null;
     this.emit();
     this.onSlotsChanged?.(this.slots());
+  }
+
+  private destroyPeer() {
+    const peer = this.peer;
+    this.peer = null;
+    if (!peer) return;
+    try { peer.destroy(); } catch { /* ignore */ }
   }
 
   kick(connId: string) {
@@ -208,6 +426,7 @@ export class PadHost {
         this.inputs[slot] = { ...ZERO_INPUT };
         const meta = this.slotMeta[slot] ?? { name: `GRACZ ${slot + 1}`, color: '#fbbf24', darkColor: '#78350f' };
         this.send(id, { t: 'welcome', slot, ...meta, screen: this.screen });
+        this.lastPadChangeAt = Date.now();
         this.emit();
         this.onSlotsChanged?.(this.slots());
         break;
@@ -240,6 +459,7 @@ export class PadHost {
     if (p) {
       this.pads.delete(connId);
       this.inputs[p.slot] = { ...ZERO_INPUT };
+      this.lastPadChangeAt = Date.now();
       this.emit();
       this.onSlotsChanged?.(this.slots());
     }
@@ -249,6 +469,12 @@ export class PadHost {
     const c = this.conns.get(connId);
     if (c && c.open) { try { c.send(msg); } catch { /* ignore */ } }
   }
+}
+
+function randomTag(): string {
+  const arr = new Uint32Array(1);
+  crypto.getRandomValues(arr);
+  return arr[0].toString(36);
 }
 
 export const padHost = new PadHost();

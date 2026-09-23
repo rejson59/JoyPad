@@ -113,10 +113,31 @@ export const STUN_SERVERS: RTCIceServer[] = [
 ];
 
 /**
- * Darmowy przekaźnik Open Relay Project (Metered).
- * Ich stary, „na sztywno” wpisany użytkownik działa już coraz rzadziej, dlatego
- * generujemy jednorazowe dane logowania w schemacie `use-auth-secret`
- * (username = czas wygaśnięcia, credential = base64(HMAC‑SHA1(sekret, username))).
+ * Produkcyjny TURN można podać podczas budowania aplikacji:
+ *
+ *   VITE_TURN_URLS="turn:turn.example.com:3478,turns:turn.example.com:5349"
+ *   VITE_TURN_USERNAME="..."
+ *   VITE_TURN_CREDENTIAL="..."
+ *
+ * Dane TURN z definicji trafiają do przeglądarki (WebRTC musi je znać), dlatego
+ * najlepiej używać krótkotrwałego konta lub konta z limitem transferu.
+ */
+const CONFIGURED_TURN_URLS = (import.meta.env.VITE_TURN_URLS ?? '')
+  .split(/[\s,]+/)
+  .map((url: string) => url.trim())
+  .filter((url: string) => /^(turn|turns):/i.test(url));
+const CONFIGURED_TURN_USERNAME = (import.meta.env.VITE_TURN_USERNAME ?? '').trim();
+const CONFIGURED_TURN_CREDENTIAL = (import.meta.env.VITE_TURN_CREDENTIAL ?? '').trim();
+
+export function hasConfiguredTurn(): boolean {
+  return CONFIGURED_TURN_URLS.length > 0;
+}
+
+/**
+ * Awaryjny, współdzielony przekaźnik Open Relay Project (Metered).
+ * Współdzielona usługa nie gwarantuje dostępności. Generujemy krótkotrwałe
+ * dane logowania w schemacie `use-auth-secret` (username = czas wygaśnięcia,
+ * credential = base64(HMAC-SHA1(sekret, username))).
  */
 const OPEN_RELAY_HOST = 'staticauth.openrelay.metered.ca';
 const OPEN_RELAY_SECRET = 'openrelayprojectsecret';
@@ -124,6 +145,15 @@ const OPEN_RELAY_SECRET = 'openrelayprojectsecret';
 const OPEN_RELAY_FALLBACK_HOST = 'relay.metered.ca';
 
 export function turnServers(ttlSeconds = 12 * 3600, nowMs = Date.now()): RTCIceServer[] {
+  if (hasConfiguredTurn()) {
+    const configured: RTCIceServer = { urls: CONFIGURED_TURN_URLS };
+    // Część prywatnych serwerów działa w zaufanej sieci bez uwierzytelniania.
+    // Nie dopisuj pustych pól — Safari potrafi wtedy odrzucić cały wpis.
+    if (CONFIGURED_TURN_USERNAME) configured.username = CONFIGURED_TURN_USERNAME;
+    if (CONFIGURED_TURN_CREDENTIAL) configured.credential = CONFIGURED_TURN_CREDENTIAL;
+    return [configured];
+  }
+
   const username = String(Math.floor(nowMs / 1000) + ttlSeconds);
   const credential = toBase64(hmacSha1(OPEN_RELAY_SECRET, username));
 

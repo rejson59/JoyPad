@@ -7,7 +7,7 @@
  *  3. czy działa STUN (połączenie w tej samej sieci / publiczny adres),
  *  4. czy działa TURN (przekaźnik, gdy telefon jest np. na LTE).
  */
-import { STUN_SERVERS, turnServers, signalingFromLocation, type SignalingConfig } from './signaling';
+import { STUN_SERVERS, hasConfiguredTurn, turnServers, signalingFromLocation, type SignalingConfig } from './signaling';
 
 export type DiagStatus = 'running' | 'ok' | 'warn' | 'fail';
 
@@ -69,13 +69,17 @@ function collectTypesFromSdp(sdp: string): Map<string, number> {
   return out;
 }
 
-async function probeIce(iceServers: RTCIceServer[], waitMs: number): Promise<IceProbe> {
+async function probeIce(
+  iceServers: RTCIceServer[],
+  waitMs: number,
+  iceTransportPolicy: RTCIceTransportPolicy = 'all',
+): Promise<IceProbe> {
   const kinds = new Map<string, number>();
   const candidates: string[] = [];
   let pc: RTCPeerConnection | null = null;
   let probeError: string | undefined;
   try {
-    pc = new RTCPeerConnection({ iceServers });
+    pc = new RTCPeerConnection({ iceServers, iceTransportPolicy });
     const started = performance.now();
     pc.onicecandidate = (ev) => {
       const c = ev.candidate;
@@ -271,34 +275,25 @@ export async function runDiagnostics(
 
   /* 4. TURN (przekaźnik dla różnych sieci) ------------------------------------ */
   report({ id: 'turn', label: 'TURN (przekaźnik)', status: 'running', detail: 'pytam przekaźnik o miejsce…' });
-  const turn = await probeIce(turnServers(), 12_000);
+  // Wymuszamy relay. Bez tego każda próba TURN zbiera też host/srflx ze zwykłej
+  // sieci i raportuje mylące „wykryto host, srflx”, choć przekaźnik nie zadziałał.
+  const turn = await probeIce(turnServers(), 12_000, 'relay');
   const relay = turn.kinds.get('relay');
-  // Czasem TURN zwraca prflx zamiast relay gdy jest za symetrycznym NAT — traktuj jako częściowy sukces
-  const prflx = turn.kinds.get('prflx');
+  const dedicatedTurn = hasConfiguredTurn();
   if (relay !== undefined) {
-    push({ id: 'turn', label: 'TURN (przekaźnik)', status: 'ok', detail: `Przekaźnik gotowy w ${ms(relay)}.` });
-  } else if (prflx !== undefined) {
     push({
-      id: 'turn', label: 'TURN (przekaźnik)', status: 'warn',
-      detail: `Wykryto kandydata prflx w ${ms(prflx)}, ale brak relay — NAT może być restrykcyjny.`,
-      hint: 'Połączenie może działać w tej samej sieci Wi‑Fi, ale między różnymi sieciami (LTE) może wymagać pełnego TURN. Spróbuj przełączyć oba urządzenia na tę samą sieć.',
+      id: 'turn', label: 'TURN (przekaźnik)', status: 'ok',
+      detail: `${dedicatedTurn ? 'Skonfigurowany' : 'Awaryjny'} przekaźnik gotowy w ${ms(relay)}.`,
     });
   } else {
-    // Jeśli mamy przynajmniej srflx/host, TURN nie jest krytyczny dla tej samej sieci
-    const hasAny = turn.kinds.size > 0;
-    if (hasAny) {
-      push({
-        id: 'turn', label: 'TURN (przekaźnik)', status: 'warn',
-        detail: `Darmowy przekaźnik nie odpowiedział — wykryto jednak ${[...turn.kinds.keys()].join(', ')}.`,
-        hint: 'Gdy telefon jest w innej sieci niż komputer (np. LTE), połączenie może się nie udać. Najpewniejsze rozwiązanie: ta sama sieć Wi‑Fi.',
-      });
-    } else {
-      push({
-        id: 'turn', label: 'TURN (przekaźnik)', status: 'warn',
-        detail: 'Darmowy przekaźnik nie odpowiedział.',
-        hint: 'Gdy telefon jest w innej sieci niż komputer (np. LTE), połączenie może się nie udać. Najpewniejsze rozwiązanie: ta sama sieć Wi‑Fi. Darmowe przekaźniki bywają przeciążone — spróbuj ponownie za chwilę.',
-      });
-    }
+    const error = turn.error ? ` (${turn.error})` : '';
+    push({
+      id: 'turn', label: 'TURN (przekaźnik)', status: 'warn',
+      detail: `${dedicatedTurn ? 'Skonfigurowany' : 'Współdzielony darmowy'} przekaźnik nie odpowiedział${error}.`,
+      hint: dedicatedTurn
+        ? 'Sprawdź adres, port, transport oraz dane logowania TURN. Do połączeń między Wi‑Fi i LTE serwer musi zwrócić kandydata relay.'
+        : 'Połączenie bez TURN nadal może zadziałać bezpośrednio, szczególnie w tej samej sieci Wi‑Fi. Aby niezawodnie łączyć Wi‑Fi z LTE, skonfiguruj własny TURN podczas wdrożenia.',
+    });
   }
 
   return results;

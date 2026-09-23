@@ -30,6 +30,11 @@ jobs:
         run: npm run build
         env:
           VITE_BASE: /${{ github.event.repository.name }}/
+          # Opcjonalne sekrety repozytorium. Gdy nie są ustawione, aplikacja
+          # korzysta ze współdzielonego (i mniej niezawodnego) Open Relay.
+          VITE_TURN_URLS: ${{ secrets.VITE_TURN_URLS }}
+          VITE_TURN_USERNAME: ${{ secrets.VITE_TURN_USERNAME }}
+          VITE_TURN_CREDENTIAL: ${{ secrets.VITE_TURN_CREDENTIAL }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -105,8 +105,11 @@ export function signalingFromLocation(): SignalingConfig {
 
 /** STUN wystarcza, gdy komputer i telefon są w tej samej sieci (Wi‑Fi/hotspot). */
 export const STUN_SERVERS: RTCIceServer[] = [
-  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302', 'stun:stun3.l.google.com:19302', 'stun:stun4.l.google.com:19302'] },
   { urls: 'stun:stun.cloudflare.com:3478' },
+  { urls: 'stun:stun.services.mozilla.com' },
+  { urls: 'stun:global.stun.twilio.com:3478' },
+  { urls: 'stun:stun.nextcloud.com:443' },
 ];
 
 /**
@@ -117,6 +120,8 @@ export const STUN_SERVERS: RTCIceServer[] = [
  */
 const OPEN_RELAY_HOST = 'staticauth.openrelay.metered.ca';
 const OPEN_RELAY_SECRET = 'openrelayprojectsecret';
+// Dodatkowy host Open Relay (alias używany przez część klientów / nowsza infrastruktura Metered)
+const OPEN_RELAY_FALLBACK_HOST = 'relay.metered.ca';
 
 export function turnServers(ttlSeconds = 12 * 3600, nowMs = Date.now()): RTCIceServer[] {
   const username = String(Math.floor(nowMs / 1000) + ttlSeconds);
@@ -124,18 +129,29 @@ export function turnServers(ttlSeconds = 12 * 3600, nowMs = Date.now()): RTCIceS
 
   return [
     {
-      urls: [`turn:${OPEN_RELAY_HOST}:443`, `turn:${OPEN_RELAY_HOST}:443?transport=tcp`, `turns:${OPEN_RELAY_HOST}:443`],
+      urls: [
+        `turn:${OPEN_RELAY_HOST}:443`,
+        `turn:${OPEN_RELAY_HOST}:443?transport=tcp`,
+        `turns:${OPEN_RELAY_HOST}:443`,
+        `turns:${OPEN_RELAY_HOST}:443?transport=tcp`,
+      ],
       username,
       credential,
     },
     {
-      urls: [`turn:${OPEN_RELAY_HOST}:80?transport=tcp`],
+      urls: [`turn:${OPEN_RELAY_HOST}:80`, `turn:${OPEN_RELAY_HOST}:80?transport=tcp`, `turns:${OPEN_RELAY_HOST}:80`],
+      username,
+      credential,
+    },
+    // Alias Metered (czasem odpowiada, gdy staticauth nie odpowiada)
+    {
+      urls: [`turn:${OPEN_RELAY_FALLBACK_HOST}:80`, `turn:${OPEN_RELAY_FALLBACK_HOST}:443`, `turn:${OPEN_RELAY_FALLBACK_HOST}:443?transport=tcp`, `turns:${OPEN_RELAY_FALLBACK_HOST}:443`],
       username,
       credential,
     },
     // Ostatnia deska ratunku: publiczne, statyczne konto Open Relay (u części osób wciąż działa).
     {
-      urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turns:openrelay.metered.ca:443'],
+      urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp', 'turns:openrelay.metered.ca:443'],
       username: 'openrelayproject',
       credential: 'openrelayproject',
     },

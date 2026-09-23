@@ -74,10 +74,7 @@ export type HostMessage =
 
 export const PROTOCOL_VERSION = 1;
 
-/** Serwery ICE. STUN wystarcza w tej samej sieci Wi‑Fi / hotspocie z telefonu. */
-export const ICE_SERVERS: RTCIceServer[] = [
-  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
-  { urls: 'stun:stun.cloudflare.com:3478' },
-  // Publiczny, darmowy TURN (Open Relay) — awaryjnie, gdy telefon jest np. na LTE za restrykcyjnym NAT-em.
-  { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turns:openrelay.metered.ca:443'], username: 'openrelayproject', credential: 'openrelayproject' },
-];
+/**
+ * Ustawienia sieciowe (serwer sygnalizacji + ICE) mieszkają w `./signaling` —
+ * host i telefon muszą mieć dokładnie takie same, inaczej się nie znajdą.
+ */

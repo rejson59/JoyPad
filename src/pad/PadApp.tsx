@@ -3,6 +3,7 @@ import { Crosshair, Gamepad2, Heart, Loader2, LogOut, Maximize2, Pause, Shield, 
 import { padClient, type PadClientState } from '../net/padClient';
 import { CODE_LENGTH, normalizeCode, padCodeFromHash, type PadFx } from '../net/protocol';
 import { Joystick } from './Joystick';
+import { ConnectionCheck } from './ConnectionCheck';
 
 const LS_NICK = 'sf_pad_nick';
 const LS_CODE = 'sf_pad_code';
@@ -138,7 +139,8 @@ export default function PadApp() {
 
   /* ---------- Connection screen ---------- */
   if (st.status !== 'connected') {
-    const busy = st.status === 'connecting';
+    // „lost” też jest zajęte — klient sam próbuje wrócić do gry.
+    const busy = st.status === 'connecting' || st.status === 'lost';
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-[#0a0a0b] px-5 py-8 text-white">
         <div className="hazard-stripes fixed left-0 right-0 top-0 h-2 opacity-80" />
@@ -182,10 +184,31 @@ export default function PadApp() {
             {busy ? <><Loader2 className="h-5 w-5 animate-spin" /> ŁĄCZENIE…</> : <><Wifi className="h-5 w-5" /> POŁĄCZ</>}
           </button>
 
-          {(st.status === 'error' || st.status === 'rejected' || st.status === 'lost') && (
+          {busy && (
+            <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100">
+              <div className="font-bold leading-snug">{st.progress || 'Łączę…'}</div>
+              <div className="mt-1 text-[11px] text-amber-200/70">
+                {st.elapsed > 0 && <>Czas: {st.elapsed} s • </>}
+                Serwer: {st.signaling}
+              </div>
+              <button
+                onClick={() => padClient.disconnect()}
+                className="mt-2 rounded-lg border border-white/20 bg-black/30 px-2.5 py-1 text-[11px] font-bold text-zinc-200 hover:bg-black/50"
+              >
+                PRZERWIJ
+              </button>
+            </div>
+          )}
+
+          {!busy && (st.status === 'error' || st.status === 'rejected') && (
             <div className="mt-3 flex items-start gap-2 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-200">
               <WifiOff className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{st.status === 'lost' ? 'Utracono połączenie z komputerem.' : st.error}</span>
+              <div className="min-w-0">
+                <div className="whitespace-pre-line leading-snug">{st.error}</div>
+                {st.lastFailure && st.lastFailure !== st.error && (
+                  <div className="mt-1 text-[10px] text-red-300/70">Szczegóły: {st.lastFailure}</div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -194,7 +217,15 @@ export default function PadApp() {
           <p>1. Na komputerze otwórz grę i kliknij <b className="text-zinc-300">📱 Telefon jako pad</b>.</p>
           <p>2. Zeskanuj kod QR albo wpisz tutaj 5‑znakowy kod.</p>
           <p>3. Telefon dostanie wolny slot gracza. Steruj joystickiem, strzelaj wielkim przyciskiem.</p>
+          <p className="pt-1 text-zinc-400">
+            Łączenie idzie przez internet, a potem bezpośrednio między urządzeniami.
+            Najszybciej i najpewniej działa, gdy komputer i telefon są w tej samej sieci Wi‑Fi.
+          </p>
           <a href="#" onClick={() => { location.hash = ''; }} className="mt-2 inline-block text-zinc-400 underline">← Wróć do gry (tryb komputera)</a>
+        </div>
+
+        <div className="mt-4 w-full max-w-sm">
+          <ConnectionCheck />
         </div>
       </div>
     );

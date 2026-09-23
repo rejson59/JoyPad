@@ -10,6 +10,13 @@ Lokalny multiplayer 2–4 graczy na jednym ekranie: klawiatura **lub telefony ja
   - Lewa strona: analogowy joystick (jazda + obrót), prawa: wielki przycisk **OGIEŃ** (przytrzymaj = seria).
   - Wibracje przy strzale, trafieniu, zniszczeniu i bonusach; HUD z HP, fragami i czasem.
   - Połączenie działa peer‑to‑peer (WebRTC / PeerJS). Komputer i telefon potrzebują internetu, ale mogą być w różnych sieciach. Najniższe opóźnienia — gdy są w tej samej sieci Wi‑Fi.
+  - Łączenie jest cierpliwe i samo się naprawia: każdy etap (serwer sygnalizacji → pokój → WebRTC) ma własny limit czasu,
+    nieudane próby są ponawiane z rosnącym opóźnieniem, a zerwane połączenie telefon odbudowuje automatycznie.
+    Kod pokoju nie zmienia się przy ponowieniach, więc raz zeskanowany QR pozostaje ważny.
+  - Gdy coś nie działa, w panelu na komputerze i na ekranie telefonu jest przycisk **🩺 Sprawdź połączenie** —
+    testuje przeglądarkę, serwer sygnalizacji, STUN i TURN, i mówi wprost, co blokuje łączność.
+  - Własny PeerServer (gdyby publiczny broker był niedostępny): dodaj `?srv=host:port/ścieżka` do adresu gry, np.
+    `…/StalowyFront/?srv=peer.mojadomena.pl:443/peerjs`. Ustawienie zapamiętuje się na telefonie (`#pad=KOD&srv=…` też działa).
 - Klawiatura wciąż działa równolegle: gracz 1 = `WSAD` + `Q/Spacja`, gracz 2 = strzałki + `Enter`, gracz 3 = `TFGH` + `R`, gracz 4 = `IJKL` + `U`. `P`/`ESC` = pauza.
 
 ## 🚀 GitHub Pages

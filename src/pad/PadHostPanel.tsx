@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { Copy, Check, Loader2, RefreshCw, Smartphone, Wifi, WifiOff, X, Power } from 'lucide-react';
 import { padHost, type PadHostState } from '../net/padHost';
 import { padUrlFor } from '../net/protocol';
+import { ConnectionCheck } from './ConnectionCheck';
 import type { PlayerConfig } from '../game/types';
 
 export function usePadHost() {
@@ -65,6 +66,18 @@ export function PadHostPanel({ players, compact, onClose }: Props) {
         </div>
       </div>
 
+      {/* Stan serwera sygnalizacji — to on odpowiada za „przekroczony czas łączenia” */}
+      {s.status !== 'error' && (
+        <div className={`mt-2 flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold ${s.signal === 'online' ? 'border-green-500/40 bg-green-500/10 text-green-300' : 'border-amber-500/40 bg-amber-500/10 text-amber-200'}`}>
+          {s.signal === 'online'
+            ? <><Wifi className="h-3.5 w-3.5" /> Serwer sygnalizacji połączony — telefony mogą dołączać</>
+            : <><Loader2 className="h-3.5 w-3.5 animate-spin" /> {s.signal === 'lost' ? 'Utracono łączność z serwerem — ponawiam automatycznie' : 'Łączę z serwerem sygnalizacji…'}{s.attempts > 0 && ` (próba ${s.attempts + 1})`}</>}
+        </div>
+      )}
+      {s.note && (
+        <div className="mt-2 rounded-lg border border-sky-500/40 bg-sky-500/10 px-2.5 py-1.5 text-[11px] text-sky-200">{s.note}</div>
+      )}
+
       <div className={`mt-3 grid gap-4 ${compact ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-[auto_1fr]'}`}>
         {/* QR + code */}
         <div className="flex flex-col items-center gap-2">
@@ -84,17 +97,25 @@ export function PadHostPanel({ players, compact, onClose }: Props) {
         <div className="min-w-0">
           {s.status === 'error' ? (
             <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-200">
-              {s.error}
+              <div className="whitespace-pre-line leading-snug">{s.error}</div>
+              {s.lastError && s.lastError !== s.error && (
+                <div className="mt-1 text-[10px] text-red-300/70">Szczegóły: {s.lastError}</div>
+              )}
               <button onClick={() => padHost.restart()} className="mt-2 flex items-center gap-1 rounded-lg bg-red-500/20 px-2 py-1 font-bold"><RefreshCw className="h-3 w-3" /> Spróbuj ponownie</button>
+              <div className="mt-2"><ConnectionCheck compact /></div>
             </div>
           ) : (
             <>
               <div className="text-xs leading-relaxed text-zinc-400">
                 Na telefonie zeskanuj QR <b className="text-zinc-200">albo</b> wejdź na tę stronę i wpisz kod. Każdy telefon zajmuje pierwszy wolny slot gracza.
+                Łączenie idzie przez internet (broker), a gra bezpośrednio między urządzeniami — <b className="text-zinc-300">najpewniej działa ta sama sieć Wi‑Fi</b>.
               </div>
               <div className="mt-2 flex items-center gap-1.5">
                 <input readOnly value={url} className="font-mono2 min-w-0 flex-1 truncate rounded-lg border border-white/10 bg-black/50 px-2 py-1.5 text-[11px] text-zinc-300" onFocus={e => e.currentTarget.select()} />
                 <button onClick={copy} className="rounded-lg border border-white/15 bg-white/5 p-1.5 text-zinc-300 hover:bg-white/10">{copied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}</button>
+              </div>
+              <div className="mt-3">
+                <ConnectionCheck compact />
               </div>
             </>
           )}

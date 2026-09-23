@@ -5,9 +5,11 @@
  *  1. czy przeglądarka ma WebRTC i czy strona działa po HTTPS,
  *  2. czy odpowiada serwer sygnalizacji (zwykłe HTTP + gniazdo WebSocket),
  *  3. czy działa STUN (połączenie w tej samej sieci / publiczny adres),
- *  4. czy działa TURN (przekaźnik, gdy telefon jest np. na LTE).
+ *  4. czy działa TURN (przekaźnik, gdy telefon jest np. na LTE),
+ *  5. czy działa awaryjny przekaźnik (broker MQTT — łączność „zawsze i wszędzie”).
  */
-import { STUN_SERVERS, hasConfiguredTurn, turnServers, signalingFromLocation, type SignalingConfig } from './signaling';
+import { STUN_SERVERS, hasConfiguredTurn, hasTurnOverride, turnServers, signalingFromLocation, type SignalingConfig } from './signaling';
+import { RELAY_BROKERS, RelayChannel, relayTopicFor } from './relay';
 
 export type DiagStatus = 'running' | 'ok' | 'warn' | 'fail';
 
@@ -141,6 +143,39 @@ async function probeIce(
     try { pc?.close(); } catch { /* ignore */ }
   }
   return { kinds, candidates, error: probeError };
+}
+
+/**
+ * Test awaryjnego przekaźnika: łączymy się z brokerem (kolejno), subskrybujemy
+ * temat i weryfikujemy end-to-end — publikujemy wiadomość i czekamy, aż broker
+ * odda ją do własnej subskrypcji.
+ */
+async function probeRelay(): Promise<{ label: string; took: number } | null> {
+  for (const url of RELAY_BROKERS) {
+    let channel: RelayChannel | null = null;
+    try {
+      const started = performance.now();
+      channel = await RelayChannel.connect(url, relayTopicFor('DIAG'), 8_000);
+      const echoed = await new Promise<boolean>((resolve) => {
+        const timer = setTimeout(() => resolve(false), 3_500);
+        channel!.onBatch((items) => {
+          if (items.some((i) => i.cid === 'sf-diag')) {
+            clearTimeout(timer);
+            resolve(true);
+          }
+        });
+        channel!.publish([{ cid: 'sf-diag', m: 1 }]);
+      });
+      if (echoed) {
+        return { label: url.replace(/^wss:\/\//, ''), took: performance.now() - started };
+      }
+    } catch {
+      /* spróbuj następnego brokera */
+    } finally {
+      channel?.close();
+    }
+  }
+  return null;
 }
 
 const ms = (v: number) => `${Math.round(v)} ms`;
@@ -278,21 +313,38 @@ export async function runDiagnostics(
   // Wymuszamy relay. Bez tego każda próba TURN zbiera też host/srflx ze zwykłej
   // sieci i raportuje mylące „wykryto host, srflx”, choć przekaźnik nie zadziałał.
   const turn = await probeIce(turnServers(), 12_000, 'relay');
-  const relay = turn.kinds.get('relay');
-  const dedicatedTurn = hasConfiguredTurn();
-  if (relay !== undefined) {
+  const turnRelay = turn.kinds.get('relay');
+  const dedicatedTurn = hasConfiguredTurn() || hasTurnOverride();
+  if (turnRelay !== undefined) {
     push({
       id: 'turn', label: 'TURN (przekaźnik)', status: 'ok',
-      detail: `${dedicatedTurn ? 'Skonfigurowany' : 'Awaryjny'} przekaźnik gotowy w ${ms(relay)}.`,
+      detail: `${dedicatedTurn ? 'Skonfigurowany' : 'Wbudowany'} przekaźnik TURN gotowy w ${ms(turnRelay)}.`,
     });
   } else {
     const error = turn.error ? ` (${turn.error})` : '';
     push({
       id: 'turn', label: 'TURN (przekaźnik)', status: 'warn',
-      detail: `${dedicatedTurn ? 'Skonfigurowany' : 'Współdzielony darmowy'} przekaźnik nie odpowiedział${error}.`,
+      detail: `${dedicatedTurn ? 'Skonfigurowany' : 'Współdzielony darmowy'} przekaźnik TURN nie odpowiedział${error}.`,
       hint: dedicatedTurn
         ? 'Sprawdź adres, port, transport oraz dane logowania TURN. Do połączeń między Wi‑Fi i LTE serwer musi zwrócić kandydata relay.'
-        : 'Połączenie bez TURN nadal może zadziałać bezpośrednio, szczególnie w tej samej sieci Wi‑Fi. Aby niezawodnie łączyć Wi‑Fi z LTE, skonfiguruj własny TURN podczas wdrożenia.',
+        : 'To nie oznacza, że gra nie połączy różnych sieci — poniższy awaryjny przekaźnik łączy Wi‑Fi z LTE bez żadnej konfiguracji. Własny TURN da najszybsze łączenie (patrz README).',
+    });
+  }
+
+  /* 5. Awaryjny przekaźnik — łączenie „zawsze i wszędzie” ---------------------- */
+  report({ id: 'relay', label: 'Awaryjny przekaźnik (Wi‑Fi ↔ LTE)', status: 'running', detail: 'testuję publicznego brokera wiadomości…' });
+  const relay = await probeRelay();
+  if (relay) {
+    push({
+      id: 'relay', label: 'Awaryjny przekaźnik (Wi‑Fi ↔ LTE)', status: 'ok',
+      detail: `Przekaźnik gotowy w ${ms(relay.took)} (${relay.label}) — urządzenia w RÓŻNYCH sieciach też się połączą, nawet gdy WebRTC/TURN nie działa.`,
+      hint: 'To awaryjna ścieżka: gra leci przez nią tylko, gdy łączenie bezpośrednie nie przechodzi. Jest o kilkadziesiąt ms wolniejsza od WebRTC.',
+    });
+  } else {
+    push({
+      id: 'relay', label: 'Awaryjny przekaźnik (Wi‑Fi ↔ LTE)', status: 'fail',
+      detail: 'Żaden z publicznych brokerów nie odpowiedział (albo sieć je blokuje).',
+      hint: 'Bez przekaźnika (i bez TURN) łączenie między różnymi sieciami może nie zadziałać. Możliwe obejścia: własny TURN — dodaj ?turn=turn:turn.example.com:3478 (opcjonalnie + ?turnUser= i ?turnPass=) do adresu gry, albo sekret VITE_TURN_* przy wdrożeniu.',
     });
   }
 

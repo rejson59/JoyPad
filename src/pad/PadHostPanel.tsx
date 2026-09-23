@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { Copy, Check, Loader2, RefreshCw, Smartphone, Wifi, WifiOff, X, Power } from 'lucide-react';
+import { Antenna, Copy, Check, Loader2, RefreshCw, Smartphone, Wifi, WifiOff, X, Power } from 'lucide-react';
 import { padHost, type PadHostState } from '../net/padHost';
 import { padUrlFor } from '../net/protocol';
 import { ConnectionCheck } from './ConnectionCheck';
@@ -23,12 +23,15 @@ export function PadHostPanel({ players, compact, onClose }: Props) {
   const [qr, setQr] = useState<string>('');
   const [copied, setCopied] = useState(false);
   const url = s.code ? padUrlFor(s.code) : '';
+  // Kod jest użyteczny, gdy zarejestruje się w serwerze sygnalizacji,
+  // albo gdy działa awaryjny przekaźnik (telefony połączą się przez niego).
+  const codeUsable = s.status === 'ready' || s.relay === 'online';
 
   useEffect(() => {
-    if (!s.code || s.status !== 'ready') { setQr(''); return; }
+    if (!s.code || !codeUsable) { setQr(''); return; }
     QRCode.toDataURL(url, { margin: 1, width: 320, color: { dark: '#0a0a0b', light: '#fbbf24' }, errorCorrectionLevel: 'M' })
       .then(setQr).catch(() => setQr(''));
-  }, [s.code, s.status, url]);
+  }, [s.code, codeUsable, url]);
 
   const copy = async () => {
     try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* ignore */ }
@@ -43,7 +46,8 @@ export function PadHostPanel({ players, compact, onClose }: Props) {
         </div>
         <p className="mt-2 text-xs leading-relaxed text-zinc-400">
           Każdy gracz może sterować czołgiem ze swojego telefonu — joystick analogowy + przycisk ognia z wibracjami.
-          Telefon i komputer potrzebują internetu (mogą być w różnych sieciach). Połączenie działa bezpośrednio (WebRTC).
+          Telefon i komputer potrzebują internetu — mogą być nawet w <b className="text-zinc-300">różnych sieciach</b> (Wi‑Fi ↔ LTE):
+          gdy łączenie bezpośrednie (WebRTC) nie przechodzi, gra automatycznie używa awaryjnego przekaźnika.
         </p>
         <button
           onClick={() => padHost.start()}
@@ -74,6 +78,14 @@ export function PadHostPanel({ players, compact, onClose }: Props) {
             : <><Loader2 className="h-3.5 w-3.5 animate-spin" /> {s.signal === 'lost' ? 'Utracono łączność z serwerem — ponawiam automatycznie' : 'Łączę z serwerem sygnalizacji…'}{s.attempts > 0 && ` (próba ${s.attempts + 1})`}</>}
         </div>
       )}
+      {/* Awaryjny przekaźnik — łączenie między sieciami (Wi‑Fi ↔ LTE) */}
+      {s.status !== 'error' && (
+        <div className={`mt-1 flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold ${s.relay === 'online' ? 'border-green-500/40 bg-green-500/10 text-green-300' : 'border-amber-500/40 bg-amber-500/10 text-amber-200'}`}>
+          {s.relay === 'online'
+            ? <><Antenna className="h-3.5 w-3.5" /> Awaryjny przekaźnik aktywny — różne sieci (Wi‑Fi ↔ LTE) też zadziałają</>
+            : <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Łączenie awaryjnego przekaźnika…</>}
+        </div>
+      )}
       {s.note && (
         <div className="mt-2 rounded-lg border border-sky-500/40 bg-sky-500/10 px-2.5 py-1.5 text-[11px] text-sky-200">{s.note}</div>
       )}
@@ -82,7 +94,7 @@ export function PadHostPanel({ players, compact, onClose }: Props) {
         {/* QR + code */}
         <div className="flex flex-col items-center gap-2">
           <div className="flex h-44 w-44 items-center justify-center overflow-hidden rounded-xl border-4 border-amber-400/70 bg-amber-400">
-            {s.status === 'ready' && qr ? (
+            {codeUsable && qr ? (
               <img src={qr} alt="QR" className="h-full w-full" />
             ) : s.status === 'error' ? (
               <WifiOff className="h-10 w-10 text-black/70" />
@@ -108,7 +120,8 @@ export function PadHostPanel({ players, compact, onClose }: Props) {
             <>
               <div className="text-xs leading-relaxed text-zinc-400">
                 Na telefonie zeskanuj QR <b className="text-zinc-200">albo</b> wejdź na tę stronę i wpisz kod. Każdy telefon zajmuje pierwszy wolny slot gracza.
-                Łączenie idzie przez internet (broker), a gra bezpośrednio między urządzeniami — <b className="text-zinc-300">najpewniej działa ta sama sieć Wi‑Fi</b>.
+                Gra leci bezpośrednio między urządzeniami (WebRTC). Gdy sieć blokuje łączenie bezpośrednie,
+                gra automatycznie przełącza się na awaryjny przekaźnik — <b className="text-zinc-300">różne sieci (Wi‑Fi ↔ LTE) też działają</b>.
               </div>
               <div className="mt-2 flex items-center gap-1.5">
                 <input readOnly value={url} className="font-mono2 min-w-0 flex-1 truncate rounded-lg border border-white/10 bg-black/50 px-2 py-1.5 text-[11px] text-zinc-300" onFocus={e => e.currentTarget.select()} />
@@ -129,7 +142,9 @@ export function PadHostPanel({ players, compact, onClose }: Props) {
                     <span className="h-2.5 w-2.5 rounded-full" style={{ background: p.color, boxShadow: pad ? `0 0 8px ${p.color}` : undefined }} />
                     <span className="font-bold" style={{ color: pad ? p.color : '#71717a' }}>{p.name}</span>
                     {pad ? (
-                      <span className="flex items-center gap-1 text-zinc-300"><Wifi className="h-3 w-3 text-green-400" /> {pad.nick}</span>
+                      <span className="flex items-center gap-1 text-zinc-300" title={pad.via === 'relay' ? 'Łączy przez awaryjny przekaźnik (Internet)' : 'Łączy bezpośrednio (WebRTC)'}>
+                        {pad.via === 'relay' ? <Antenna className="h-3 w-3 text-sky-400" /> : <Wifi className="h-3 w-3 text-green-400" />} {pad.nick}
+                      </span>
                     ) : (
                       <span className="text-zinc-600">{p.enabled ? (p.isBot ? 'bot' : 'klawiatura — czeka na telefon') : 'wyłączony'}</span>
                     )}

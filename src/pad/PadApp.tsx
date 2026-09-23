@@ -219,7 +219,8 @@ export default function PadApp() {
           <p>3. Telefon dostanie wolny slot gracza. Steruj joystickiem, strzelaj wielkim przyciskiem.</p>
           <p className="pt-1 text-zinc-400">
             Łączenie idzie przez internet, a potem bezpośrednio między urządzeniami.
-            Najszybciej i najpewniej działa, gdy komputer i telefon są w tej samej sieci Wi‑Fi.
+            Gdy połączenie bezpośrednie nie przechodzi (np. telefon na LTE), gra automatycznie
+            używa awaryjnego przekaźnika — <b className="text-zinc-300">różne sieci (Wi‑Fi ↔ LTE) też działają</b>.
           </p>
           <a href="#" onClick={() => { location.hash = ''; }} className="mt-2 inline-block text-zinc-400 underline">← Wróć do gry (tryb komputera)</a>
         </div>
@@ -257,6 +258,11 @@ export default function PadApp() {
           <span className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-bold ${st.latency < 80 ? 'text-green-400' : st.latency < 160 ? 'text-amber-300' : 'text-red-400'}`}>
             <Signal className="h-3 w-3" />{st.latency} ms
           </span>
+          {st.viaRelay && (
+            <span className="rounded bg-sky-500/20 px-1.5 py-0.5 text-[10px] font-bold text-sky-300" title="Łączenie przez awaryjny przekaźnik (bezpośrednie WebRTC nie przeszło)">
+              przekaźnik
+            </span>
+          )}
           <button onClick={goFullscreen} className="rounded-lg border border-white/15 bg-white/5 p-1.5 text-zinc-300"><Maximize2 className="h-4 w-4" /></button>
           <button onClick={() => { padClient.requestPause(); vibrate(15); }} className="rounded-lg border border-white/15 bg-white/5 p-1.5 text-zinc-300"><Pause className="h-4 w-4" /></button>
           <button onClick={() => { padClient.disconnect(); }} className="rounded-lg border border-red-500/40 bg-red-500/10 p-1.5 text-red-300"><LogOut className="h-4 w-4" /></button>

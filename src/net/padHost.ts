@@ -4,6 +4,8 @@ import {
   type HostMessage, type HostScreen, type PadFx, type PadInput, type PadMessage,
 } from './protocol';
 import { buildPeerOptions, signalingFromLocation, type SignalingConfig } from './signaling';
+import { WebrtcLink, type PadLink } from './links';
+import { HostRelayLink, RELAY_BROKERS, RelayChannel, relayTopicFor, type RelayItem } from './relay';
 
 export interface PadInfo {
   connId: string;
@@ -12,6 +14,10 @@ export interface PadInfo {
   connectedAt: number;
   lastSeen: number;
   latency: number;
+  /** Przez jaki transport leci ten pad. */
+  via: 'webrtc' | 'relay';
+  /** Stały identyfikator telefonu (localStorage na telefonie). */
+  pid?: string;
 }
 
 export interface SlotMeta { name: string; color: string; darkColor: string }
@@ -21,12 +27,16 @@ export type HostStatus = 'idle' | 'connecting' | 'ready' | 'error';
 /** Łączność z serwerem sygnalizacji (brokerem). */
 export type SignalState = 'offline' | 'connecting' | 'online' | 'lost';
 
+/** Łączność z awaryjnym przekaźnikiem (broker MQTT — łączność między sieciami). */
+export type RelayState = 'off' | 'connecting' | 'online';
+
 export interface PadHostState {
   status: HostStatus;
   code: string;
   error: string | null;
   pads: PadInfo[];
   signal: SignalState;
+  relay: RelayState;
   /** Liczba nieudanych prób rejestracji w serwerze. */
   attempts: number;
   /** Ostatni problem techniczny (pokazywany w panelu). */
@@ -46,6 +56,10 @@ const MAX_ATTEMPTS_BEFORE_NOTICE = 3;
 const PROBE_INTERVAL = 30_000;
 /** Ile razy próbujemy tego samego kodu, zanim go zmienimy (QR). */
 const MAX_CONFLICT_RETRIES = 4;
+/** Pad, który nic nie sygnalizuje dłużej niż to (telefon pinguje co 2 s), traktujemy jako rozłączony. */
+const STALE_PAD_MS = 10_000;
+/** Drugi „hello” z tego samego telefonu (inna ścieżka) ignorujemy, dopóki pierwsza jest świeża. */
+const PAD_SWITCH_GRACE_MS = 4_000;
 
 /**
  * Host (komputer): tworzy pokój w sieci PeerJS i przyjmuje telefony-pady.
@@ -54,11 +68,17 @@ const MAX_CONFLICT_RETRIES = 4;
  *
  * Rejestracja w serwerze sygnalizacji jest ponawiana automatycznie i po cichu —
  * kod pokoju (QR) zostaje ten sam, więc gracze nie muszą nic robić.
+ *
+ * Dodatkowo host stale podsłuchuje awaryjny przekaźnik (broker MQTT): gdy
+ * łączenie bezpośrednie (WebRTC) nie przechodzi — np. telefon na LTE za
+ * trudnym NAT — telefon i tak się łączy przez przekaźnik.
  */
 export class PadHost {
   private peer: Peer | null = null;
-  private conns = new Map<string, DataConnection>();
+  private conns = new Map<string, PadLink>();
   private pads = new Map<string, PadInfo>();
+  /** pid telefonu -> connId jego aktywnego pada (anti-duplicate slot). */
+  private padsByPid = new Map<string, string>();
   private listeners = new Set<Listener>();
   private slotMeta: SlotMeta[] = [];
   private screen: HostScreen = 'menu';
@@ -67,6 +87,7 @@ export class PadHost {
   private registerTimer = 0;
   private retryTimer = 0;
   private probeTimer = 0;
+  private sweepTimer = 0;
   private probing = false;
   private lastPadChangeAt = 0;
   private attempts = 0;
@@ -74,10 +95,19 @@ export class PadHost {
   private running = false;
   private signaling: SignalingConfig = signalingFromLocation();
 
+  /* Awaryjny przekaźnik (niezależny od serwera sygnalizacji). */
+  private relayChannel: RelayChannel | null = null;
+  /** Linki padów idących przez przekaźnik (cid -> link). */
+  private relayLinks = new Map<string, HostRelayLink>();
+  private relayTimer = 0;
+  private relayCursor = 0;
+  private relayToken = 0;
+
   status: HostStatus = 'idle';
   code = '';
   error: string | null = null;
   signal: SignalState = 'offline';
+  relay: RelayState = 'off';
   lastError: string | null = null;
   note: string | null = null;
 
@@ -101,6 +131,7 @@ export class PadHost {
       error: this.error,
       pads: [...this.pads.values()].sort((a, b) => a.slot - b.slot),
       signal: this.signal,
+      relay: this.relay,
       attempts: this.attempts,
       lastError: this.lastError,
       note: this.note,
@@ -138,7 +169,9 @@ export class PadHost {
     if (!p) return;
     const now = performance.now();
     const last = this.hudTimers.get(p.connId) ?? 0;
-    if (now - last < 120) return; // ~8 Hz wystarczy na telefon
+    // Przekaźnik ma ograniczony przepustowością ruch — HUD leci tam rzadziej.
+    const minGap = this.conns.get(p.connId)?.kind === 'relay' ? 300 : 120;
+    if (now - last < minGap) return; // ~8 Hz (120 ms) / ~3 Hz (300 ms) wystarczy na telefon
     this.hudTimers.set(p.connId, now);
     this.send(p.connId, hud);
   }
@@ -162,6 +195,8 @@ export class PadHost {
     this.code = preferredCode || randomCode();
     this.lastPadChangeAt = Date.now();
     this.startProbe();
+    this.startSweep();
+    this.startRelay();
     this.emit();
     this.openPeer();
   }
@@ -235,6 +270,8 @@ export class PadHost {
       this.conflictRetries = 0;
       this.code = randomCode();
       this.note = 'Kod pokoju został odświeżony — na telefonach zeskanuj nowy QR.';
+      // Temat przekaźnika zależy od kodu — przełączamy go razem z pokojem.
+      this.startRelay();
       this.scheduleRetry('Kod pokoju był zajęty na serwerze.', 1200);
       return;
     }
@@ -256,7 +293,9 @@ export class PadHost {
     this.lastError = reason;
     this.signal = this.attempts === 1 ? 'connecting' : 'lost';
     if (this.attempts >= MAX_ATTEMPTS_BEFORE_NOTICE) {
-      this.error = 'Serwer sygnalizacji (broker) nie odpowiada — telefony nie zobaczą pokoju, dopóki połączenie nie wróci. Ponawiam automatycznie co kilka sekund.';
+      this.error = this.relay === 'online'
+        ? 'Serwer sygnalizacji nie odpowiada — bezpośrednie łączenie z telefonami nie zadziała, ALE awaryjny przekaźnik jest aktywny: telefony będą łączyć się przez niego (Wi‑Fi ↔ LTE).'
+        : 'Serwer sygnalizacji (broker) nie odpowiada — telefony nie zobaczą pokoju, dopóki połączenie nie wróci. Łącze też awaryjny przekaźnik… Ponawiam automatycznie co kilka sekund.';
     }
     this.emit();
 
@@ -294,10 +333,10 @@ export class PadHost {
   }
 
   /**
-   * Sprawdza, czy pokój nadal jest widoczny na serwerze sygnalizacji.
-   * Zdarza się, że socket „umiera” po cichu (serwer pada, zmienia się sieć) i wtedy
-   * komputer dalej pokazuje kod, którego żaden telefon nie znajdzie.
-   */
+ * Sprawdza, czy pokój nadal jest widoczny na serwerze sygnalizacji.
+ * Zdarza się, że socket „umiera” po cichu (serwer pada, zmienia się sieć) i wtedy
+ * komputer dalej pokazuje kod, którego żaden telefon nie znajdzie.
+ */
   private checkRegistration() {
     if (!this.running || this.probing || this.status !== 'ready') return;
     if (Date.now() - this.lastPadChangeAt < 8000) return; // chwila po dołączeniu/odejściu telefonu
@@ -343,6 +382,109 @@ export class PadHost {
     });
   }
 
+  /* --------------------- awaryjny przekaźnik --------------------------- */
+
+  /**
+   * Przekaźnik jest aktywny cały czas, gdy pokój działa — niezależnie od tego,
+   * czy serwer sygnalizacji odpowiada. Dzięki temu telefon łączy się przez niego
+   * natychmiast, gdy tylko połączenie bezpośrednie nie przechodzi.
+   */
+  private startRelay() {
+    this.stopRelay();
+    if (!this.running) return;
+    this.relay = 'connecting';
+    this.relayCursor = 0;
+    this.emit();
+    this.tryRelayBroker();
+  }
+
+  private stopRelay() {
+    this.relayToken++;
+    clearTimeout(this.relayTimer);
+    this.relayTimer = 0;
+    const ch = this.relayChannel;
+    this.relayChannel = null;
+    this.relayLinks.clear();
+    this.relay = 'off';
+    ch?.close();
+  }
+
+  private tryRelayBroker() {
+    if (!this.running) return;
+    const token = ++this.relayToken;
+    const url = RELAY_BROKERS[this.relayCursor % RELAY_BROKERS.length];
+    const topic = relayTopicFor(this.code);
+    RelayChannel.connect(url, topic, 12_000).then((channel) => {
+      if (token !== this.relayToken || !this.running) { channel.close(); return; }
+      this.bindRelayChannel(channel);
+    }).catch(() => {
+      if (token !== this.relayToken || !this.running) return;
+      // Ten broker nie odpowiada — po chwili spróbujemy następnego.
+      this.relayCursor = (this.relayCursor + 1) % RELAY_BROKERS.length;
+      this.relayTimer = window.setTimeout(() => this.tryRelayBroker(), 5_000);
+    });
+  }
+
+  private bindRelayChannel(channel: RelayChannel) {
+    this.relayChannel = channel;
+    this.relay = 'online';
+    channel.onBatch((items) => this.onRelayBatch(items));
+    channel.addCloseListener(() => this.onRelayChannelClosed());
+    this.emit();
+  }
+
+  private onRelayBatch(items: RelayItem[]) {
+    for (const it of items) {
+      if (!it || typeof it.cid !== 'string' || !it.cid || it.cid.length > 64) continue;
+      let link = this.relayLinks.get(it.cid);
+      if (!link) {
+        const channel = this.relayChannel;
+        if (!channel) continue;
+        const fresh = new HostRelayLink(channel, it.cid);
+        fresh.onMessage((raw) => this.onMessage(fresh, raw as PadMessage));
+        fresh.onClosed(() => this.dropConn(fresh.id));
+        this.relayLinks.set(it.cid, fresh);
+        this.conns.set(it.cid, fresh);
+        link = fresh;
+      }
+      link.deliver(it.m);
+    }
+  }
+
+  private onRelayChannelClosed() {
+    const wasOnline = this.relayChannel !== null;
+    this.relayChannel = null;
+    // Wszystkie pady przez przekaźnik tracą łączność — zwalniają sloty.
+    for (const cid of [...this.relayLinks.keys()]) this.dropConn(cid);
+    this.relayLinks.clear();
+    if (!this.running) {
+      this.relay = 'off';
+      return;
+    }
+    this.relay = 'connecting';
+    if (wasOnline) this.lastError = 'Awaryjny przekaźnik rozłączony — łączę ponownie…';
+    this.emit();
+    this.relayCursor = (this.relayCursor + 1) % RELAY_BROKERS.length;
+    this.relayTimer = window.setTimeout(() => this.tryRelayBroker(), 4_000);
+  }
+
+  /* ------------------- sprzątanie „starych” padów ---------------------- */
+
+  /**
+   * Telefon nieaktywny dłużej niż STALE_PAD_MS (nie ma input/ping) traktujemy
+   * jako rozłączony — zwalnia slot, nawet jeśli gniazdo nie zgłosiło się o tym.
+   */
+  private startSweep() {
+    clearInterval(this.sweepTimer);
+    this.sweepTimer = window.setInterval(() => {
+      if (!this.running) return;
+      const now = Date.now();
+      for (const p of [...this.pads.values()]) {
+        if (now - p.lastSeen > STALE_PAD_MS) this.dropConn(p.connId);
+      }
+    }, 5_000);
+  }
+
   /** Kasuje stan i próbuje jeszcze raz (np. po kliknięciu „Spróbuj ponownie”). */
   restart() {
     const code = this.code || undefined;
@@ -355,12 +497,16 @@ export class PadHost {
     clearTimeout(this.registerTimer);
     clearTimeout(this.retryTimer);
     clearInterval(this.probeTimer);
+    clearInterval(this.sweepTimer);
     this.registerTimer = 0;
     this.retryTimer = 0;
     this.probeTimer = 0;
+    this.sweepTimer = 0;
     this.probing = false;
+    this.stopRelay();
     for (const c of this.conns.values()) { try { c.close(); } catch { /* ignore */ } }
     this.conns.clear();
+    this.padsByPid.clear();
     this.pads.clear();
     this.inputs.forEach((_, i) => { this.inputs[i] = { ...ZERO_INPUT }; });
     this.destroyPeer();
@@ -389,12 +535,12 @@ export class PadHost {
   }
 
   private handleConn(conn: DataConnection) {
+    const link = new WebrtcLink(conn);
+    link.onMessage((raw) => this.onMessage(link, raw as PadMessage));
+    link.onClosed(() => this.dropConn(link.id));
     conn.on('open', () => {
-      this.conns.set(conn.peer, conn);
+      if (!this.conns.has(link.id)) this.conns.set(link.id, link);
     });
-    conn.on('data', (raw) => this.onMessage(conn, raw as PadMessage));
-    conn.on('close', () => this.dropConn(conn.peer));
-    conn.on('error', () => this.dropConn(conn.peer));
   }
 
   private freeSlot(): number {
@@ -403,26 +549,43 @@ export class PadHost {
     return -1;
   }
 
-  private onMessage(conn: DataConnection, msg: PadMessage) {
+  private onMessage(link: PadLink, msg: PadMessage) {
     if (!msg || typeof msg !== 'object') return;
-    const id = conn.peer;
+    const id = link.id;
     switch (msg.t) {
       case 'hello': {
         if (msg.v !== PROTOCOL_VERSION) {
           this.send(id, { t: 'rejected', reason: 'Niezgodna wersja gry — odśwież stronę na telefonie.' });
-          setTimeout(() => conn.close(), 200);
+          setTimeout(() => link.close(), 200);
           return;
         }
-        if (this.pads.has(id)) return;
+        if (this.pads.has(id)) return; // ten sam link się powtarza
+        // Stały identyfikator telefonu: gdy ten sam telefon łączy się przez drugą
+        // ścieżkę (P2P + przekaźnik na raz), pierwsza aktywna wygrywa —
+        // nie zajmujemy dwóch slotów. Po rozłączeniu (lastSeen stale) nowa ścieżka przejmie slot.
+        const pid = typeof msg.pid === 'string' && msg.pid ? msg.pid.slice(0, 64) : undefined;
+        if (pid) {
+          const prevId = this.padsByPid.get(pid);
+          if (prevId && prevId !== id) {
+            const prev = this.pads.get(prevId);
+            if (prev) {
+              if (Date.now() - prev.lastSeen < PAD_SWITCH_GRACE_MS) return; // pierwszy pad jest wciąż aktywny
+              this.dropConn(prevId); // telefon wraca na nowej ścieżki — starą zamykamy
+            } else {
+              this.padsByPid.delete(pid);
+            }
+          }
+        }
         const slot = this.freeSlot();
         if (slot < 0) {
           this.send(id, { t: 'rejected', reason: 'Wszystkie 4 miejsca są zajęte.' });
-          setTimeout(() => conn.close(), 200);
+          setTimeout(() => link.close(), 200);
           return;
         }
         const nick = (msg.nick || '').trim().slice(0, 14) || `Telefon ${slot + 1}`;
-        const info: PadInfo = { connId: id, slot, nick, connectedAt: Date.now(), lastSeen: Date.now(), latency: 0 };
+        const info: PadInfo = { connId: id, slot, nick, connectedAt: Date.now(), lastSeen: Date.now(), latency: 0, via: link.kind, pid };
         this.pads.set(id, info);
+        if (pid) this.padsByPid.set(pid, id);
         this.inputs[slot] = { ...ZERO_INPUT };
         const meta = this.slotMeta[slot] ?? { name: `GRACZ ${slot + 1}`, color: '#fbbf24', darkColor: '#78350f' };
         this.send(id, { t: 'welcome', slot, ...meta, screen: this.screen });
@@ -455,9 +618,14 @@ export class PadHost {
   private dropConn(connId: string) {
     const p = this.pads.get(connId);
     this.conns.delete(connId);
+    this.relayLinks.delete(connId);
     this.hudTimers.delete(connId);
     if (p) {
       this.pads.delete(connId);
+      if (p.pid) {
+        const holder = this.padsByPid.get(p.pid);
+        if (holder === connId) this.padsByPid.delete(p.pid);
+      }
       this.inputs[p.slot] = { ...ZERO_INPUT };
       this.lastPadChangeAt = Date.now();
       this.emit();

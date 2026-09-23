@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="refresh" content="0; url=/" />
+    <title>STALOWY FRONT — przekierowanie…</title>
+    <script>
+      // GitHub Pages SPA fallback → przerzucenie ścieżki do hasha
+      (function () {
+        var loc = window.location;
+        var url = loc.protocol + '//' + loc.hostname + (loc.port ? ':' + loc.port : '') + '/';
+        var rest = loc.pathname.replace(/^\/+/, '') + loc.search + loc.hash;
+        loc.replace(url + (rest ? '#' + rest : ''));
+      })();
+    </script>
+  </head>
+  <body>
+    <p>Przekierowanie…</p>
+  </body>
+</html>

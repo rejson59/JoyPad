@@ -32,6 +32,8 @@ export const LS_SIGNALING = 'sf_signaling';
 export function parseSignaling(raw: string): SignalingConfig | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
+  // `?srv=cloud` = wróć do chmury PeerJS (przydatne, gdy zapisany serwer przestał działać).
+  if (/^(cloud|default|peerjs)$/i.test(trimmed)) return CLOUD_SIGNALING;
   const secure = !/^(ws|http):\/\//i.test(trimmed);
 
   let s = trimmed.replace(/^[a-z]+:\/\//i, '');

@@ -144,7 +144,90 @@ const OPEN_RELAY_SECRET = 'openrelayprojectsecret';
 // Dodatkowy host Open Relay (alias używany przez część klientów / nowsza infrastruktura Metered)
 const OPEN_RELAY_FALLBACK_HOST = 'relay.metered.ca';
 
+/* ------------------------------------------------------------------ */
+/* Własny TURN bez przebudowywania: `?turn=` (jak `?srv=`)            */
+/* ------------------------------------------------------------------ */
+
+const LS_TURN = 'sf_turn';
+
+export interface TurnOverride {
+  urls: string[];
+  username?: string;
+  credential?: string;
+}
+
+function isValidTurnUrl(url: string): boolean {
+  return /^(turn|turns):/i.test(url);
+}
+
+/**
+ * Własny TURN podany adresem strony:
+ * `?turn=turn:turn.example.com:3478,turns:turn.example.com:5349&turnUser=…&turnPass=…`
+ *
+ * Ustawienie (jak `?srv=`) zapamiętuje się na urządzeniu, a kod QR przenosi je
+ * automatycznie na telefony (QR zawiera pełny adres z parametrami).
+ */
+export function turnOverrideFromLocation(): TurnOverride | null {
+  try {
+    const search = new URLSearchParams(location.search.replace(/^\?/, ''));
+    const hash = location.hash.replace(/^#/, '');
+    const tail = hash.includes('&') ? hash.slice(hash.indexOf('&') + 1) : '';
+    const hashParams = new URLSearchParams(tail);
+    const get = (k: string) => (search.get(k) ?? hashParams.get(k));
+
+    const raw = (get('turn') ?? '').trim();
+    if (raw) {
+      const urls = raw.split(/[\s,]+/).map((u) => u.trim()).filter(isValidTurnUrl);
+      const user = (get('turnUser') ?? '').trim();
+      const pass = (get('turnPass') ?? '').trim();
+      if (urls.length > 0) {
+        const ov: TurnOverride = { urls };
+        if (user) ov.username = user;
+        if (pass) ov.credential = pass;
+        try { localStorage.setItem(LS_TURN, JSON.stringify(ov)); } catch { /* ignore */ }
+        return ov;
+      }
+    }
+    if (search.has('turn') || hashParams.has('turn')) {
+      // jawnie wyczyszczone (`?turn=`) => wracamy do domyślnej listy
+      try { localStorage.removeItem(LS_TURN); } catch { /* ignore */ }
+      return null;
+    }
+    const saved = (localStorage.getItem(LS_TURN) ?? '').trim();
+    if (saved) {
+      const ov = JSON.parse(saved) as { urls?: unknown; username?: unknown; credential?: unknown };
+      const urls = Array.isArray(ov.urls)
+        ? ov.urls.filter((u): u is string => typeof u === 'string' && isValidTurnUrl(u))
+        : typeof ov.urls === 'string'
+          ? ov.urls.split(/[\s,]+/).map((u) => u.trim()).filter(isValidTurnUrl)
+          : [];
+      if (urls.length > 0) {
+        return {
+          urls,
+          username: typeof ov.username === 'string' ? ov.username : undefined,
+          credential: typeof ov.credential === 'string' ? ov.credential : undefined,
+        };
+      }
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+export function hasTurnOverride(): boolean {
+  return turnOverrideFromLocation() !== null;
+}
+
 export function turnServers(ttlSeconds = 12 * 3600, nowMs = Date.now()): RTCIceServer[] {
+  // 1) Własny TURN podany adresem (`?turn=`) — ma pierwszeństwo.
+  const override = turnOverrideFromLocation();
+  if (override) {
+    const server: RTCIceServer = { urls: override.urls };
+    if (override.username) server.username = override.username;
+    if (override.credential) server.credential = override.credential;
+    return [server];
+  }
+
+  // 2) TURN wbudowany w build (sekrety VITE_TURN_*).
   if (hasConfiguredTurn()) {
     const configured: RTCIceServer = { urls: CONFIGURED_TURN_URLS };
     // Część prywatnych serwerów działa w zaufanej sieci bez uwierzytelniania.
@@ -179,11 +262,17 @@ export function turnServers(ttlSeconds = 12 * 3600, nowMs = Date.now()): RTCIceS
       username,
       credential,
     },
-    // Ostatnia deska ratunku: publiczne, statyczne konto Open Relay (u części osób wciąż działa).
+    // Publiczne, statyczne konto Open Relay (u części osób wciąż działa).
     {
       urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp', 'turns:openrelay.metered.ca:443'],
       username: 'openrelayproject',
       credential: 'openrelayproject',
+    },
+    // Ostatni rzut: darmowy TURN bez rejestracji (dostępność niegwarantowana).
+    {
+      urls: ['turn:freestun.net:3478', 'turn:freestun.net:3478?transport=tcp'],
+      username: 'free',
+      credential: 'free',
     },
   ];
 }

@@ -60,9 +60,14 @@ export function ConnectionCheck({ defaultOpen = false, compact = false }: { defa
     return 'ok';
   }, [steps, running]);
 
+  const relayOk = steps.some(s => s.id === 'relay' && s.status === 'ok');
   const summary = worst === null ? null
-    : worst === 'fail' ? 'Coś blokuje połączenie — szczegóły niżej.'
-      : worst === 'warn' ? 'Połączenie zadziała, ale najlepiej w tej samej sieci Wi‑Fi.'
+    : worst === 'fail' ? (relayOk
+        ? 'Łączenie bezpośrednie jest zablokowane, ALE awaryjny przekaźnik łączy urządzenia — gra powinna działać.'
+        : 'Coś blokuje połączenie — szczegóły niżej.')
+      : worst === 'warn' ? (relayOk
+        ? 'Różne sieci (Wi‑Fi ↔ LTE) połączą się przez awaryjny przekaźnik — bez konfiguracji.'
+        : 'Połączenie zadziała, ale najlepiej w tej samej sieci Wi‑Fi.')
         : 'Wszystkie ogniwa łączności działają.';
 
   return (

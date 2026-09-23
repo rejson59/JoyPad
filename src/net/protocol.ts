@@ -57,7 +57,8 @@ export type HostScreen = 'menu' | 'setup' | 'game' | 'over';
 
 /** Telefon -> komputer */
 export type PadMessage =
-  | { t: 'hello'; nick: string; ua: string; v: number }
+  /** `pid` = stały identyfikator telefonu (localStorage) — zapobiega dwóm slotom na tym samym telefonie po zmianie transportu. */
+  | { t: 'hello'; nick: string; ua: string; v: number; pid?: string }
   | { t: 'input'; fwd: number; turn: number; fire: boolean }
   | { t: 'pause' }
   | { t: 'ping'; at: number };

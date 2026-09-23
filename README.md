@@ -35,6 +35,20 @@ Konfiguracja jednorazowa (2 kroki):
 
 Gra będzie dostępna pod `https://<użytkownik>.github.io/StalowyFront/` (base URL jest ustawiany automatycznie z nazwy repozytorium).
 
+### TURN dla połączeń Wi‑Fi ↔ LTE
+
+Wbudowany Open Relay jest usługą współdzieloną i może okresowo nie zwracać kandydata `relay`. Nie oznacza to błędu WebRTC — połączenie bezpośrednie nadal zwykle działa w tej samej sieci — ale nie daje gwarancji połączenia między różnymi sieciami.
+
+Aby użyć własnego lub zarządzanego TURN, dodaj w **Settings → Secrets and variables → Actions** trzy sekrety repozytorium:
+
+- `VITE_TURN_URLS` — adresy rozdzielone przecinkiem, np. `turn:turn.example.com:3478,turns:turn.example.com:5349`,
+- `VITE_TURN_USERNAME`,
+- `VITE_TURN_CREDENTIAL`.
+
+Workflow przekaże je do buildu automatycznie. Dane dostępowe TURN są z natury widoczne dla klienta WebRTC, więc używaj konta krótkotrwałego albo objętego limitem transferu. Po wdrożeniu test **TURN (przekaźnik)** powinien wyświetlić kandydata `relay`.
+
+Lokalnie te same wartości można umieścić w ignorowanym przez Git pliku `.env.local`.
+
 ## 🛠️ Rozwój lokalny
 
 ```bash

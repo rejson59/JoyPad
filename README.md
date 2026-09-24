@@ -1,6 +1,6 @@
 # JoyPad 🎮
 
-Siedem gier multiplayer na **jednym ekranie**. Telefony stają się bezprzewodowymi padami; komputer lub TV wyświetla wspólną arenę. JoyPad ma teraz ciemny, pomarańczowy interfejs w stylu konsoli, dwa nowe światy 3D-lite (renderer Canvas bez ciężkiego silnika) oraz opcjonalny split-screen. Strona jest statyczna i może działać na GitHub Pages. Stalowy Front pozostaje pełną grą z dotychczasowym menu, mapami, botami i sterowaniem.
+Siedem gier multiplayer na **jednym ekranie**. Telefony stają się bezprzewodowymi padami; komputer lub TV wyświetla wspólną arenę. JoyPad ma teraz ciemny, pomarańczowy interfejs w stylu konsoli, dwa nowe światy 3D-lite (surowy WebGL2 z fallbackiem Canvas2D) oraz opcjonalny split-screen. Strona jest statyczna i może działać na GitHub Pages. Stalowy Front pozostaje pełną grą z dotychczasowym menu, mapami, botami i sterowaniem.
 
 | Gra | Co się dzieje | Telefon |
 | --- | --- | --- |
@@ -16,7 +16,7 @@ Każda gra ma własny ekran wejściowy, zasady, ustawienia rundy, HUD i ekran wy
 
 ### Grafika i wydajność
 
-Nowe światy korzystają z proceduralnych tekstur, izometrycznych klocków, świateł, cieni i geometrii perspektywicznej zamiast ładować duży silnik 3D. Canvas ma stałą scenę 1200×720, adaptacyjny limit DPR, zatrzymuje się po ukryciu karty i ładuje silniki dopiero po wybraniu gry. Dzięki temu oprawa wygląda bogaciej, ale nie tworzy niepotrzebnego obciążenia urządzenia.
+Nowe światy korzystają z proceduralnych tekstur, izometrycznych klocków, świateł, cieni i geometrii perspektywicznej. `Turbo League` i `Voxel Frontier` próbują najpierw surowego WebGL2 z małymi low-poly siatkami; jeśli urządzenie nie ma WebGL2, automatycznie przechodzą na sprawdzony renderer Canvas2D. Canvas i WebGL mają stałą scenę, adaptacyjny limit DPR, zatrzymują się po ukryciu karty i ładują silniki dopiero po wybraniu gry. Dzięki temu oprawa wygląda bogaciej, ale nie tworzy niepotrzebnego obciążenia urządzenia.
 
 ## Jak zagrać
 
@@ -51,8 +51,8 @@ Po scaleniu zmian do `main` możesz zmienić nazwę repozytorium na **JoyPad** w
 npm ci
 npm run dev                 # lokalnie http://localhost:5173/  |  pad: /#pad
 npm run build               # TypeScript + produkcyjny build
-npm run selftest:arcade     # role admina, protokół i silniki sześciu gier arcade
+npm run selftest:arcade     # role admina, protokół, 6 silników + macierze WebGL2
 npm run selftest:relay      # warstwa MQTT / awaryjnego przekaźnika
 ```
 
-Stack: Vite, React, TypeScript, Canvas 2D/3D-lite, PeerJS, QRCode. `src/arcade/catalog.ts` to biblioteka; `src/arcade/games/` to sześć niezależnych silników z jedną warstwą obsługi klawiatury/pada (`src/arcade/runtime.ts`). `src/arcade/games/Voxel.ts` i `League.ts` dodają izometryczne klocki, światło, cienie oraz perspektywę stadionu bez ciężkiej biblioteki 3D. `src/App.tsx` i `src/game/` zawierają Stalowy Front. `src/net/` zachowuje istniejący transport, poszerzony o stan sesji i komendy admina. Używany jest hash `#pad`, więc GitHub Pages nie potrzebuje routingu serwerowego.
+Stack: Vite, React, TypeScript, Canvas 2D, raw WebGL2, PeerJS, QRCode. `src/arcade/catalog.ts` to biblioteka; `src/arcade/games/` to sześć niezależnych silników z jedną warstwą obsługi klawiatury/pada (`src/arcade/runtime.ts`). `src/arcade/webgl/runtime3d.ts` dostarcza mały renderer WebGL2, macierze kamery, low-poly geometrię i profile DPR, a `League3D.ts` oraz `Voxel3D.ts` są używane przed fallbackiem Canvas2D. Wersje Canvas (`Voxel.ts`, `League.ts`) nadal służą jako bezpieczny fallback. `src/App.tsx` i `src/game/` zawierają Stalowy Front. `src/net/` zachowuje istniejący transport, poszerzony o stan sesji i komendy admina. Używany jest hash `#pad`, więc GitHub Pages nie potrzebuje routingu serwerowego.

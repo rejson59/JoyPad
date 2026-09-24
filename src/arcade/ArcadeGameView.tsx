@@ -6,7 +6,7 @@ import { padHost } from '../net/padHost';
 import type { RemoteCommand, RemoteEvent } from '../net/protocol';
 import { usePadHost, PadHostPanel } from '../pad/PadHostPanel';
 import { gameInfo, type GameId } from './catalog';
-import { CanvasRound, COLORS, type DisplayMode, type Racer, type RenderQuality, type RoundHud, type RoundResult } from './runtime';
+import { COLORS, type DisplayMode, type GameRound, type Racer, type RenderQuality, type RoundConfig, type RoundHud, type RoundResult } from './runtime';
 
 type ArcadeId = Exclude<GameId, 'tanks'>;
 type Stage = 'menu' | 'game' | 'over';
@@ -30,15 +30,25 @@ function readPreference<T extends string>(key: string, fallback: T, values: read
   try { const value = localStorage.getItem(key) as T | null; return value && values.includes(value) ? value : fallback; } catch { return fallback; }
 }
 
-async function createRound(id: ArcadeId, canvas: HTMLCanvasElement, config: ConstructorParameters<typeof CanvasRound>[1]): Promise<CanvasRound> {
+function hasWebGL2(canvas: HTMLCanvasElement) {
+  try { return Boolean(canvas.getContext('webgl2')); } catch { return false; }
+}
+
+async function createRound(id: ArcadeId, canvas: HTMLCanvasElement, config: RoundConfig): Promise<GameRound> {
   // Każdy silnik ładuje się dopiero po wybraniu gry — menu nie pobiera całej biblioteki naraz.
   switch (id) {
     case 'race': return new (await import('./games/Race')).RaceRound(canvas, config);
     case 'orbit': return new (await import('./games/Orbit')).OrbitRound(canvas, config);
     case 'snake': return new (await import('./games/Snake')).SnakeRound(canvas, config);
     case 'temple': return new (await import('./games/Temple')).TempleRound(canvas, config);
-    case 'voxel': return new (await import('./games/Voxel')).VoxelRound(canvas, config);
-    case 'league': return new (await import('./games/League')).LeagueRound(canvas, config);
+    case 'voxel': {
+      if (hasWebGL2(canvas)) return new (await import('./webgl/Voxel3D')).Voxel3DRound(canvas, config);
+      return new (await import('./games/Voxel')).VoxelRound(canvas, config);
+    }
+    case 'league': {
+      if (hasWebGL2(canvas)) return new (await import('./webgl/League3D')).League3DRound(canvas, config);
+      return new (await import('./games/League')).LeagueRound(canvas, config);
+    }
   }
 }
 
@@ -66,7 +76,7 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   const [muted, setMuted] = useState(gameAudio.muted);
   const host = usePadHost();
   const canvas = useRef<HTMLCanvasElement>(null);
-  const round = useRef<CanvasRound | null>(null);
+  const round = useRef<GameRound | null>(null);
   const stageRef = useRef(stage); stageRef.current = stage;
 
   const stepPrimary = useCallback((step: number) => setPrimary(i => (i + step + rules.primary.length) % rules.primary.length), [rules.primary.length]);

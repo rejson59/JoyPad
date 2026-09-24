@@ -11,6 +11,7 @@ import { SnakeRound } from '../src/arcade/games/Snake';
 import { TempleRound } from '../src/arcade/games/Temple';
 import { VoxelRound } from '../src/arcade/games/Voxel';
 import { LeagueRound } from '../src/arcade/games/League';
+import { mat4LookAt, mat4Multiply, mat4Perspective } from '../src/arcade/webgl/runtime3d';
 import type { CanvasRound, RoundConfig, RoundResult } from '../src/arcade/runtime';
 
 (globalThis as unknown as { window: Window }).window = globalThis as unknown as Window;
@@ -113,6 +114,11 @@ const players = [
   { slot: 1, name: 'BOT 1', color: '#38bdf8', isBot: true },
 ];
 const rounds = [RaceRound, OrbitRound, SnakeRound, TempleRound, VoxelRound, LeagueRound] as const;
+const projection = mat4Perspective(Math.PI / 3, 16 / 9, .1, 100);
+const camera = mat4LookAt([0, 8, 12], [0, 0, 0], [0, 1, 0]);
+const viewProjection = mat4Multiply(projection, camera);
+assert.equal(viewProjection.length, 16);
+assert.ok(Array.from(viewProjection).every(Number.isFinite), 'macierz WebGL2 musi być stabilna numerycznie');
 let simulations = 0;
 for (const Round of rounds) {
   let result: RoundResult | null = null;
@@ -132,4 +138,4 @@ for (const Round of rounds) {
   assert.ok(result, `${Round.name}: wynik powinien powstać`);
   simulations++;
 }
-console.log(`ARCADE SELFTEST: OK (role admina, uprawnienia, protokół, ${simulations} silniki 2D/3D-lite)`);
+console.log(`ARCADE SELFTEST: OK (role admina, protokół, ${simulations} silniki + macierze WebGL2)`);

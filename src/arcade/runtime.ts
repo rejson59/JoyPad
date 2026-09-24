@@ -44,6 +44,12 @@ export interface RoundResult {
   players: RoundPlayer[];
 }
 
+export interface GameRound {
+  start(): void;
+  destroy(): void;
+  togglePause(): void;
+}
+
 export interface RoundConfig {
   players: Racer[];
   padInputs: PadInput[];
@@ -83,7 +89,7 @@ export function glow(ctx: CanvasRenderingContext2D, x: number, y: number, radius
  * That gives a console-like composition while keeping phones and integrated GPUs
  * out of the "4K canvas for a tiny game" trap.
  */
-export abstract class CanvasRound {
+export abstract class CanvasRound implements GameRound {
   protected ctx: CanvasRenderingContext2D;
   protected config: RoundConfig;
   protected keys = new Set<string>();

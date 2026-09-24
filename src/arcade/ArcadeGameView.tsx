@@ -20,6 +20,10 @@ const RULES: Record<ArcadeId, { primaryLabel: string; primary: string[]; seconda
 
 const formatTime = (n: number) => `${Math.floor(n / 60)}:${String(Math.floor(n % 60)).padStart(2, '0')}`;
 
+function readLocalRecord(id: ArcadeId): number {
+  try { return Number(localStorage.getItem(`joypad-record-${id}`) || 0) || 0; } catch { return 0; }
+}
+
 async function createRound(id: ArcadeId, canvas: HTMLCanvasElement, config: ConstructorParameters<typeof CanvasRound>[1]): Promise<CanvasRound> {
   // Każdy silnik ładuje się dopiero po wybraniu gry — małe lobby, szybki pierwszy widok.
   switch (id) {
@@ -41,6 +45,7 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   const [secondary, setSecondary] = useState(id === 'race' ? 2 : 1);
   const [hud, setHud] = useState<RoundHud | null>(null);
   const [result, setResult] = useState<RoundResult | null>(null);
+  const [record, setRecord] = useState(() => readLocalRecord(id));
   const [participants, setParticipants] = useState<Racer[]>([]);
   const [roundKey, setRoundKey] = useState(0);
   const [showPads, setShowPads] = useState(false);
@@ -74,6 +79,16 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
     padHost.onPauseRequest = () => round.current?.togglePause();
     return () => { padHost.onPauseRequest = null; };
   }, []);
+
+  useEffect(() => {
+    if (!result) return;
+    const score = Math.max(0, ...result.players.map(player => player.score));
+    setRecord(previous => {
+      const next = Math.max(previous, score);
+      try { localStorage.setItem(`joypad-record-${id}`, String(next)); } catch { /* optional */ }
+      return next;
+    });
+  }, [id, result]);
 
   useEffect(() => {
     padHost.setMenuOptions(stage === 'menu' ? {
@@ -188,6 +203,7 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
       <div className="relative z-10 w-full max-w-[700px] text-center"><div className="joy-kicker" style={{ color: info.accent }}>{info.eyebrow} / KONIEC RUNDY</div>
         {result.allWon ? <Sparkles className="mx-auto mt-5 h-14 w-14" style={{ color: info.accent }} /> : <Trophy className="mx-auto mt-5 h-14 w-14" style={{ color: info.accent }} />}
         <h1 className="arcade-title mt-4 text-4xl font-extrabold leading-tight sm:text-6xl">{result.title}</h1><p className="mt-3 text-sm text-slate-300">{result.subtitle}</p>
+        <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/30 px-3 py-1.5 text-[11px] text-slate-300"><span className="text-slate-500">LOKALNY REKORD</span><b style={{ color: info.accent }}>{record}</b></div>
         <div className="mt-8 overflow-hidden rounded-2xl border border-white/15 bg-black/35 text-left"><div className="joy-kicker flex justify-between border-b border-white/10 px-5 py-3 text-slate-400"><span>DRUŻYNA / KLASYFIKACJA</span><span>WYNIK</span></div>
           {result.players.map((p, i) => <div key={p.slot} className="flex items-center justify-between gap-2 border-b border-white/[.08] px-5 py-3 last:border-none"><div className="flex items-center gap-3"><span className="font-mono2 text-xs text-slate-500">{String(i + 1).padStart(2, '0')}</span><span className="h-2.5 w-2.5 rounded-full" style={{ background: p.color }} /><span className="text-sm font-bold">{p.name}</span>{p.isBot && <span className="text-[10px] text-slate-500">BOT</span>}</div><div className="text-right"><b className="font-mono2 text-lg" style={{ color: p.color }}>{p.score}</b><span className="ml-3 text-[11px] text-slate-400">{p.detail}</span></div></div>)}
         </div>

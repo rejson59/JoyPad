@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronLeft, CircleHelp, Crown, Gamepad2, Home, LogOut, Maximize2, Menu, Pause, Play, RotateCcw, Signal, Smartphone, Trophy, X } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Crown, Gamepad2, Home, LogOut, Maximize2, Menu, Pause, Play, RotateCcw, Signal, Smartphone, Trophy, X } from 'lucide-react';
 import { GAMES, gameInfo } from '../arcade/catalog';
 import { padClient, type PadClientState } from '../net/padClient';
 import type { RemoteCommand } from '../net/protocol';
@@ -16,37 +16,140 @@ function Roster({ st }: { st: PadClientState }) {
   })}</div>;
 }
 
+function RemoteButton({
+  command,
+  label,
+  children,
+  admin,
+  primary = false,
+}: {
+  command: RemoteCommand;
+  label: string;
+  children: React.ReactNode;
+  admin: boolean;
+  primary?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={!admin}
+      onClick={() => send(command)}
+      aria-label={label}
+      className={`pad-remote-button ${primary ? 'pad-remote-primary' : ''}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function RemoteNavigation({ admin, accent }: { admin: boolean; accent: string }) {
+  return (
+    <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
+      <div className="mb-3 text-center text-[10px] font-black tracking-[.2em] text-slate-500">PILOT ADMINISTRATORA</div>
+      <div className="mx-auto grid w-[210px] grid-cols-3 gap-2">
+        <span />
+        <RemoteButton command="up" label="W górę" admin={admin}><ArrowUp size={22} /></RemoteButton>
+        <span />
+        <RemoteButton command="left" label="W lewo" admin={admin}><ArrowLeft size={22} /></RemoteButton>
+        <RemoteButton command="select" label="Wybierz" admin={admin} primary>
+          <span className="text-[10px] font-black tracking-wider">OK</span>
+        </RemoteButton>
+        <RemoteButton command="right" label="W prawo" admin={admin}><ArrowRight size={22} /></RemoteButton>
+        <span />
+        <RemoteButton command="down" label="W dół" admin={admin}><ArrowDown size={22} /></RemoteButton>
+        <span />
+      </div>
+      <div className="mt-3 flex justify-center gap-2">
+        <button type="button" onClick={() => send('back')} disabled={!admin} className="pad-secondary min-w-[112px] disabled:cursor-not-allowed disabled:opacity-40">
+          <ArrowLeft size={14} /> WSTECZ
+        </button>
+        <button type="button" onClick={() => send('home')} disabled={!admin} className="pad-secondary min-w-[112px] disabled:cursor-not-allowed disabled:opacity-40">
+          <Home size={14} /> GRY
+        </button>
+      </div>
+      {!admin && <p className="mt-3 text-center text-[10px] text-slate-500">Tylko administrator steruje menu.</p>}
+      <div className="mt-3 text-center text-[10px] text-slate-500" style={{ color: admin ? `${accent}cc` : undefined }}>
+        Strzałki: wybór · OK: zatwierdź
+      </div>
+    </div>
+  );
+}
+
 function RemoteController({ st, fullscreen }: { st: PadClientState; fullscreen: () => void }) {
   const admin = st.slot === st.adminSlot;
   const selected = GAMES[st.selection] ?? GAMES[0];
   const game = st.game ? gameInfo(st.game) : null;
   const accent = game?.accent || '#a78bfa';
-  const label = st.screen === 'lobby' ? 'WYBÓR GIER' : st.screen === 'over' ? 'KONIEC RUNDY' : st.screen === 'setup' ? 'USTAWIENIA' : 'MENU GRY';
-  const onSelect = () => send('select');
-  return <div className="pad-joy min-h-[100dvh] overflow-y-auto text-white" style={{ '--game-accent': accent } as React.CSSProperties}>
-    <div className="pointer-events-none fixed inset-0 opacity-20" style={{ background: `radial-gradient(ellipse at 50% 0%, ${accent}, transparent 60%)` }} />
-    <div className="relative mx-auto flex min-h-[100dvh] max-w-[530px] flex-col px-4 pb-8" style={{ paddingTop: 'max(16px, env(safe-area-inset-top))' }}>
-      <header className="flex items-center justify-between gap-2"><div className="flex items-center gap-2"><span className="joy-logo flex h-9 w-9 items-center justify-center rounded-xl"><Gamepad2 size={20} /></span><div><div className="joy-brand text-xl font-extrabold leading-none">Joy<span className="text-violet-400">Pad.</span></div><div className="joy-kicker mt-1 text-[8px] text-slate-500">PILOT / {st.code}</div></div></div><div className="flex items-center gap-1"><button onClick={fullscreen} title="Pełny ekran" className="pad-icon"><Maximize2 size={17} /></button><button onClick={() => padClient.disconnect()} title="Odłącz telefon" className="pad-icon text-red-300"><LogOut size={17} /></button></div></header>
-      <div className="mt-6 flex items-center justify-between gap-2"><span className="joy-kicker" style={{ color: accent }}>● {label}</span><span className={`rounded-full border px-3 py-1 text-[10px] font-bold ${admin ? 'border-amber-400/40 bg-amber-400/10 text-amber-200' : 'border-white/15 bg-white/5 text-slate-300'}`}>{admin ? <span className="flex items-center gap-1"><Crown size={12} /> ADMINISTRATOR</span> : `GRACZ ${st.slot + 1}`}</span></div>
+  const label = st.screen === 'lobby' ? 'BIBLIOTEKA GIER' : st.screen === 'over' ? 'KONIEC RUNDY' : st.screen === 'setup' ? 'USTAWIENIA' : 'MENU GRY';
+  const actionText = st.screen === 'over'
+    ? 'REWANŻ'
+    : st.screen === 'setup' && st.game === 'tanks'
+      ? 'DO BOJU'
+      : st.game === 'tanks' && st.screen === 'menu'
+        ? 'WYBIERZ TRYB'
+        : 'ROZPOCZNIJ';
 
-      {st.screen === 'lobby' ? <>
-        <h1 className="joy-heading mt-3 text-[34px] font-extrabold leading-tight">Wybierzmy <span className="joy-gradient-text">grę.</span></h1>
-        <p className="mt-2 text-sm text-slate-400">{admin ? 'Ty prowadzisz! Wybierz tytuł na pilocie albo przełączaj strzałkami.' : 'Poczekaj, aż administrator wybierze grę. Połączenie jest aktywne — zagrasz w następnej rundzie.'}</p>
-        <div className="mt-5 grid gap-2">{GAMES.map((entry, i) => <button key={entry.id} disabled={!admin} onClick={() => { vibrate(); padClient.chooseGame(i); }} className={`flex items-center gap-3 overflow-hidden rounded-2xl border p-2 text-left transition disabled:cursor-default ${i === st.selection ? 'border-violet-400/70 bg-violet-500/15' : 'border-white/10 bg-white/[.035]'}`}><img src={`${import.meta.env.BASE_URL}${entry.cover}`} alt="" className="h-[52px] w-[68px] shrink-0 rounded-lg object-cover" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold">{entry.title}</span><span className="block truncate text-[11px] text-slate-400">{entry.genre} · {entry.teaser}</span></span>{i === st.selection && <Check size={17} className="mr-2 shrink-0 text-violet-300" />}</button>)}</div>
-        {admin && <div className="mt-4 flex items-center gap-2"><button onClick={() => send('left')} aria-label="Poprzednia gra" className="pad-nav"><ChevronLeft size={23} /></button><button onClick={onSelect} className="pad-primary flex-1" style={{ background: accent }}>OTWÓRZ {selected.title.toUpperCase()}</button><button onClick={() => send('right')} aria-label="Następna gra" className="pad-nav"><ArrowRight size={20} /></button></div>}
-      </> : <>
-        <div className="relative mt-4 overflow-hidden rounded-[22px] border border-white/15 bg-white/[.035]"><img src={`${import.meta.env.BASE_URL}${game?.cover ?? GAMES[0].cover}`} alt="" className="h-36 w-full object-cover opacity-75" /><div className="absolute inset-0 bg-gradient-to-t from-[#101126] to-transparent" /><div className="absolute bottom-3 left-4"><div className="joy-kicker" style={{ color: accent }}>{game?.eyebrow}</div><h1 className="joy-heading mt-1 text-2xl font-extrabold">{game?.title || 'JoyPad'}</h1></div></div>
-        {st.screen === 'over' ? <div className="mt-4 rounded-2xl border border-white/15 bg-white/[.05] p-5 text-center"><Trophy className="mx-auto mb-2 h-8 w-8 text-amber-300" /><div className="text-lg font-bold" style={{ color: st.result?.youWon ? accent : '#f1f5f9' }}>{st.result?.youWon ? 'Wygrana!' : st.result?.winnerName || 'Koniec rundy'}</div><p className="mt-1 text-xs text-slate-400">{admin ? 'Możesz uruchomić rewanż albo wybrać inną grę.' : 'Administrator decyduje o kolejnej rundzie.'}</p></div> : <p className="mt-4 text-sm leading-relaxed text-slate-300">{admin ? 'Ustaw rundę i rozpocznij grę. Pozostali gracze dołączają automatycznie.' : 'Gra jest przygotowywana. Poczekaj na start od administratora.'}</p>}
-        {st.options && st.screen !== 'over' && <div className="mt-4 grid grid-cols-2 gap-2">{[[st.options.primaryLabel, st.options.primaryValue, '← / →'], [st.options.secondaryLabel, st.options.secondaryValue, '↑ / ↓']].map(([title, value, help]) => <div key={title} className="rounded-xl border border-white/10 bg-white/[.04] p-3"><div className="joy-kicker text-[9px] text-slate-400">{title}</div><div className="mt-2 text-xs font-bold" style={{ color: accent }}>{value}</div><div className="mt-2 text-[10px] text-slate-500">{help}</div></div>)}</div>}
-        {admin && <>
-          {st.screen !== 'over' && <div className="mt-4 flex items-center justify-center gap-2"><div className="grid w-[204px] grid-cols-3 gap-1.5"><div /><button onClick={() => send('up')} aria-label="Opcja w górę" className="pad-nav"><ArrowUp size={20} /></button><div /><button onClick={() => send('left')} aria-label="Opcja w lewo" className="pad-nav"><ArrowLeft size={20} /></button><div className="flex items-center justify-center text-[10px] text-slate-500"><CircleHelp size={15} /></div><button onClick={() => send('right')} aria-label="Opcja w prawo" className="pad-nav"><ArrowRight size={20} /></button><div /><button onClick={() => send('down')} aria-label="Opcja w dół" className="pad-nav"><ArrowDown size={20} /></button><div /></div></div>}
-          <button onClick={onSelect} className="pad-primary mt-4 w-full" style={{ background: accent }}>{st.screen === 'over' ? <><RotateCcw size={17} /> REWANŻ</> : <><Play size={17} fill="currentColor" /> {st.game === 'tanks' && st.screen === 'menu' ? 'WYBIERZ TRYB' : 'ROZPOCZNIJ GRĘ'}</>}</button>
-          <div className="mt-2 grid grid-cols-2 gap-2"><button onClick={() => send('back')} className="pad-secondary"><ArrowLeft size={14} /> WSTECZ</button><button onClick={() => send('home')} className="pad-secondary"><Home size={14} /> WSZYSTKIE GRY</button></div>
-        </>}
-      </>}
-      <div className="mt-auto pt-7"><div className="mb-3 flex items-center justify-between"><span className="joy-kicker text-slate-400">POŁĄCZENI / {st.roster.length} Z 4</span><span className="flex items-center gap-1 text-[10px] text-slate-500"><Signal size={12} /> {st.latency} ms</span></div><Roster st={st} /><div className="mt-4 flex items-center justify-center gap-1 text-[10px] text-slate-500"><Smartphone size={12} /> {st.viaRelay ? 'Połączenie przez przekaźnik' : 'Połączenie bezpośrednie P2P'}</div></div>
+  return (
+    <div className="pad-joy min-h-[100dvh] overflow-y-auto text-white" style={{ '--game-accent': accent } as React.CSSProperties}>
+      <div className="pointer-events-none fixed inset-0 opacity-20" style={{ background: `radial-gradient(ellipse at 50% 0%, ${accent}, transparent 60%)` }} />
+      <div className="relative mx-auto flex min-h-[100dvh] max-w-[430px] flex-col px-4 pb-8" style={{ paddingTop: 'max(16px, env(safe-area-inset-top))' }}>
+        <header className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="joy-logo flex h-9 w-9 items-center justify-center rounded-xl"><Gamepad2 size={20} /></span>
+            <div><div className="joy-brand text-xl font-extrabold leading-none">Joy<span className="text-violet-400">Pad.</span></div><div className="joy-kicker mt-1 text-[8px] text-slate-500">PILOT / {st.code}</div></div>
+          </div>
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={fullscreen} title="Pełny ekran" className="pad-icon"><Maximize2 size={17} /></button>
+            <button type="button" onClick={() => padClient.disconnect()} title="Odłącz telefon" className="pad-icon text-red-300"><LogOut size={17} /></button>
+          </div>
+        </header>
+
+        <div className="mt-6 flex items-center justify-between gap-2">
+          <span className="joy-kicker" style={{ color: accent }}>● {label}</span>
+          <span className={`rounded-full border px-3 py-1 text-[10px] font-bold ${admin ? 'border-amber-400/40 bg-amber-400/10 text-amber-200' : 'border-white/15 bg-white/5 text-slate-300'}`}>
+            {admin ? <span className="flex items-center gap-1"><Crown size={12} /> ADMINISTRATOR</span> : `GRACZ ${st.slot + 1}`}
+          </span>
+        </div>
+
+        {st.screen === 'lobby' ? (
+          <>
+            <div className="mt-8 rounded-[26px] border border-white/15 bg-white/[.045] p-6 text-center shadow-[0_20px_50px_rgba(0,0,0,.2)]">
+              <div className="joy-kicker" style={{ color: accent }}>WYBRANA GRA {String(st.selection + 1).padStart(2, '0')} / 05</div>
+              <h1 className="joy-heading mt-3 text-3xl font-extrabold leading-tight">{selected.title}</h1>
+              <p className="mt-2 text-xs leading-relaxed text-slate-400">{selected.genre} · {selected.players}</p>
+              <div className="mt-5 h-1 rounded-full bg-white/10"><div className="h-full rounded-full" style={{ width: `${((st.selection + 1) / GAMES.length) * 100}%`, background: accent }} /></div>
+            </div>
+            <p className="mt-5 text-center text-sm leading-relaxed text-slate-300">{admin ? 'Pilotem wybierz grę strzałkami, a następnie naciśnij OK.' : 'Poczekaj, aż administrator wybierze grę.'}</p>
+            {admin && <RemoteNavigation admin accent={accent} />}
+          </>
+        ) : (
+          <>
+            <div className="mt-8 rounded-[26px] border border-white/15 bg-white/[.045] p-6 text-center">
+              <div className="joy-kicker" style={{ color: accent }}>{game?.eyebrow || 'JOYPAD'}{st.screen === 'over' ? ' / WYNIK' : ''}</div>
+              <h1 className="joy-heading mt-3 text-3xl font-extrabold leading-tight">{game?.title || 'JoyPad'}</h1>
+              {st.screen === 'over' ? (
+                <div className="mt-4"><Trophy className="mx-auto mb-2 h-8 w-8 text-amber-300" /><div className="text-lg font-bold" style={{ color: st.result?.youWon ? accent : '#f1f5f9' }}>{st.result?.youWon ? 'Wygrana!' : st.result?.winnerName || 'Koniec rundy'}</div><p className="mt-1 text-xs text-slate-400">{admin ? 'Wybierz rewanż albo wróć do biblioteki.' : 'Administrator decyduje o kolejnej rundzie.'}</p></div>
+              ) : <p className="mt-3 text-sm leading-relaxed text-slate-300">{admin ? 'Steruj ustawieniami i rozpocznij rundę przyciskiem OK.' : 'Administrator ustawia grę. Poczekaj na start.'}</p>}
+            </div>
+            {st.options && st.screen !== 'over' && <div className="mt-4 grid grid-cols-2 gap-2">{[[st.options.primaryLabel, st.options.primaryValue, '← / →'], [st.options.secondaryLabel, st.options.secondaryValue, '↑ / ↓']].map(([title, value, help]) => <div key={title} className="rounded-xl border border-white/10 bg-white/[.04] p-3"><div className="joy-kicker text-[9px] text-slate-400">{title}</div><div className="mt-2 text-xs font-bold" style={{ color: accent }}>{value}</div><div className="mt-2 text-[10px] text-slate-500">{help}</div></div>)}</div>}
+            {admin && <>
+              {st.screen !== 'over' && <RemoteNavigation admin accent={accent} />}
+              <button type="button" onClick={() => send('select')} className="pad-primary mt-4 w-full" style={{ background: accent }}>
+                {st.screen === 'over' ? <><RotateCcw size={17} /> {actionText}</> : <><Play size={17} fill="currentColor" /> {actionText}</>}
+              </button>
+              {st.screen === 'over' && <button type="button" onClick={() => send('home')} className="pad-secondary mt-2 w-full"><Home size={14} /> WSZYSTKIE GRY</button>}
+            </>}
+          </>
+        )}
+
+        <div className="mt-auto pt-7">
+          <div className="mb-3 flex items-center justify-between"><span className="joy-kicker text-slate-400">POŁĄCZENI / {st.roster.length} Z 4</span><span className="flex items-center gap-1 text-[10px] text-slate-500"><Signal size={12} /> {st.latency} ms</span></div>
+          <Roster st={st} />
+          <div className="mt-4 flex items-center justify-center gap-1 text-[10px] text-slate-500"><Smartphone size={12} /> {st.viaRelay ? 'Połączenie przez przekaźnik' : 'Połączenie bezpośrednie P2P'}</div>
+        </div>
+      </div>
     </div>
-  </div>;
+  );
 }
 
 function ArcadeController({ st, fullscreen }: { st: PadClientState; fullscreen: () => void }) {

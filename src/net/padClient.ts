@@ -467,20 +467,26 @@ export class PadClient {
       case 'slot':
         this.set({ slot: msg.slot, name: msg.name, color: msg.color, darkColor: msg.darkColor });
         break;
-      case 'screen':
+      case 'screen': {
+        const effectiveScreen = this.state.game === null ? 'lobby' : msg.screen;
         this.set({
-          screen: msg.screen,
-          hud: msg.screen === 'game' ? this.state.hud : null,
-          arcadeHud: msg.screen === 'game' ? this.state.arcadeHud : null,
-          result: msg.screen === 'over' ? { winnerName: msg.winnerName, winnerColor: msg.winnerColor, youWon: msg.youWon } : null,
+          screen: effectiveScreen,
+          hud: effectiveScreen === 'game' ? this.state.hud : null,
+          arcadeHud: effectiveScreen === 'game' ? this.state.arcadeHud : null,
+          result: effectiveScreen === 'over' ? { winnerName: msg.winnerName, winnerColor: msg.winnerColor, youWon: msg.youWon } : null,
         });
         break;
+      }
       case 'session': {
         const { game, screen, adminSlot, selection, roster, options } = msg.session;
+        // Sesja bez gry oznacza bibliotekę. Wymuszamy to także po stronie
+        // telefonu, żeby pojedynczy opóźniony pakiet „menu gry” nie zablokował
+        // ponownego wyboru po powrocie z rozgrywki.
+        const effectiveScreen = game === null ? 'lobby' : screen;
         this.set({
-          game, screen, adminSlot, selection, roster, options,
-          hud: screen === 'game' && game === 'tanks' ? this.state.hud : null,
-          arcadeHud: screen === 'game' && game !== 'tanks' ? this.state.arcadeHud : null,
+          game, screen: effectiveScreen, adminSlot, selection, roster, options,
+          hud: effectiveScreen === 'game' && game === 'tanks' ? this.state.hud : null,
+          arcadeHud: effectiveScreen === 'game' && game !== 'tanks' ? this.state.arcadeHud : null,
         });
         break;
       }

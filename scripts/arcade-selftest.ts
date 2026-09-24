@@ -73,6 +73,9 @@ assert.equal(host.session().adminSlot, 1); // ale najstarszy AKTYWNY telefon nad
 host.setGame('race'); host.setScreen('game');
 assert.equal(host.session().game, 'race');
 assert.equal((replacement.sent.at(-1) as { t: string }).t, 'session');
+host.setGame(null);
+assert.equal(host.session().game, null);
+assert.equal(host.session().screen, 'lobby');
 host.stop();
 
 const client = new PadClient();
@@ -80,6 +83,15 @@ const client = new PadClient();
 assert.equal(client.state.game, 'snake'); assert.equal(client.state.adminSlot, 1);
 (client as unknown as { onMessage: (l: PadLink, m: unknown) => void }).onMessage(mockLink('server'), { t: 'arcadeHud', hud: { score: 4, timeLeft: 89, title: 'Test', detail: '3 życia' } });
 assert.equal(client.state.arcadeHud?.score, 4);
+// Powrót z gry musi zawsze otworzyć bibliotekę, nawet jeśli pakiety z dwóch
+// zmian ekranu dotrą niemal równocześnie.
+(client as unknown as { onMessage: (l: PadLink, m: unknown) => void }).onMessage(mockLink('server'), {
+  t: 'session', session: { game: null, screen: 'menu', selection: 2, adminSlot: 1, roster: [] },
+});
+assert.equal(client.state.game, null);
+assert.equal(client.state.screen, 'lobby');
+(client as unknown as { onMessage: (l: PadLink, m: unknown) => void }).onMessage(mockLink('server'), { t: 'screen', screen: 'menu' });
+assert.equal(client.state.screen, 'lobby');
 
 // Wszystkie cztery silniki: prawdziwa inicjalizacja, wejście analogowe,
 // kilkaset kroków symulacji i pełne rysowanie na mocku Canvas 2D.

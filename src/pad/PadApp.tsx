@@ -1,12 +1,39 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Crosshair, Gamepad2, Heart, Loader2, LogOut, Maximize2, Pause, Shield, Signal, Skull, Smartphone, Wifi, WifiOff, Zap, Wind, RotateCcw, Trophy } from 'lucide-react';
+import { Crosshair, Gamepad2, Settings, X, Heart, Loader2, LogOut, Maximize2, Pause, Shield, Signal, Skull, Smartphone, Wifi, WifiOff, Zap, Wind, RotateCcw, Trophy } from 'lucide-react';
 import { padClient, type PadClientState } from '../net/padClient';
-import { CODE_LENGTH, normalizeCode, padCodeFromHash, type PadFx } from '../net/protocol';
+import { CODE_LENGTH, normalizeCode, padCodeFromHash, type PadFx, type PadSteer } from '../net/protocol';
 import { Joystick } from './Joystick';
 import { ConnectionCheck } from './ConnectionCheck';
 
 const LS_NICK = 'sf_pad_nick';
 const LS_CODE = 'sf_pad_code';
+const LS_LAYOUT = 'sf_pad_layout';
+
+/** Układ ekranu pada (zapamiętywany na telefonie). */
+interface PadLayout {
+  /** Drugi joystick do celowania wieżą. */
+  aimStick: boolean;
+  /** Strzelaj automatycznie, gdy gałka celowania jest wychylona do czerwonego pierścienia. */
+  autoFire: boolean;
+  /** Zamień strony: jazda po prawej, celowanie/ogień po lewej. */
+  swap: boolean;
+}
+const DEFAULT_LAYOUT: PadLayout = { aimStick: true, autoFire: true, swap: false };
+/** Wychylenie gałki celowania (część zasięgu), od którego działa auto-ogień. */
+const AUTO_FIRE_RING = 0.82;
+
+function readLayout(): PadLayout {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LS_LAYOUT) || '{}') as Partial<PadLayout>;
+    return {
+      aimStick: typeof raw.aimStick === 'boolean' ? raw.aimStick : DEFAULT_LAYOUT.aimStick,
+      autoFire: typeof raw.autoFire === 'boolean' ? raw.autoFire : DEFAULT_LAYOUT.autoFire,
+      swap: typeof raw.swap === 'boolean' ? raw.swap : DEFAULT_LAYOUT.swap,
+    };
+  } catch {
+    return DEFAULT_LAYOUT;
+  }
+}
 
 function vibrate(p: number | number[]) {
   try { navigator.vibrate?.(p); } catch { /* ignore */ }
@@ -125,17 +152,67 @@ export default function PadApp() {
     } catch { /* ignore */ }
   };
 
+  /* Tryb sterowania: KIERUNEK (jedziesz tam, gdzie pchasz) albo CZOŁG (przód/tył + obrót). */
+  const [steer, setSteerState] = useState<PadSteer>(() => padClient.steer);
+  const changeSteer = (m: PadSteer) => {
+    if (m === steer) return;
+    padClient.setSteer(m);
+    setSteerState(m);
+    vibrate([15, 40, 15]);
+  };
+
   const onStick = useCallback((x: number, y: number) => {
-    padClient.setInput({ turn: x, fwd: y });
+    // y z joysticka: góra = +1. Dla trybu KIERUNEK wysyłamy wektor ekranowy (y w dół),
+    // dla trybu CZOŁG — gaz/obrót. Wysyłamy oba, gra wybiera wg trybu.
+    padClient.setInput({ turn: x, fwd: y, dirX: x, dirY: -y });
+  }, []);
+  const onStickTick = useCallback(() => vibrate(6), []);
+
+  /* Układ: joystick celowania, auto-ogień, zamiana stron. */
+  const [layout, setLayoutState] = useState<PadLayout>(readLayout);
+  const [showSettings, setShowSettings] = useState(false);
+  const updateLayout = (patch: Partial<PadLayout>) => {
+    setLayoutState(prev => {
+      const next = { ...prev, ...patch };
+      try { localStorage.setItem(LS_LAYOUT, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+    vibrate(12);
+  };
+
+  /* Ogień = przycisk ALBO (auto-ogień i gałka celowania w czerwonym pierścieniu). */
+  const fireBtn = useRef(false);
+  const aimHot = useRef(false);
+  const fireSent = useRef(false);
+  const autoFireRef = useRef(layout.autoFire);
+  const syncFire = useCallback(() => {
+    const v = fireBtn.current || (autoFireRef.current && aimHot.current);
+    if (fireSent.current === v) return;
+    fireSent.current = v;
+    padClient.setInput({ fire: v });
+  }, []);
+  useEffect(() => { autoFireRef.current = layout.autoFire; syncFire(); }, [layout.autoFire, syncFire]);
+  const setFire = (v: boolean) => {
+    if (fireBtn.current === v) return;
+    fireBtn.current = v;
+    if (v) vibrate(10);
+    syncFire();
+  };
+  const onAimHot = useCallback((hot: boolean) => {
+    aimHot.current = hot;
+    if (hot && autoFireRef.current) vibrate(12);
+    syncFire();
+  }, [syncFire]);
+
+  const onAim = useCallback((x: number, y: number) => {
+    // wektor ekranowy: y w dół (joystick daje górę = +1)
+    padClient.setInput({ aimX: x, aimY: -y });
   }, []);
 
-  const fireDown = useRef(false);
-  const setFire = (v: boolean) => {
-    if (fireDown.current === v) return;
-    fireDown.current = v;
-    padClient.setInput({ fire: v });
-    if (v) vibrate(10);
-  };
+  // Wyłączenie joysticka celowania = wieża znowu słucha kadłuba.
+  useEffect(() => {
+    if (!layout.aimStick) { padClient.setInput({ aimX: 0, aimY: 0 }); aimHot.current = false; syncFire(); }
+  }, [layout.aimStick, syncFire]);
 
   /* ---------- Connection screen ---------- */
   if (st.status !== 'connected') {
@@ -248,7 +325,7 @@ export default function PadApp() {
       {flash && <div className="pointer-events-none absolute inset-0 z-40" style={{ background: flash }} />}
 
       {/* top bar */}
-      <div className="absolute left-0 right-0 top-0 z-20 flex items-center justify-between gap-2 px-3 py-2" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>
+      <div className="absolute left-0 right-0 top-0 z-30 flex items-center justify-between gap-2 px-3 py-2" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>
         <div className="flex items-center gap-2">
           <span className="h-3 w-3 rounded-full" style={{ background: color, boxShadow: `0 0 10px ${color}` }} />
           <span className="text-sm font-black tracking-wide" style={{ color }}>{st.name}</span>
@@ -263,6 +340,7 @@ export default function PadApp() {
               przekaźnik
             </span>
           )}
+          <button onClick={() => setShowSettings(v => !v)} className={`rounded-lg border p-1.5 ${showSettings ? 'border-amber-400/60 bg-amber-400/20 text-amber-200' : 'border-white/15 bg-white/5 text-zinc-300'}`} title="Ustawienia sterowania"><Settings className="h-4 w-4" /></button>
           <button onClick={goFullscreen} className="rounded-lg border border-white/15 bg-white/5 p-1.5 text-zinc-300"><Maximize2 className="h-4 w-4" /></button>
           <button onClick={() => { padClient.requestPause(); vibrate(15); }} className="rounded-lg border border-white/15 bg-white/5 p-1.5 text-zinc-300"><Pause className="h-4 w-4" /></button>
           <button onClick={() => { padClient.disconnect(); }} className="rounded-lg border border-red-500/40 bg-red-500/10 p-1.5 text-red-300"><LogOut className="h-4 w-4" /></button>
@@ -330,33 +408,133 @@ export default function PadApp() {
         )}
       </div>
 
-      {/* controls */}
-      <div className="absolute inset-x-0 bottom-0 z-20 flex items-end justify-between px-6" style={{ paddingBottom: 'max(18px, env(safe-area-inset-bottom))' }}>
-        <div className="flex flex-col items-center gap-2">
-          <Joystick size={Math.min(220, Math.max(150, Math.floor(Math.min(window.innerWidth * 0.38, window.innerHeight * 0.5))))} color={color} onChange={onStick} />
-          <span className="text-[10px] font-bold tracking-widest text-zinc-500">JAZDA / OBRÓT</span>
+      {(() => {
+        const driveSide = layout.swap ? 'right' : 'left';
+        const aimSide = layout.swap ? 'left' : 'right';
+        const twin = layout.aimStick;
+        const stickSize = twin
+          ? Math.min(190, Math.max(130, Math.floor(Math.min(window.innerWidth * 0.3, window.innerHeight * 0.44))))
+          : Math.min(210, Math.max(140, Math.floor(Math.min(window.innerWidth * 0.34, window.innerHeight * 0.46))));
+        const bigFire = Math.min(170, Math.max(120, Math.floor(window.innerHeight * 0.38)));
+        const smallFire = Math.min(96, Math.max(72, Math.floor(window.innerHeight * 0.22)));
+        const fireHandlers = {
+          onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => { e.preventDefault(); e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); setFire(true); },
+          onPointerUp: () => setFire(false),
+          onPointerCancel: () => setFire(false),
+          onLostPointerCapture: () => setFire(false),
+          onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
+        };
+        const fireStyle = (d: number, font: string): React.CSSProperties => ({
+          width: d, height: d, fontSize: font,
+          background: 'radial-gradient(circle at 40% 30%, #f87171 0%, #dc2626 45%, #7f1d1d 100%)',
+          boxShadow: `0 ${d > 100 ? 10 : 6}px 0 #450a0a, 0 14px 30px rgba(0,0,0,0.6), inset 0 -8px 16px rgba(0,0,0,0.35), 0 0 30px rgba(239,68,68,0.35)`,
+          touchAction: 'none',
+        });
+        return (
+          <>
+            {/* JAZDA — pół ekranu to strefa dotyku (gałka pojawia się pod kciukiem) */}
+            <Joystick
+              side={driveSide}
+              size={stickSize}
+              color={color}
+              onChange={onStick}
+              onTick={onStickTick}
+              mode={steer}
+              zoneWidthPct={twin ? 50 : 55}
+              caption={steer === 'direct' ? 'JAZDA • TAM, GDZIE PCHASZ' : 'JAZDA • GÓRA = PRZÓD'}
+            >
+              <div className="flex overflow-hidden rounded-full border border-white/15 bg-black/60 text-[10px] font-black tracking-wider backdrop-blur-sm">
+                {([['direct', 'KIERUNEK'], ['tank', 'CZOŁG']] as const).map(([m, label]) => (
+                  <button
+                    key={m}
+                    onClick={() => changeSteer(m)}
+                    className="px-3 py-1.5 transition-colors"
+                    style={steer === m ? { background: color, color: '#0a0a0b' } : { color: '#a1a1aa' }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </Joystick>
+
+            {twin ? (
+              /* CELOWANIE — obraca wieżę; wychylenie do czerwonego pierścienia = auto-ogień */
+              <Joystick
+                side={aimSide}
+                size={stickSize}
+                color="#f87171"
+                onChange={onAim}
+                zoneWidthPct={50}
+                hotRing={layout.autoFire ? AUTO_FIRE_RING : undefined}
+                onHotChange={onAimHot}
+                label="WIEŻA"
+                caption={layout.autoFire ? 'CELOWANIE • DO KOŃCA = OGIEŃ' : 'CELOWANIE WIEŻĄ'}
+                sideSlot={
+                  <div className="flex flex-col items-center gap-1">
+                    <button {...fireHandlers} className="flex items-center justify-center rounded-full border-4 border-red-900 font-display tracking-widest text-white active:scale-95" style={fireStyle(smallFire, '15px')}>
+                      OGIEŃ
+                    </button>
+                  </div>
+                }
+              />
+            ) : (
+              <div
+                className={`absolute bottom-0 z-20 flex flex-col items-center gap-2 px-6 ${aimSide === 'right' ? 'right-0' : 'left-0'}`}
+                style={{ paddingBottom: 'max(18px, env(safe-area-inset-bottom))' }}
+              >
+                <button {...fireHandlers} className="flex items-center justify-center rounded-full border-4 border-red-900 font-display tracking-widest text-white active:scale-95" style={fireStyle(bigFire, '24px')}>
+                  OGIEŃ
+                </button>
+                <span className="text-[10px] font-bold tracking-widest text-zinc-500">PRZYTRZYMAJ = SERIA</span>
+              </div>
+            )}
+          </>
+        );
+      })()}
+
+      {/* ustawienia sterowania */}
+      {showSettings && (
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setShowSettings(false)}>
+          <div className="metal-panel w-full max-w-sm rounded-2xl p-4" onClick={e => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm font-black tracking-widest text-amber-300"><Settings className="h-4 w-4" /> STEROWANIE</div>
+              <button onClick={() => setShowSettings(false)} className="rounded-lg p-1 text-zinc-400 hover:bg-white/10"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="mb-3">
+              <div className="mb-1 text-[10px] font-bold tracking-widest text-zinc-500">JAZDA</div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {([['direct', 'KIERUNEK', 'Jedziesz tam, gdzie pchasz'], ['tank', 'CZOŁG', 'Góra = przód, boki = obrót']] as const).map(([m, label, desc]) => (
+                  <button key={m} onClick={() => changeSteer(m)}
+                    className={`rounded-xl border px-2 py-2 text-left ${steer === m ? 'border-amber-400/70 bg-amber-400/15' : 'border-white/10 bg-black/30'}`}>
+                    <div className="text-xs font-black" style={{ color: steer === m ? color : '#e4e4e7' }}>{label}</div>
+                    <div className="text-[10px] leading-tight text-zinc-400">{desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            {([
+              ['aimStick', 'Joystick celowania', 'Drugi joystick obraca wieżę niezależnie od jazdy. Wyłączony = wieża patrzy tam, gdzie kadłub, i jest wielki przycisk OGIEŃ.'],
+              ['autoFire', 'Auto-ogień przy celowaniu', 'Wychyl gałkę celowania do końca (czerwony pierścień), a czołg strzela sam — nie trzeba przekładać kciuka na przycisk.'],
+              ['swap', 'Zamień strony', 'Jazda po prawej, celowanie i ogień po lewej (dla leworęcznych).'],
+            ] as const).map(([key, label, desc]) => {
+              const on = layout[key];
+              const disabled = key === 'autoFire' && !layout.aimStick;
+              return (
+                <button key={key} disabled={disabled} onClick={() => updateLayout({ [key]: !on } as Partial<PadLayout>)}
+                  className="mb-1.5 flex w-full items-center gap-3 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-left disabled:opacity-40">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-black text-zinc-100">{label}</div>
+                    <div className="text-[10px] leading-snug text-zinc-400">{desc}</div>
+                  </div>
+                  <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${on ? 'bg-amber-400' : 'bg-zinc-700'}`}>
+                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-        <div className="flex flex-col items-center gap-2">
-          <button
-            onPointerDown={e => { e.preventDefault(); (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); setFire(true); }}
-            onPointerUp={() => setFire(false)}
-            onPointerCancel={() => setFire(false)}
-            onLostPointerCapture={() => setFire(false)}
-            onContextMenu={e => e.preventDefault()}
-            className="flex items-center justify-center rounded-full border-4 border-red-900 font-display text-2xl tracking-widest text-white active:scale-95"
-            style={{
-              width: Math.min(170, Math.max(120, Math.floor(window.innerHeight * 0.38))),
-              height: Math.min(170, Math.max(120, Math.floor(window.innerHeight * 0.38))),
-              background: 'radial-gradient(circle at 40% 30%, #f87171 0%, #dc2626 45%, #7f1d1d 100%)',
-              boxShadow: '0 10px 0 #450a0a, 0 14px 30px rgba(0,0,0,0.6), inset 0 -8px 16px rgba(0,0,0,0.35), 0 0 30px rgba(239,68,68,0.35)',
-              touchAction: 'none',
-            }}
-          >
-            OGIEŃ
-          </button>
-          <span className="text-[10px] font-bold tracking-widest text-zinc-500">PRZYTRZYMAJ = SERIA</span>
-        </div>
-      </div>
+      )}
 
       {landscapeHint && (
         <button onClick={goFullscreen} className="absolute left-1/2 top-[30%] z-30 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/15 px-3 py-2 text-[11px] font-bold text-amber-200">

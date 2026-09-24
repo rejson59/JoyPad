@@ -1,6 +1,7 @@
 import Peer, { type DataConnection } from 'peerjs';
 import {
-  PROTOCOL_VERSION, roomIdFromCode, type HostMessage, type HostScreen, type PadFx, type PadInput,
+  DEFAULT_PAD_STEER, PROTOCOL_VERSION, roomIdFromCode,
+  type HostMessage, type HostScreen, type PadFx, type PadInput, type PadSteer,
 } from './protocol';
 import { buildPeerOptions, signalingFromLocation, type SignalingConfig } from './signaling';
 import { WebrtcLink, type PadLink } from './links';
@@ -62,6 +63,16 @@ const RELAY_WELCOME_TIMEOUT = 8_000;  // komputer milczy po hello na przekaźnik
 const LIVENESS_TIMEOUT = 6_000;
 
 const LS_PAD_PID = 'sf_pad_pid';
+const LS_PAD_STEER = 'sf_pad_steer';
+
+/** Zapamiętany na telefonie tryb sterowania (domyślnie: jedziesz tam, gdzie pchasz). */
+function readSteerMode(): PadSteer {
+  try {
+    return localStorage.getItem(LS_PAD_STEER) === 'tank' ? 'tank' : DEFAULT_PAD_STEER;
+  } catch {
+    return DEFAULT_PAD_STEER;
+  }
+}
 
 const delayFor = (attempt: number) => Math.min(1200 + attempt * 1800, 6000);
 
@@ -89,8 +100,12 @@ export class PadClient {
   private attemptTimer = 0;
   private retryTimer = 0;
   private tickTimer = 0;
-  private lastSent: PadInput = { fwd: 0, turn: 0, fire: false };
-  private pending: PadInput = { fwd: 0, turn: 0, fire: false };
+  private lastSent: PadInput = { fwd: 0, turn: 0, fire: false, dirX: 0, dirY: 0, aimX: 0, aimY: 0 };
+  private pending: PadInput = { fwd: 0, turn: 0, fire: false, dirX: 0, dirY: 0, aimX: 0, aimY: 0 };
+  /** Tryb sterowania wybrany na telefonie (wysyłany razem z każdym stanem joysticka). */
+  private steerMode: PadSteer = readSteerMode();
+  /** Wymuś najbliższą wysyłkę niezależnie od tego, czy stan się zmienił. */
+  private forceSend = true;
   private lastSendAt = 0;
   private lastMsgAt = 0;
 
@@ -248,7 +263,7 @@ export class PadClient {
   }
 
   private sendHello(link: PadLink) {
-    link.send({ t: 'hello', nick: this.nick, ua: navigator.userAgent.slice(0, 80), v: PROTOCOL_VERSION, pid: this.devicePid() });
+    link.send({ t: 'hello', nick: this.nick, ua: navigator.userAgent.slice(0, 80), v: PROTOCOL_VERSION, pid: this.devicePid(), steer: this.steerMode });
   }
 
   private startStreams() {
@@ -409,6 +424,9 @@ export class PadClient {
         this.cancelLosingTransport(link);
         this.clearAttemptTimers();
         this.lastMsgAt = performance.now();
+        // Komputer właśnie wyzerował nasze wejście — wyślij bieżący stan od razu
+        // (inaczej przytrzymana gałka „zamarzłaby” na ~250 ms po ponownym połączeniu).
+        this.forceSend = true;
         this.startStreams();
         this.startLiveness();
         this.set({
@@ -656,6 +674,19 @@ export class PadClient {
     this.pending = { ...this.pending, ...inp };
   }
 
+  /** Bieżący tryb sterowania joysticka (`direct` = jedziesz tam, gdzie pchasz). */
+  get steer(): PadSteer {
+    return this.steerMode;
+  }
+
+  /** Zmień tryb sterowania — zapamiętuje wybór i wysyła go komputerowi od razu. */
+  setSteer(mode: PadSteer) {
+    this.steerMode = mode;
+    try { localStorage.setItem(LS_PAD_STEER, mode); } catch { /* ignore */ }
+    this.forceSend = true;
+    if (this.conn?.open) this.flush();
+  }
+
   requestPause() {
     if (this.conn?.open) this.conn.send({ t: 'pause' });
   }
@@ -664,11 +695,24 @@ export class PadClient {
     if (!this.conn?.open) return;
     const p = this.pending, l = this.lastSent;
     const now = performance.now();
-    const changed = Math.abs(p.fwd - l.fwd) > 0.01 || Math.abs(p.turn - l.turn) > 0.01 || p.fire !== l.fire;
-    if (!changed && now - this.lastSendAt < 250) return; // heartbeat co 250 ms
+    const r2 = (v: number) => +v.toFixed(2);
+    const changed = Math.abs(p.fwd - l.fwd) > 0.01
+      || Math.abs(p.turn - l.turn) > 0.01
+      || Math.abs((p.dirX ?? 0) - (l.dirX ?? 0)) > 0.01
+      || Math.abs((p.dirY ?? 0) - (l.dirY ?? 0)) > 0.01
+      || Math.abs((p.aimX ?? 0) - (l.aimX ?? 0)) > 0.01
+      || Math.abs((p.aimY ?? 0) - (l.aimY ?? 0)) > 0.01
+      || p.fire !== l.fire;
+    if (!changed && !this.forceSend && now - this.lastSendAt < 250) return; // heartbeat co 250 ms
+    this.forceSend = false;
     this.lastSent = { ...p };
     this.lastSendAt = now;
-    this.conn.send({ t: 'input', fwd: +p.fwd.toFixed(2), turn: +p.turn.toFixed(2), fire: p.fire });
+    this.conn.send({
+      t: 'input',
+      fwd: r2(p.fwd), turn: r2(p.turn), fire: p.fire,
+      steer: this.steerMode, dirX: r2(p.dirX ?? 0), dirY: r2(p.dirY ?? 0),
+      aimX: r2(p.aimX ?? 0), aimY: r2(p.aimY ?? 0),
+    });
   }
 }
 

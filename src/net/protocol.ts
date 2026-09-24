@@ -40,13 +40,41 @@ export function padCodeFromHash(): string | null {
   return normalizeCode(m[1] ?? '');
 }
 
+/**
+ * Tryb sterowania joystickiem na telefonie.
+ *
+ * - `direct` (domyślny) — **pchasz gałkę w dół ⇒ czołg jedzie w dół ekranu**.
+ *   Kierunek z gałki = kierunek na mapie, kadłub sam się obraca w stronę jazdy.
+ *   Zero zgadywania „gdzie teraz jest przód mojego czołgu”.
+ * - `tank` — klasyk dla purystów: góra = gaz do przodu, dół = wsteczny,
+ *   lewo/prawo = obrót kadłuba względem kierunku, w którym czołg jest zwrócony.
+ */
+export type PadSteer = 'direct' | 'tank';
+
+/** Nowe telefony startują w trybie kierunkowym — najmniej mylący. */
+export const DEFAULT_PAD_STEER: PadSteer = 'direct';
+
 /** Stan joysticka wysyłany przez telefon. */
 export interface PadInput {
-  /** -1 (tył) .. 1 (przód) */
+  /** -1 (tył) .. 1 (przód) — używane w trybie `tank` (i przez starsze pady). */
   fwd: number;
-  /** -1 (lewo) .. 1 (prawo) */
+  /** -1 (lewo) .. 1 (prawo) — używane w trybie `tank` (i przez starsze pady). */
   turn: number;
   fire: boolean;
+  /**
+   * Tryb wybrany na telefonie. Brak pola = stary pad (host stosuje wtedy `fwd`/`turn`),
+   * dzięki czemu telefon z zapisaną w pamięci starszą wersją strony nadal działa.
+   */
+  steer?: PadSteer;
+  /** Wektor kierunku w przestrzeni ekranu (x = prawo, y = DÓŁ), -1..1 — tryb `direct`. */
+  dirX?: number;
+  dirY?: number;
+  /**
+   * Joystick celowania: kierunek wieży w przestrzeni ekranu (x = prawo, y = DÓŁ), -1..1.
+   * (0,0) = nie celujesz — wieża po chwili wraca do kierunku kadłuba.
+   */
+  aimX?: number;
+  aimY?: number;
 }
 
 export const ZERO_INPUT: PadInput = { fwd: 0, turn: 0, fire: false };
@@ -58,8 +86,8 @@ export type HostScreen = 'menu' | 'setup' | 'game' | 'over';
 /** Telefon -> komputer */
 export type PadMessage =
   /** `pid` = stały identyfikator telefonu (localStorage) — zapobiega dwóm slotom na tym samym telefonie po zmianie transportu. */
-  | { t: 'hello'; nick: string; ua: string; v: number; pid?: string }
-  | { t: 'input'; fwd: number; turn: number; fire: boolean }
+  | { t: 'hello'; nick: string; ua: string; v: number; pid?: string; steer?: PadSteer }
+  | { t: 'input'; fwd: number; turn: number; fire: boolean; steer?: PadSteer; dirX?: number; dirY?: number; aimX?: number; aimY?: number }
   | { t: 'pause' }
   | { t: 'ping'; at: number };
 

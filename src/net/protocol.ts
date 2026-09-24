@@ -1,7 +1,5 @@
-/**
- * Wspólny protokół komunikacji komputer (host) <-> telefon (pad).
- * Wszystko leci przez WebRTC DataChannel (PeerJS), jako JSON.
- */
+/** Wspólny protokół — ten sam JSON przez WebRTC albo awaryjny przekaźnik MQTT. */
+import type { GameId } from '../arcade/catalog';
 
 export const ROOM_PREFIX = 'stalowy-front-';
 export const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -81,7 +79,35 @@ export const ZERO_INPUT: PadInput = { fwd: 0, turn: 0, fire: false };
 
 export type PadFx = 'fire' | 'hit' | 'kill' | 'dead' | 'pickup' | 'shield' | 'respawn' | 'win' | 'lose';
 
-export type HostScreen = 'menu' | 'setup' | 'game' | 'over';
+export type HostScreen = 'lobby' | 'menu' | 'setup' | 'game' | 'over';
+export type RemoteCommand = 'left' | 'right' | 'up' | 'down' | 'select' | 'back' | 'pause' | 'restart' | 'home';
+export const REMOTE_COMMANDS: readonly RemoteCommand[] = ['left', 'right', 'up', 'down', 'select', 'back', 'pause', 'restart', 'home'];
+export interface RemoteEvent { id: number; command: RemoteCommand }
+
+export interface ArcadeHud {
+  score: number;
+  timeLeft: number;
+  title: string;
+  detail: string;
+  value?: number;
+  maxValue?: number;
+}
+
+export interface SessionOptions {
+  primaryLabel: string;
+  primaryValue: string;
+  secondaryLabel: string;
+  secondaryValue: string;
+}
+
+export interface SessionState {
+  game: GameId | null;
+  screen: HostScreen;
+  selection: number;
+  adminSlot: number | null;
+  roster: { slot: number; nick: string }[];
+  options?: SessionOptions;
+}
 
 /** Telefon -> komputer */
 export type PadMessage =
@@ -89,6 +115,8 @@ export type PadMessage =
   | { t: 'hello'; nick: string; ua: string; v: number; pid?: string; steer?: PadSteer }
   | { t: 'input'; fwd: number; turn: number; fire: boolean; steer?: PadSteer; dirX?: number; dirY?: number; aimX?: number; aimY?: number }
   | { t: 'pause' }
+  | { t: 'command'; command: RemoteCommand }
+  | { t: 'choose'; index: number }
   | { t: 'ping'; at: number };
 
 /** Komputer -> telefon */
@@ -97,6 +125,8 @@ export type HostMessage =
   | { t: 'rejected'; reason: string }
   | { t: 'slot'; slot: number; name: string; color: string; darkColor: string }
   | { t: 'screen'; screen: HostScreen; winnerName?: string; winnerColor?: string; youWon?: boolean }
+  | { t: 'session'; session: SessionState }
+  | { t: 'arcadeHud'; hud: ArcadeHud }
   | { t: 'hud'; hp: number; maxHp: number; alive: boolean; kills: number; deaths: number; lives: number; respawn: number; countdown: number; paused: boolean; timeLeft: number; shield: boolean; rapid: boolean; big: boolean; speed: boolean; mode: 'deathmatch' | 'survival' }
   | { t: 'fx'; fx: PadFx }
   | { t: 'pong'; at: number };

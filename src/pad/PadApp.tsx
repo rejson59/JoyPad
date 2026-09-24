@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Crosshair, Gamepad2, Settings, X, Heart, Loader2, LogOut, Maximize2, Pause, Shield, Signal, Skull, Smartphone, Wifi, WifiOff, Zap, Wind, RotateCcw, Trophy } from 'lucide-react';
+import { Crosshair, Gamepad2, Settings, X, Heart, Loader2, LogOut, Maximize2, Pause, Shield, Signal, Skull, Smartphone, Wifi, WifiOff, Zap, Wind, RotateCcw } from 'lucide-react';
 import { padClient, type PadClientState } from '../net/padClient';
 import { CODE_LENGTH, normalizeCode, padCodeFromHash, type PadFx, type PadSteer } from '../net/protocol';
 import { Joystick } from './Joystick';
 import { ConnectionCheck } from './ConnectionCheck';
+import { JoypadController } from './JoypadController';
 
 const LS_NICK = 'sf_pad_nick';
 const LS_CODE = 'sf_pad_code';
@@ -84,11 +85,11 @@ export default function PadApp() {
   // Slot bez czołgu w trwającej bitwie: brak HUD-u przez >2 s
   const [noTank, setNoTank] = useState(false);
   useEffect(() => {
-    if (st.screen !== 'game' || st.status !== 'connected') { setNoTank(false); return; }
+    if (st.screen !== 'game' || st.game !== 'tanks' || st.status !== 'connected') { setNoTank(false); return; }
     if (st.hud) { setNoTank(false); return; }
     const t = setTimeout(() => setNoTank(true), 2500);
     return () => clearTimeout(t);
-  }, [st.screen, st.status, st.hud]);
+  }, [st.screen, st.game, st.status, st.hud]);
 
   // Orientation hint
   useEffect(() => {
@@ -214,23 +215,26 @@ export default function PadApp() {
     if (!layout.aimStick) { padClient.setInput({ aimX: 0, aimY: 0 }); aimHot.current = false; syncFire(); }
   }, [layout.aimStick, syncFire]);
 
+  // Żadna gra nie dziedziczy wciśniętego przycisku ani kierunku z poprzedniego ekranu.
+  useEffect(() => {
+    fireBtn.current = false; aimHot.current = false; fireSent.current = false;
+    padClient.setInput({ fwd: 0, turn: 0, dirX: 0, dirY: 0, aimX: 0, aimY: 0, fire: false });
+  }, [st.screen, st.game]);
+
   /* ---------- Connection screen ---------- */
   if (st.status !== 'connected') {
     // „lost” też jest zajęte — klient sam próbuje wrócić do gry.
     const busy = st.status === 'connecting' || st.status === 'lost';
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-[#0a0a0b] px-5 py-8 text-white">
-        <div className="hazard-stripes fixed left-0 right-0 top-0 h-2 opacity-80" />
-        <div className="hazard-stripes fixed bottom-0 left-0 right-0 h-2 opacity-80" />
-        <div className="mb-2 flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-4 py-1.5 text-[11px] font-bold tracking-[0.25em] text-amber-400">
-          <Smartphone className="h-3.5 w-3.5" /> TELEFON JAKO JOYSTICK
+      <div className="pad-joy flex min-h-[100dvh] flex-col items-center justify-center px-5 py-8 text-white" style={{ background: 'radial-gradient(ellipse at 50% 4%,rgba(108,60,202,.22),transparent 52%),#0d1021' }}>
+        <div className="fixed left-0 right-0 top-0 h-1 bg-gradient-to-r from-violet-600 via-sky-400 to-fuchsia-500" />
+        <div className="mb-3 flex items-center gap-2 rounded-full border border-violet-400/30 bg-violet-500/10 px-4 py-1.5 text-[11px] font-bold tracking-[0.2em] text-violet-300">
+          <Smartphone className="h-3.5 w-3.5" /> TELEFON JAKO PAD
         </div>
-        <h1 className="font-display text-center text-4xl leading-none">
-          <span className="bg-gradient-to-b from-amber-200 via-amber-400 to-orange-700 bg-clip-text text-transparent">STALOWY</span>{' '}
-          <span className="bg-gradient-to-b from-zinc-100 via-zinc-400 to-zinc-600 bg-clip-text text-transparent">FRONT</span>
-        </h1>
+        <h1 className="joy-brand text-center text-5xl font-extrabold tracking-[-.06em]">Joy<span className="text-violet-400">Pad.</span></h1>
+        <p className="mt-2 max-w-sm text-center text-sm text-slate-400">Jeden ekran, pięć gier i telefon w roli kontrolera.</p>
 
-        <div className="metal-panel rivet mt-6 w-full max-w-sm rounded-2xl p-5">
+        <div className="joy-room mt-6 w-full max-w-sm rounded-2xl p-5">
           <label className="block text-[11px] font-bold tracking-widest text-zinc-400">KOD Z EKRANU KOMPUTERA</label>
           <input
             value={code}
@@ -242,21 +246,21 @@ export default function PadApp() {
             autoCorrect="off"
             spellCheck={false}
             maxLength={CODE_LENGTH}
-            className="font-mono2 mt-1.5 w-full rounded-xl border border-white/15 bg-black/60 px-4 py-3 text-center text-3xl font-extrabold tracking-[0.4em] text-amber-300 outline-none focus:border-amber-400"
+            className="font-mono2 mt-1.5 w-full rounded-xl border border-white/15 bg-black/60 px-4 py-3 text-center text-3xl font-extrabold tracking-[0.4em] text-violet-300 outline-none focus:border-violet-400"
           />
           <label className="mt-4 block text-[11px] font-bold tracking-widest text-zinc-400">TWÓJ NICK</label>
           <input
             value={nick}
             onChange={e => setNick(e.target.value.slice(0, 14))}
             onKeyDown={e => { if (e.key === 'Enter') connect(); }}
-            placeholder="np. Czołgista"
+            placeholder="np. Alex"
             maxLength={14}
-            className="mt-1.5 w-full rounded-xl border border-white/15 bg-black/60 px-4 py-2.5 text-base font-bold text-white outline-none focus:border-amber-400"
+            className="mt-1.5 w-full rounded-xl border border-white/15 bg-black/60 px-4 py-2.5 text-base font-bold text-white outline-none focus:border-violet-400"
           />
           <button
             onClick={connect}
             disabled={busy || normalizeCode(code).length !== CODE_LENGTH}
-            className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-amber-400 to-orange-600 py-3.5 text-lg font-black tracking-widest text-black shadow-[0_0_30px_rgba(251,146,60,0.35)] disabled:opacity-40 disabled:shadow-none"
+            className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-400 to-sky-300 py-3.5 text-lg font-black tracking-widest text-[#0d1021] shadow-[0_0_30px_rgba(139,92,246,0.25)] disabled:opacity-40 disabled:shadow-none"
           >
             {busy ? <><Loader2 className="h-5 w-5 animate-spin" /> ŁĄCZENIE…</> : <><Wifi className="h-5 w-5" /> POŁĄCZ</>}
           </button>
@@ -291,15 +295,15 @@ export default function PadApp() {
         </div>
 
         <div className="mt-5 max-w-sm space-y-1.5 text-center text-[11px] leading-relaxed text-zinc-500">
-          <p>1. Na komputerze otwórz grę i kliknij <b className="text-zinc-300">📱 Telefon jako pad</b>.</p>
-          <p>2. Zeskanuj kod QR albo wpisz tutaj 5‑znakowy kod.</p>
-          <p>3. Telefon dostanie wolny slot gracza. Steruj joystickiem, strzelaj wielkim przyciskiem.</p>
+          <p>1. Otwórz <b className="text-zinc-300">JoyPad na komputerze lub TV</b>.</p>
+          <p>2. Zeskanuj kod QR z ekranu albo wpisz tutaj 5‑znakowy kod.</p>
+          <p>3. Pierwszy telefon zostanie administratorem i wybierze grę. Pozostałe dostaną własne pady.</p>
           <p className="pt-1 text-zinc-400">
             Łączenie idzie przez internet, a potem bezpośrednio między urządzeniami.
             Gdy połączenie bezpośrednie nie przechodzi (np. telefon na LTE), gra automatycznie
             używa awaryjnego przekaźnika — <b className="text-zinc-300">różne sieci (Wi‑Fi ↔ LTE) też działają</b>.
           </p>
-          <a href="#" onClick={() => { location.hash = ''; }} className="mt-2 inline-block text-zinc-400 underline">← Wróć do gry (tryb komputera)</a>
+          <a href="#" onClick={() => { location.hash = ''; }} className="mt-2 inline-block text-zinc-400 underline">← Otwórz JoyPad na tym urządzeniu</a>
         </div>
 
         <div className="mt-4 w-full max-w-sm">
@@ -309,12 +313,14 @@ export default function PadApp() {
     );
   }
 
+  // Pilot biblioteki, menu poszczególnych gier i cztery dedykowane pady arcade.
+  // Oryginalny pad twin-stick Stalowego Frontu poniżej pozostaje nietknięty.
+  if (st.screen !== 'game' || st.game !== 'tanks') return <JoypadController st={st} fullscreen={goFullscreen} />;
+
   /* ---------- Controller screen ---------- */
   const hud = st.hud;
   const hpPct = hud ? (hud.hp / hud.maxHp) * 100 : 100;
   const color = st.color;
-  const inLobby = st.screen === 'menu' || st.screen === 'setup';
-  const over = st.screen === 'over';
 
   return (
     <div
@@ -342,8 +348,11 @@ export default function PadApp() {
           )}
           <button onClick={() => setShowSettings(v => !v)} className={`rounded-lg border p-1.5 ${showSettings ? 'border-amber-400/60 bg-amber-400/20 text-amber-200' : 'border-white/15 bg-white/5 text-zinc-300'}`} title="Ustawienia sterowania"><Settings className="h-4 w-4" /></button>
           <button onClick={goFullscreen} className="rounded-lg border border-white/15 bg-white/5 p-1.5 text-zinc-300"><Maximize2 className="h-4 w-4" /></button>
-          <button onClick={() => { padClient.requestPause(); vibrate(15); }} className="rounded-lg border border-white/15 bg-white/5 p-1.5 text-zinc-300"><Pause className="h-4 w-4" /></button>
-          <button onClick={() => { padClient.disconnect(); }} className="rounded-lg border border-red-500/40 bg-red-500/10 p-1.5 text-red-300"><LogOut className="h-4 w-4" /></button>
+          {st.slot === st.adminSlot && <>
+            <button onClick={() => { padClient.requestPause(); vibrate(15); }} title="Pauza" className="rounded-lg border border-white/15 bg-white/5 p-1.5 text-zinc-300"><Pause className="h-4 w-4" /></button>
+            <button onClick={() => { if (window.confirm('Zakończyć bitwę i wrócić do JoyPad?')) padClient.sendCommand('home'); }} title="Wróć do JoyPad" className="rounded-lg border border-violet-400/30 bg-violet-500/10 p-1.5 text-violet-200"><Gamepad2 className="h-4 w-4" /></button>
+          </>}
+          <button onClick={() => { padClient.disconnect(); }} title="Odłącz telefon" className="rounded-lg border border-red-500/40 bg-red-500/10 p-1.5 text-red-300"><LogOut className="h-4 w-4" /></button>
         </div>
       </div>
 
@@ -376,13 +385,6 @@ export default function PadApp() {
 
       {/* centre message */}
       <div className="pointer-events-none absolute inset-x-0 top-1/2 z-10 flex -translate-y-1/2 flex-col items-center px-6 text-center">
-        {inLobby && (
-          <>
-            <Gamepad2 className="h-9 w-9 animate-pulse" style={{ color }} />
-            <div className="font-display mt-1 text-2xl" style={{ color }}>POŁĄCZONO</div>
-            <div className="mt-1 max-w-xs text-xs text-zinc-400">Czekaj, aż host uruchomi bitwę. Sterujesz czołgiem <b style={{ color }}>{st.name}</b>.</div>
-          </>
-        )}
         {hud && hud.countdown > 0 && (
           <div className="font-display text-7xl text-amber-300 drop-shadow-[0_0_30px_rgba(251,191,36,0.6)]">{Math.ceil(hud.countdown)}</div>
         )}
@@ -395,15 +397,6 @@ export default function PadApp() {
         {noTank && (
           <div className="rounded-xl border border-amber-500/40 bg-black/70 px-5 py-3 text-xs text-amber-200">
             Bitwa już trwa, a Twój slot <b style={{ color }}>{st.name}</b> nie bierze w niej udziału.<br />Dołączysz automatycznie w następnej rundzie.
-          </div>
-        )}
-        {over && (
-          <div className="rounded-2xl border border-white/10 bg-black/70 px-6 py-4">
-            <Trophy className="mx-auto h-8 w-8 text-amber-400" />
-            <div className="font-display mt-1 text-2xl" style={{ color: st.result?.youWon ? color : '#e4e4e7' }}>
-              {st.result?.youWon ? 'WYGRANA!' : st.result?.winnerName ? `WYGRYWA ${st.result.winnerName}` : 'REMIS'}
-            </div>
-            <div className="mt-1 text-xs text-zinc-400">Host może rozpocząć kolejną bitwę.</div>
           </div>
         )}
       </div>

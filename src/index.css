@@ -111,3 +111,55 @@ canvas {
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: #111; }
 ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 4px; }
+
+/* ----------------------------- JOYPAD ----------------------------- */
+:root { --font-joy: "Outfit", "Chakra Petch", sans-serif; --font-joy-heading: "Space Grotesk", "Outfit", sans-serif; }
+.joy-shell, .pad-joy, .arcade-page { font-family: var(--font-joy); }
+.joy-brand, .joy-heading, .arcade-title { font-family: var(--font-joy-heading); }
+.joy-kicker { font-family: var(--font-joy); font-size: 10px; font-weight: 800; letter-spacing: .2em; line-height: 1.45; }
+.joy-shell { background: #0d1021; }
+.joy-ambient {
+  background: radial-gradient(ellipse at 6% 8%, rgba(109,54,205,.17), transparent 34%),
+              radial-gradient(ellipse at 95% 58%, rgba(22,86,152,.14), transparent 40%),
+              linear-gradient(180deg,#0f1227 0%,#090d1d 85%);
+}
+.joy-ambient::after { content: ""; position: absolute; inset: 0; opacity: .32; background-image: linear-gradient(rgba(157,158,214,.045) 1px,transparent 1px), linear-gradient(90deg,rgba(157,158,214,.045) 1px,transparent 1px); background-size: 56px 56px; mask-image: linear-gradient(transparent,#000 18%,#000 80%,transparent); }
+.joy-gradient-text { color: #c2aaff; background: linear-gradient(105deg,#d6c5ff 0%,#9c82ef 55%,#72d7ee 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.joy-logo { color: white; background: linear-gradient(140deg,#a78bfa,#6d35ce 58%,#442294); box-shadow: 0 8px 24px rgba(110,66,218,.35), inset 0 1px 0 #ffffff66; }
+.joy-room { background: linear-gradient(145deg,rgba(34,38,70,.86),rgba(17,20,42,.94)); border: 1px solid rgba(187,179,255,.17); box-shadow: 0 22px 70px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.07); }
+.joy-status { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #ba9d4a40; background: #ba9d4a19; color: #f4d488; border-radius: 999px; padding: 5px 8px; font-size: 9px; letter-spacing: .09em; font-weight: 800; white-space: nowrap; }
+.joy-status span { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.joy-status-live { border-color: #34d39955; background: #34d39916; color: #6ee7b7; }
+.joy-status-live span { box-shadow: 0 0 8px #34d399; }
+.joy-feature-image { transition: transform .5s ease, opacity .35s; }
+.joy-feature:hover .joy-feature-image { transform: scale(1.025); }
+.joy-feature-number { font-family: var(--font-joy-heading); }
+.joy-arrow, .pad-nav, .pad-icon, .arcade-icon { display: inline-flex; justify-content: center; align-items: center; flex-shrink: 0; border: 1px solid rgba(255,255,255,.16); color: #e1e5f0; background: rgba(255,255,255,.06); transition: background .16s, border-color .16s, transform .16s; }
+.joy-arrow { width: 35px; height: 35px; border-radius: 11px; }
+.joy-arrow:hover, .pad-nav:hover, .pad-icon:hover, .arcade-icon:hover { background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.38); }
+.joy-arrow:active, .pad-nav:active, .pad-icon:active, .arcade-icon:active, .pad-primary:active { transform: scale(.96); }
+.joy-game-card[aria-current="true"] { box-shadow: 0 0 0 1px #a78bfa6b, 0 13px 30px rgba(103,63,203,.16); }
+.joy-shell kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 23px; padding: 1px 5px; border-radius: 4px; border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.06); color: #e2e8f0; font: 10px var(--font-mono); }
+
+/* Każda gra ma odrębną paletę, ale ten sam czytelny język nawigacji. */
+.arcade-page { background: #0b111d; }
+.arcade-race { background: radial-gradient(ellipse at 20% 0%,#23114a,#090e23 64%); }
+.arcade-orbit { background: radial-gradient(ellipse at 80% 5%,#112853,#070b1c 68%); }
+.arcade-snake { background: radial-gradient(ellipse at 15% 0%,#1b402e,#09191b 65%); }
+.arcade-temple { background: radial-gradient(ellipse at 80% 5%,#43301d,#12201b 67%); }
+.arcade-texture { background-image: linear-gradient(rgba(255,255,255,.023) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.023) 1px,transparent 1px); background-size: 50px 50px; }
+.arcade-hero { box-shadow: 0 26px 65px rgba(0,0,0,.4); }
+.arcade-panel { border: 1px solid rgba(255,255,255,.12); background: rgba(18,25,38,.66); box-shadow: inset 0 1px 0 rgba(255,255,255,.04); }
+.arcade-option { border: 1px solid rgba(255,255,255,.10); background: rgba(0,0,0,.22); }
+.arcade-secondary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid rgba(255,255,255,.18); border-radius: 12px; background: rgba(255,255,255,.06); color: #e6e8ee; padding: 12px 18px; font-size: 13px; font-weight: 700; transition: background .18s; }
+.arcade-secondary:hover { background: rgba(255,255,255,.13); }
+.arcade-icon { height: 33px; width: 33px; border-radius: 9px; }
+
+.pad-joy { background: #0c1021; }
+.pad-nav { width: 59px; height: 51px; border-radius: 12px; touch-action: manipulation; }
+.pad-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 51px; border-radius: 12px; padding: 10px 12px; font-size: 13px; font-weight: 900; color: #101124; box-shadow: 0 10px 23px rgba(0,0,0,.25); touch-action: manipulation; }
+.pad-secondary { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 41px; border-radius: 10px; border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.06); color: #e2e8f0; font-size: 11px; font-weight: 800; touch-action: manipulation; }
+.pad-secondary:active { background: rgba(255,255,255,.14); }
+.pad-icon { height: 34px; width: 34px; border-radius: 9px; }
+button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid #a78bfa; outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .joy-feature-image, .joy-game-card, .joy-arrow, .arcade-start { transition-duration: 0s !important; } }

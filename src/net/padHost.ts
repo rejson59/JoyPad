@@ -1,11 +1,14 @@
 import Peer, { type DataConnection } from 'peerjs';
 import {
-  PROTOCOL_VERSION, ZERO_INPUT, randomCode, roomIdFromCode,
-  type HostMessage, type HostScreen, type PadFx, type PadInput, type PadMessage, type PadSteer,
+  PROTOCOL_VERSION, REMOTE_COMMANDS, ZERO_INPUT, randomCode, roomIdFromCode,
+  type ArcadeHud, type HostMessage, type HostScreen, type PadFx, type PadInput, type PadMessage,
+  type PadSteer, type RemoteCommand, type SessionOptions, type SessionState,
 } from './protocol';
 import { buildPeerOptions, signalingFromLocation, type SignalingConfig } from './signaling';
 import { WebrtcLink, type PadLink } from './links';
 import { HostRelayLink, RELAY_BROKERS, RelayChannel, relayTopicFor, type RelayItem } from './relay';
+import type { GameId } from '../arcade/catalog';
+import { GAMES } from '../arcade/catalog';
 
 export interface PadInfo {
   connId: string;
@@ -88,7 +91,10 @@ export class PadHost {
   private padsByPid = new Map<string, string>();
   private listeners = new Set<Listener>();
   private slotMeta: SlotMeta[] = [];
-  private screen: HostScreen = 'menu';
+  private screen: HostScreen = 'lobby';
+  private game: GameId | null = null;
+  private selection = 0;
+  private menuOptions: SessionOptions | undefined;
   private hudTimers = new Map<string, number>();
 
   private registerTimer = 0;
@@ -124,6 +130,9 @@ export class PadHost {
   /** Wywoływane, gdy zmieni się przypisanie slotów (dołączył / odszedł telefon). */
   onSlotsChanged: ((slots: (PadInfo | null)[]) => void) | null = null;
   onPauseRequest: (() => void) | null = null;
+  /** Komendy menu są wykonywane wyłącznie dla pierwszego aktywnego telefonu. */
+  onAdminCommand: ((command: RemoteCommand) => void) | null = null;
+  onGameChoice: ((index: number) => void) | null = null;
 
   subscribe(fn: Listener) {
     this.listeners.add(fn);
@@ -148,6 +157,31 @@ export class PadHost {
 
   private emit() { const s = this.snapshot(); this.listeners.forEach(l => l(s)); }
 
+  /** Starszeństwo wynika z kolejności połączenia, a nie numeru zwolnionego slotu. */
+  private admin(): PadInfo | null {
+    let first: PadInfo | null = null;
+    for (const pad of this.pads.values()) if (!first || pad.connectedAt < first.connectedAt) first = pad;
+    return first;
+  }
+
+  session(): SessionState {
+    return {
+      game: this.game, screen: this.screen, selection: this.selection,
+      adminSlot: this.admin()?.slot ?? null,
+      roster: [...this.pads.values()].sort((a, b) => a.slot - b.slot).map(p => ({ slot: p.slot, nick: p.nick })),
+      options: this.menuOptions,
+    };
+  }
+
+  private broadcastSession() {
+    const msg: HostMessage = { t: 'session', session: this.session() };
+    for (const pad of this.pads.values()) this.send(pad.connId, msg);
+  }
+
+  setGame(game: GameId | null) { this.game = game; this.menuOptions = undefined; this.broadcastSession(); }
+  setSelection(index: number) { this.selection = index; this.broadcastSession(); }
+  setMenuOptions(options?: SessionOptions) { this.menuOptions = options; this.broadcastSession(); }
+
   setSlotMeta(meta: SlotMeta[]) {
     this.slotMeta = meta;
     for (const p of this.pads.values()) {
@@ -156,15 +190,16 @@ export class PadHost {
     }
   }
 
-  setScreen(screen: HostScreen, extra?: { winnerSlot?: number | null; winnerName?: string; winnerColor?: string }) {
+  setScreen(screen: HostScreen, extra?: { winnerSlot?: number | null; winnerName?: string; winnerColor?: string; allWon?: boolean }) {
     this.screen = screen;
     for (const p of this.pads.values()) {
       this.send(p.connId, {
         t: 'screen', screen,
         winnerName: extra?.winnerName, winnerColor: extra?.winnerColor,
-        youWon: extra?.winnerSlot === undefined ? undefined : extra.winnerSlot === p.slot,
+        youWon: extra?.allWon || (extra?.winnerSlot === undefined ? undefined : extra.winnerSlot === p.slot),
       });
     }
+    this.broadcastSession();
   }
 
   slotOf(connId: string) { return this.pads.get(connId)?.slot ?? -1; }
@@ -186,6 +221,16 @@ export class PadHost {
   sendFx(slot: number, fx: PadFx) {
     const p = this.padForSlot(slot);
     if (p) this.send(p.connId, { t: 'fx', fx });
+  }
+
+  sendArcadeHud(slot: number, hud: ArcadeHud) {
+    const p = this.padForSlot(slot);
+    if (!p) return;
+    const now = performance.now();
+    const gap = p.via === 'relay' ? 350 : 160;
+    if (now - (this.hudTimers.get(p.connId) ?? 0) < gap) return;
+    this.hudTimers.set(p.connId, now);
+    this.send(p.connId, { t: 'arcadeHud', hud });
   }
 
   start(preferredCode?: string) {
@@ -543,11 +588,11 @@ export class PadHost {
 
   private handleConn(conn: DataConnection) {
     const link = new WebrtcLink(conn);
+    // Zarejestruj link zanim peer wyemituje 'open': telefon potrafi wysłać
+    // hello natychmiast, a odpowiedź musi już znać adres zwrotny.
+    this.conns.set(link.id, link);
     link.onMessage((raw) => this.onMessage(link, raw as PadMessage));
     link.onClosed(() => this.dropConn(link.id));
-    conn.on('open', () => {
-      if (!this.conns.has(link.id)) this.conns.set(link.id, link);
-    });
   }
 
   private freeSlot(): number {
@@ -566,7 +611,16 @@ export class PadHost {
           setTimeout(() => link.close(), 200);
           return;
         }
-        if (this.pads.has(id)) return; // ten sam link się powtarza
+        if (this.pads.has(id)) {
+          // Welcome mogło zginąć przy przejściu DataChannel w stan OPEN albo
+          // na brokerze MQTT. Ponowne hello nie tworzy drugiego slotu.
+          const existing = this.pads.get(id)!;
+          existing.lastSeen = Date.now();
+          const m = this.slotMeta[existing.slot] ?? { name: `GRACZ ${existing.slot + 1}`, color: '#fbbf24', darkColor: '#78350f' };
+          this.send(id, { t: 'welcome', slot: existing.slot, ...m, screen: this.screen });
+          this.send(id, { t: 'session', session: this.session() });
+          return;
+        }
         // Stały identyfikator telefonu: gdy ten sam telefon łączy się przez drugą
         // ścieżkę (P2P + przekaźnik na raz), pierwsza aktywna wygrywa —
         // nie zajmujemy dwóch slotów. Po rozłączeniu (lastSeen stale) nowa ścieżka przejmie slot.
@@ -589,7 +643,7 @@ export class PadHost {
           setTimeout(() => link.close(), 200);
           return;
         }
-        const nick = (msg.nick || '').trim().slice(0, 14) || `Telefon ${slot + 1}`;
+        const nick = (typeof msg.nick === 'string' ? msg.nick.trim().slice(0, 14) : '') || `Telefon ${slot + 1}`;
         const info: PadInfo = { connId: id, slot, nick, connectedAt: Date.now(), lastSeen: Date.now(), latency: 0, via: link.kind, pid, steer: normSteer(msg.steer) };
         this.pads.set(id, info);
         if (pid) this.padsByPid.set(pid, id);
@@ -598,6 +652,7 @@ export class PadHost {
         this.send(id, { t: 'welcome', slot, ...meta, screen: this.screen });
         this.lastPadChangeAt = Date.now();
         this.emit();
+        this.broadcastSession();
         this.onSlotsChanged?.(this.slots());
         break;
       }
@@ -622,7 +677,19 @@ export class PadHost {
         break;
       }
       case 'pause': {
-        if (this.pads.has(id)) this.onPauseRequest?.();
+        if (this.admin()?.connId === id) this.onPauseRequest?.();
+        break;
+      }
+      case 'command': {
+        if (this.admin()?.connId === id && REMOTE_COMMANDS.includes(msg.command)) {
+          this.onAdminCommand?.(msg.command);
+        }
+        break;
+      }
+      case 'choose': {
+        if (this.admin()?.connId === id && Number.isInteger(msg.index) && msg.index >= 0 && msg.index < GAMES.length) {
+          this.onGameChoice?.(msg.index);
+        }
         break;
       }
       case 'ping': {
@@ -648,6 +715,7 @@ export class PadHost {
       this.inputs[p.slot] = { ...ZERO_INPUT };
       this.lastPadChangeAt = Date.now();
       this.emit();
+      this.broadcastSession();
       this.onSlotsChanged?.(this.slots());
     }
   }

@@ -1,83 +1,52 @@
-# StalowyFront — Przeglądarkowa gra w czołgi 🛡️
+# JoyPad 🎮
 
-Lokalny multiplayer 2–4 graczy na jednym ekranie: klawiatura **lub telefony jako bezprzewodowe joysticki**.
+Pięć gier multiplayer na **jednym ekranie**. Telefony stają się bezprzewodowymi padami; komputer lub TV wyświetla wspólną arenę. Strona jest statyczna i może działać na GitHub Pages. Stalowy Front pozostaje pełną grą z dotychczasowym menu, mapami, botami i sterowaniem.
 
-## 🎮 Granie
+| Gra | Co się dzieje | Telefon |
+| --- | --- | --- |
+| **Stalowy Front** | Bitwy czołgów: 3 mapy, 2 tryby, rykoszety, niszczalne osłony, bonusy i boty | Joystick jazdy, joystick wieży, ogień |
+| **Neon Circuit** | Wyścig po nocnym torze, okrążenia, rywale SI, ścinanie zakrętów i zbieranie turbo | Kierunek jazdy + turbo |
+| **Orbitalna Fala** | Kooperacyjna obrona przed kolejnymi falami dronów i asteroid; życia, osłony, naprawy i szybki ogień | Lot, celowanie i strzał |
+| **Wężowy Wir** | Rywalizacja w neonowej arenie: rosnące węże, złote impulsy, kolizje, sprint i boty | Skręt + sprint |
+| **Skarbiec Świątyni** | Wspólna wyprawa przez labirynt: relikty, skrzynie, pułapki, strażnicy i portal ucieczki | Ruch + sprint / otwieranie |
 
-- **Komputer / TV**: otwórz stronę gry, wybierz tryb i mapę.
-- **Telefon jako pad**: na komputerze kliknij **📱 TELEFON JAKO PAD** → pojawi się kod QR i 5‑znakowy kod.
-  Na telefonie zeskanuj QR (lub wejdź na tę samą stronę z `#pad` i wpisz kod). Telefon dostaje pierwszy wolny slot gracza.
-  - Sterowanie **twin-stick**: lewa połowa ekranu = joystick **jazdy**, prawa = joystick **celowania** (obraca wieżę
-    niezależnie od kadłuba — na mapie widać wtedy przerywaną linię celowania). Dotknij **gdziekolwiek** w danej połowie,
-    a gałka pojawi się pod kciukiem.
-  - Ogień: przycisk **OGIEŃ** obok gałki celowania (przytrzymaj = seria) albo **auto-ogień** — wychyl gałkę celowania
-    do czerwonego pierścienia, a czołg strzela sam. Po puszczeniu gałki wieża chwilę trzyma cel, potem wraca nad kadłub.
-  - ⚙️ Ustawienia na telefonie: tryb jazdy, joystick celowania wł./wył. (wył. = stary układ z wielkim przyciskiem OGIEŃ),
-    auto-ogień, **zamiana stron** (dla leworęcznych). Wszystko zapamiętuje się na telefonie.
-  - Dwa tryby sterowania (przełącznik nad joystickiem, wybór zapamiętuje się na telefonie):
-    - **KIERUNEK** (domyślny) — czołg jedzie tam, gdzie pchasz gałkę: w dół = w dół ekranu, w lewo = w lewo.
-      Kadłub sam obraca się w stronę jazdy, więc nie trzeba pamiętać, gdzie jest przód czołgu.
-    - **CZOŁG** — klasyczne sterowanie: góra = przód, dół = wsteczny, lewo/prawo = obrót kadłuba.
-  - Wibracje przy strzale, trafieniu, zniszczeniu i bonusach; HUD z HP, fragami i czasem.
-  - Połączenie działa peer‑to‑peer (WebRTC / PeerJS). Komputer i telefon potrzebują internetu, ale mogą być
-    w **różnych sieciach** (Wi‑Fi ↔ LTE): łączenie idzie „na wyścig” — równolegle z próbami P2P telefon łączy się
-    z awaryjnym przekaźnikiem (publiczny broker MQTT, zero konfiguracji), a wygrywa ten transport, który pierwszy
-    dostarczy połączenie. Najniższe opóźnienia daje WebRTC; przekaźnik jest gwarancją, że gra po prostu się połączy.
-    Na telefonie (i w panelu hosta) widać, przez którą ścieżkę idzie pad.
-  - Łączenie jest cierpliwe i samo się naprawia: każdy etap (serwer sygnalizacji → pokój → WebRTC) ma własny limit czasu,
-    nieudane próby są ponawiane z rosnącym opóźnieniem, a zerwane połączenie telefon odbudowuje automatycznie
-    (zawieszony pad po 10 s bez sygnalizacji zwalnia slot). Kod pokoju nie zmienia się przy ponowieniach,
-    więc raz zeskanowany QR pozostaje ważny.
-  - Gdy coś nie działa, w panelu na komputerze i na ekranie telefonu jest przycisk **🩺 Sprawdź połączenie** —
-    testuje przeglądarkę, serwer sygnalizacji, STUN, TURN **oraz awaryjny przekaźnik**, i mówi wprost, co blokuje łączność.
-  - Własny PeerServer (gdyby publiczny broker był niedostępny): dodaj `?srv=host:port/ścieżka` do adresu gry, np.
-    `…/StalowyFront/?srv=peer.mojadomena.pl:443/peerjs`. Ustawienie zapamiętuje się na telefonie (`#pad=KOD&srv=…` też działa).
-- Klawiatura wciąż działa równolegle: gracz 1 = `WSAD` + `Q/Spacja`, gracz 2 = strzałki + `Enter`, gracz 3 = `TFGH` + `R`, gracz 4 = `IJKL` + `U`. `P`/`ESC` = pauza.
+Każda gra ma własny ekran wejściowy, zasady, ustawienia rundy, HUD i ekran wyników. Nowe gry obsługują 1–4 graczy (plus opcjonalne boty w wyścigu i arenie węży). Stalowy Front zachowuje swoje zasady 2–4 uczestników; możesz dobrać boty, gdy grasz sam.
 
-## 🚀 GitHub Pages
+## Jak zagrać
 
-Workflow GitHub Actions leży w **`.github/workflows/deploy.yml`** — przy każdym pushu na `main` buduje grę
-i publikuje ją na GitHub Pages (w repo: **Settings → Pages → Build and deployment → Source: „GitHub Actions”**,
-już ustawione).
+1. Otwórz JoyPad na komputerze lub TV. Pokój z pięcioznakowym kodem otwiera się automatycznie. Na ekranie widać **QR** i listę miejsc.
+2. Każdy gracz skanuje QR albo otwiera tę samą stronę z `#pad`, wpisuje kod i opcjonalny nick. Nie trzeba zakładać konta ani instalować aplikacji.
+3. **Pierwszy aktywnie połączony telefon zostaje administratorem**. Wybiera grę na pilocie, zmienia opcje, uruchamia rundę, pauzuje i wraca do biblioteki. Pozostałe telefony są padami do gry, ale nie zmieniają menu. Gdy administrator odejdzie, uprawnienie przechodzi na najdłużej podłączony z pozostałych telefonów — niekoniecznie na slot 1.
+4. Wystarczy jeden ekran i jeden telefon. Bez telefonu możesz wybrać grę myszką/klawiaturą i grać na klawiaturze. W lobby działają strzałki + Enter; na ekranach gier również. W rozgrywce: gracz 1 `WSAD` + `Q`/Spacja, gracz 2 strzałki + Enter, gracz 3 `TFGH` + `R`, gracz 4 `IJKL` + `U`. `P`/`Esc` pauzuje.
 
-Gra jest dostępna pod `https://<użytkownik>.github.io/StalowyFront/` (base URL jest ustawiany automatycznie z nazwy repozytorium).
+Telefony podłączone **w trakcie rundy** dostają miejsce w pokoju, ale dołączą do rozgrywki od kolejnej rundy, jeśli ich postać nie była na starcie. Kod pokoju i połączenie pozostają aktywne podczas zmiany gier. Na telefonie można rozłączyć się ręcznie. Administrator może wrócić do JoyPad podczas rundy (w menu pada jest potwierdzenie), a host ma przycisk powrotu.
 
-### Łączenie „zawsze i wszędzie” (Wi‑Fi ↔ LTE)
+### Stalowy Front: sterowanie, które już działało
 
-Gra łączy urządzenia w trzech warstwach, od najlepszej do awaryjnej:
+- Lewy joystick: **KIERUNEK** (czołg jedzie tam, gdzie pchasz palec) lub **CZOŁG** (góra = przód, boki = obrót). Ustawienie jest zapamiętywane.
+- Prawy joystick: kierunek wieży niezależny od jazdy. Wychylenie do czerwonego pierścienia może automatycznie strzelać; jest też przycisk **OGIEŃ**. W ustawieniach pada można wyłączyć prawy joystick, auto-ogień i zamienić strony.
+- Wibracje sygnalizują strzał, trafienie, bonusy i wynik. Oryginalny silnik Canvas, mapy i efekty audio nie zostały zastąpione.
 
-1. **WebRTC P2P** — bezpośrednio między urządzeniami; przechodzi, gdy sieć nie blokuje UDP/TURN.
-2. **TURN** — przekaźnik WebRTC (gdy NAT jest trudny, np. telefon na LTE).
-3. **Awaryjny przekaźnik (bez konfiguracji)** — gdy WebRTC/TURN nie przechodzi, gra leci przez publicznego
-   brokera MQTT‑over‑WebSocket (hivemq → emqx → mosquitto, próbowani po kolei). Host stale podsłuchuje temat
-   pokoju, telefon łączy się tam równolegle z próbami P2P. Działa z dowolnej sieci, bo to zwykłe połączenie
-   wychodzące (wss://). Ruch jest minimalny (stan joysticka ~50 B, kilka razy/s), więc publiczny broker wystarczy.
+## Łączność i ograniczenia
 
-W testach **🩺 Sprawdź połączenie** widoczne są osobno kroki **TURN (przekaźnik)** i **Awaryjny przekaźnik
-(Wi‑Fi ↔ LTE)** — ten drugi jest gwarancją zerowej konfiguracji.
+Zachowano dotychczasową ścieżkę połączenia: **PeerJS / WebRTC**, opcjonalny **TURN** oraz awaryjny przekaźnik przez publiczne brokery MQTT-over-WebSocket. Host i telefon ścigają WebRTC z przekaźnikiem; działa to także między Wi‑Fi a LTE, o ile urządzenia mają internet i przynajmniej jedna z tych zewnętrznych usług jest dostępna. **GitHub Pages nie udostępnia własnego serwera sygnalizacji ani gwarantowanego przekaźnika** — publiczne usługi mogą czasem zawodzić. W panelu hosta i telefonu dostępny jest test „Sprawdź połączenie”.
 
-Jeśli chcesz najszybsze łączenie między sieciami, dodaj własny TURN — na trzy sposoby:
+Gdy chcesz używać własnego PeerServer, dodaj do adresu hosta `?srv=host:port/peerjs` (opcja zostanie przekazana przez QR i zapamiętana na telefonie). Własny TURN można skonfigurować parametrami `?turn=turn:twoj-host:3478,turns:twoj-host:5349` wraz z opcjonalnym `turnUser` i `turnPass`, albo przez zmienne buildu `VITE_TURN_URLS`, `VITE_TURN_USERNAME`, `VITE_TURN_CREDENTIAL`. Dane TURN są widoczne dla klientów WebRTC — używaj danych krótkotrwałych lub konta z limitem. Pokój jest zabezpieczony **kodem zaproszenia**, nie systemem logowania; nie udostępniaj kodu nieznajomym.
 
-- **Adres strony (bez przebudowy)**: `?turn=turn:turn.example.com:3478,turns:turn.example.com:5349`
-  + opcjonalnie `?turnUser=…` i `?turnPass=…`. Jak `?srv=`, ustawienie zapamiętuje się na urządzeniu,
-  a kod QR przenosi je automatycznie na telefony.
-- **Sekrety repozytorium (build)**: w **Settings → Secrets and variables → Actions** dodaj
-  `VITE_TURN_URLS` (adresy przecinkiem, np. `turn:turn.example.com:3478,turns:turn.example.com:5349`),
-  `VITE_TURN_USERNAME`, `VITE_TURN_CREDENTIAL` — workflow przekaże je do buildu automatycznie.
-- **Lokalnie**: te same wartości w pliku `.env.local` w katalogu projektu (ignorowany przez Git).
+## Publikacja na GitHub Pages i zmiana nazwy repozytorium
 
-Dane dostępowe TURN są z natury widoczne dla klienta WebRTC, więc używaj konta krótkotrwałego
-albo objętego limitem transferu (np. darmowy [Metered Open Relay](https://www.metered.ca/tools/openrelay/)
-z kluczem API, albo coturn na własnym VPS). Wbudowany wspólny Open Relay to tylko rezerwa —
-jest usługą współdzieloną i bywa, że nie zwróci kandydata `relay`; wtedy grę i tak podłapie warstwa awaryjna.
+Workflow `.github/workflows/deploy.yml` buduje stronę po pushu na **main** i publikuje katalog `dist` na Pages. W repozytorium: **Settings → Pages → Build and deployment → GitHub Actions**. `VITE_BASE` jest wyliczane automatycznie z **aktualnej nazwy repozytorium**, a link QR opiera się na aktualnym adresie strony. Nazwa projektu wewnątrz strony i pakietu to już **JoyPad**.
 
-## 🛠️ Rozwój lokalny
+Po scaleniu zmian do `main` możesz zmienić nazwę repozytorium na **JoyPad** w GitHub **Settings → General → Repository name**. Następnie uruchom ręcznie **Actions → Deploy to GitHub Pages → Run workflow** (albo zrób nowy push na main), żeby ponownie zbudować stronę pod `https://<nazwa-użytkownika>.github.io/JoyPad/`. Wystarczy nowy QR po uruchomieniu pokoju — stare linki wskazujące poprzednią nazwę repo mogą być nieaktualne. Nie trzeba ręcznie podmieniać ścieżek w kodzie. Dla repozytorium o nazwie `<użytkownik>.github.io` zamiast projektu `/JoyPad/` ustaw `VITE_BASE=/` w workflow.
+
+## Rozwój
 
 ```bash
-npm install
-npm run dev       # http://localhost:5173  (tryb pada: http://localhost:5173/#pad)
-npm run build     # typecheck + build do dist/
-npm run preview
+npm ci
+npm run dev                 # lokalnie http://localhost:5173/  |  pad: /#pad
+npm run build               # TypeScript + produkcyjny build
+npm run selftest:arcade     # role admina, protokół i silniki czterech gier
+npm run selftest:relay      # warstwa MQTT / awaryjnego przekaźnika
 ```
 
-Stack: Vite 7, React 19, TypeScript, Tailwind 4, PeerJS, qrcode. Grafika i fizyka na Canvas 2D (`src/game/engine.ts`).
+Stack: Vite, React, TypeScript, Canvas 2D, PeerJS, QRCode. `src/arcade/catalog.ts` to biblioteka; `src/arcade/games/` to cztery niezależne silniki z jedną warstwą obsługi klawiatury/pada (`src/arcade/runtime.ts`); `src/App.tsx` i `src/game/` zawierają Stalowy Front. `src/net/` zachowuje istniejący transport, poszerzony o stan sesji i komendy admina. Używany jest hash `#pad`, więc GitHub Pages nie potrzebuje routingu serwerowego.

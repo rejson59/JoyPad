@@ -45,6 +45,8 @@ export interface JoystickProps {
   /** Etykieta w środku gałki, gdy nie jest wciśnięta. */
   label?: string;
   zIndex?: number;
+  /** Dodatkowy odstęp joysticka od dolnej krawędzi (podpis/bezpieczny obszar). */
+  bottomPadding?: number;
 }
 
 /**
@@ -72,6 +74,7 @@ export function Joystick({
   onHotChange,
   label,
   zIndex = 20,
+  bottomPadding = 46,
 }: JoystickProps) {
   const zoneRef = useRef<HTMLDivElement>(null);
   const pointerId = useRef<number | null>(null);
@@ -123,7 +126,7 @@ export function Joystick({
   const zoneH = zone.h || window.innerHeight;
 
   /* ---- pozycja domowa i bieżący środek ---- */
-  const bottomPad = 46;
+  const bottomPad = bottomPadding;
   const homeX = clampRange(radius + 16, zoneW * (sideSlot ? 0.34 : 0.42), zoneW - radius - 14);
   const home = {
     // strefa po prawej = lustrzane odbicie (gałka bliżej prawej krawędzi)

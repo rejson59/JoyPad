@@ -1,11 +1,13 @@
 import Peer, { type DataConnection } from 'peerjs';
 import {
   DEFAULT_PAD_STEER, PROTOCOL_VERSION, roomIdFromCode,
-  type HostMessage, type HostScreen, type PadFx, type PadInput, type PadSteer,
+  type ArcadeHud, type HostMessage, type HostScreen, type PadFx, type PadInput,
+  type PadSteer, type RemoteCommand, type SessionOptions,
 } from './protocol';
 import { buildPeerOptions, signalingFromLocation, type SignalingConfig } from './signaling';
 import { WebrtcLink, type PadLink } from './links';
 import { ClientRelayLink, RELAY_BROKERS, RelayChannel, newRelaySessionId, relayTopicFor } from './relay';
+import type { GameId } from '../arcade/catalog';
 
 export type PadStatus = 'idle' | 'connecting' | 'connected' | 'rejected' | 'lost' | 'error';
 
@@ -38,7 +40,13 @@ export interface PadClientState {
   color: string;
   darkColor: string;
   screen: HostScreen;
+  game: GameId | null;
+  adminSlot: number | null;
+  selection: number;
+  roster: { slot: number; nick: string }[];
+  options?: SessionOptions;
   hud: PadHud | null;
+  arcadeHud: ArcadeHud | null;
   latency: number;
   result: { winnerName?: string; winnerColor?: string; youWon?: boolean } | null;
   /** Aktywne połączenie leci przez awaryjny przekaźnik (nie przez WebRTC). */
@@ -98,6 +106,7 @@ export class PadClient {
   private pingTimer = 0;
   private livenessTimer = 0;
   private attemptTimer = 0;
+  private helloTimer = 0;
   private retryTimer = 0;
   private tickTimer = 0;
   private lastSent: PadInput = { fwd: 0, turn: 0, fire: false, dirX: 0, dirY: 0, aimX: 0, aimY: 0 };
@@ -137,7 +146,8 @@ export class PadClient {
     attempt: 0, maxAttempts: MAX_ATTEMPTS, elapsed: 0, lastFailure: null,
     signaling: this.signaling.label,
     slot: -1, name: '', color: '#fbbf24', darkColor: '#78350f',
-    screen: 'menu', hud: null, latency: 0, result: null, viaRelay: false,
+    screen: 'lobby', game: null, adminSlot: null, selection: 0, roster: [],
+    hud: null, arcadeHud: null, latency: 0, result: null, viaRelay: false,
   };
 
   onFx: ((fx: PadFx) => void) | null = null;
@@ -182,7 +192,8 @@ export class PadClient {
     this.settleDone = false;
     this.relayCid = newRelaySessionId();
     this.set({
-      status: 'connecting', code, error: null, result: null, hud: null, slot: -1,
+      status: 'connecting', code, error: null, result: null, hud: null, arcadeHud: null,
+      game: null, roster: [], adminSlot: null, options: undefined, slot: -1,
       phase: 'signal', attempt: 1, maxAttempts: this.maxAttempts, elapsed: 0,
       lastFailure: null, signaling: this.signaling.label, viaRelay: false,
       progress: 'Łączę z serwerem sygnalizacji…',
@@ -258,7 +269,11 @@ export class PadClient {
     this.attemptStartedAt = performance.now();
     this.set({ phase: 'handshake', progress: 'Witam się z komputerem…' });
     this.sendHello(link);
-    // Komputer zawsze odpowiada `welcome` albo `rejected` — jeśli milczy, coś jest nie tak.
+    // Na niektórych przeglądarkach kanał może zgłosić 'open' zanim host
+    // zainstaluje listener wiadomości. Powtarzaj hello do otrzymania welcome.
+    this.helloTimer = window.setInterval(() => {
+      if (this.active && this.state.status === 'connecting' && this.p2pLink === link && link.open) this.sendHello(link);
+    }, 850);
     this.armTimeout(WELCOME_TIMEOUT, () => this.failAttempt('Komputer nie przydzielił miejsca dla tego telefonu.', false));
   }
 
@@ -325,7 +340,13 @@ export class PadClient {
           this.set({ phase: 'link', progress: 'Łączę przez awaryjny przekaźnik (Internet)…' });
         }
         this.sendHello(link);
+        // MQTT QoS 0 nie gwarantuje dostarczenia pierwszej wiadomości,
+        // zwłaszcza przed SUBACK. Ponawiamy krótki handshake, nie wejście gracza.
+        const repeat = window.setInterval(() => {
+          if (this.active && this.state.status === 'connecting' && this.relayLink === link) this.sendHello(link);
+        }, 900);
         const outcome = await this.waitForRelayOutcome(RELAY_WELCOME_TIMEOUT);
+        clearInterval(repeat);
         if (outcome === 'won' && this.relayLink === link) {
           // Wygraliśmy przez ten przekaźnik — połączenie żyje, kończymy wyścig.
           this.relayActive = false;
@@ -388,6 +409,7 @@ export class PadClient {
     this.conn = winner;
     if (winner.kind === 'webrtc') {
       // Wygrało łączenie bezpośrednie — cicho kończymy rundę przekaźnika.
+      this.resolveRelayWait('closed');
       const link = this.relayLink;
       this.relayLink = null;
       const channel = this.relayChannel;
@@ -449,8 +471,21 @@ export class PadClient {
         this.set({
           screen: msg.screen,
           hud: msg.screen === 'game' ? this.state.hud : null,
+          arcadeHud: msg.screen === 'game' ? this.state.arcadeHud : null,
           result: msg.screen === 'over' ? { winnerName: msg.winnerName, winnerColor: msg.winnerColor, youWon: msg.youWon } : null,
         });
+        break;
+      case 'session': {
+        const { game, screen, adminSlot, selection, roster, options } = msg.session;
+        this.set({
+          game, screen, adminSlot, selection, roster, options,
+          hud: screen === 'game' && game === 'tanks' ? this.state.hud : null,
+          arcadeHud: screen === 'game' && game !== 'tanks' ? this.state.arcadeHud : null,
+        });
+        break;
+      }
+      case 'arcadeHud':
+        this.set({ arcadeHud: msg.hud });
         break;
       case 'hud': {
         const { t: _t, ...hud } = msg; void _t;
@@ -606,7 +641,9 @@ export class PadClient {
   disconnect(silent = false) {
     this.active = false;
     this.teardown();
-    if (!silent) this.set({ status: 'idle', hud: null, slot: -1, error: null, progress: '', phase: 'idle', attempt: 0, elapsed: 0, lastFailure: null, viaRelay: false });
+    this.pending = { fwd: 0, turn: 0, fire: false, dirX: 0, dirY: 0, aimX: 0, aimY: 0 };
+    this.forceSend = true;
+    if (!silent) this.set({ status: 'idle', game: null, adminSlot: null, roster: [], hud: null, arcadeHud: null, slot: -1, error: null, progress: '', phase: 'idle', attempt: 0, elapsed: 0, lastFailure: null, viaRelay: false });
   }
 
   /* --------------------------- sprzątanie ---------------------------- */
@@ -630,8 +667,10 @@ export class PadClient {
 
   private clearAttemptTimers() {
     clearTimeout(this.attemptTimer);
+    clearInterval(this.helloTimer);
     clearTimeout(this.retryTimer);
     this.attemptTimer = 0;
+    this.helloTimer = 0;
     this.retryTimer = 0;
   }
 
@@ -689,6 +728,14 @@ export class PadClient {
 
   requestPause() {
     if (this.conn?.open) this.conn.send({ t: 'pause' });
+  }
+
+  sendCommand(command: RemoteCommand) {
+    if (this.conn?.open) this.conn.send({ t: 'command', command });
+  }
+
+  chooseGame(index: number) {
+    if (this.conn?.open) this.conn.send({ t: 'choose', index });
   }
 
   private flush() {

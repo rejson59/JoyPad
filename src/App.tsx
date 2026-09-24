@@ -9,6 +9,7 @@ import { PLAYER_DEFS, type GameMode, type MapId, type PlayerConfig } from './gam
 import { MAPS } from './game/maps';
 import { gameAudio } from './game/audio';
 import { padHost } from './net/padHost';
+import type { RemoteCommand, RemoteEvent } from './net/protocol';
 import { PadHostPanel, usePadHost } from './pad/PadHostPanel';
 import { Smartphone } from 'lucide-react';
 
@@ -80,9 +81,10 @@ function PlayerCard({ t, mode, killLimit, phone }: { t: HudTank; mode: GameMode;
   );
 }
 
-export default function App() {
+export default function TankApp({ onExit, remote }: { onExit: () => void; remote: RemoteEvent | null }) {
   const [screen, setScreen] = useState<Screen>('menu');
-  const [players, setPlayers] = useState<PlayerConfig[]>(PLAYER_DEFS);
+  const [menuChoice, setMenuChoice] = useState(0);
+  const [players, setPlayers] = useState<PlayerConfig[]>(() => PLAYER_DEFS.map((p, i) => padHost.padForSlot(i) ? { ...p, enabled: true, isBot: false } : p));
   const [mapId, setMapId] = useState<MapId>('desert');
   const [mode, setMode] = useState<GameMode>('deathmatch');
   const [killLimit, setKillLimit] = useState(5);
@@ -123,6 +125,16 @@ export default function App() {
     }
   }, [screen, results]);
 
+  useEffect(() => {
+    padHost.setMenuOptions(screen === 'setup' ? {
+      primaryLabel: 'MAPA', primaryValue: MAPS[mapId].name,
+      secondaryLabel: 'TRYB', secondaryValue: mode === 'deathmatch' ? 'Deathmatch' : 'Przetrwanie',
+    } : screen === 'menu' ? {
+      primaryLabel: 'WYBÓR', primaryValue: ['Pojedynek 1v1', 'Bitwa 4 graczy', 'Trening z botami'][menuChoice],
+      secondaryLabel: 'STEROWANIE', secondaryValue: '← / → wybierz · OK otwórz',
+    } : undefined);
+  }, [screen, mapId, mode, menuChoice]);
+
   const startGame = useCallback((quick?: { count: number; bots: number }) => {
     let cfg = players;
     if (quick) {
@@ -142,6 +154,49 @@ export default function App() {
     setHud(null);
     setScreen('game');
   }, [players]);
+
+  const handleRemote = useCallback((command: RemoteCommand) => {
+    const stage = screenRef.current;
+    if (command === 'home' || (command === 'back' && stage === 'menu')) { onExit(); return; }
+    if (command === 'pause' || (command === 'back' && stage === 'game')) { gameRef.current?.togglePause(); return; }
+    if (stage === 'menu') {
+      if (command === 'left' || command === 'up') setMenuChoice(i => (i + 2) % 3);
+      if (command === 'right' || command === 'down') setMenuChoice(i => (i + 1) % 3);
+      if (command === 'select') {
+        if (menuChoice === 0) { gameAudio.init(); startGame({ count: 2, bots: 0 }); }
+        else {
+          setPlayers(PLAYER_DEFS.map((p, i) => ({ ...p, enabled: menuChoice === 1 ? true : i < 3, isBot: menuChoice === 2 && i > 0 && i < 3 })));
+          setScreen('setup');
+        }
+      }
+    } else if (stage === 'setup') {
+      const maps = Object.keys(MAPS) as MapId[];
+      if (command === 'left' || command === 'right') setMapId(id => maps[(maps.indexOf(id) + (command === 'right' ? 1 : maps.length - 1)) % maps.length]);
+      if (command === 'up' || command === 'down') setMode(m => m === 'deathmatch' ? 'survival' : 'deathmatch');
+      if (command === 'select') { gameAudio.init(); startGame(); }
+      if (command === 'back') setScreen('menu');
+    } else if (stage === 'over') {
+      if (command === 'select' || command === 'restart') startGame();
+      if (command === 'back') setScreen('setup');
+    }
+  }, [menuChoice, onExit, startGame]);
+
+  const lastRemote = useRef(0);
+  useEffect(() => {
+    if (remote && remote.id !== lastRemote.current) {
+      lastRemote.current = remote.id;
+      handleRemote(remote.command);
+    }
+  }, [remote, handleRemote]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (screenRef.current === 'game' || e.target instanceof HTMLInputElement) return;
+      const keys: Record<string, RemoteCommand> = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', Enter: 'select', Escape: 'back' };
+      if (keys[e.code]) { e.preventDefault(); handleRemote(keys[e.code]); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [handleRemote]);
 
   // engine lifecycle
   useEffect(() => {
@@ -223,7 +278,8 @@ export default function App() {
           <style>{`@keyframes floatUp { to { transform: translateY(-110vh); opacity: 0; } }`}</style>
         </div>
 
-        <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-center px-4 py-10">
+        <button onClick={onExit} className="absolute left-4 top-5 z-30 flex items-center gap-2 rounded-lg border border-white/20 bg-black/60 px-3 py-2 text-xs font-bold text-zinc-200 transition hover:border-amber-400/50 hover:text-amber-300 sm:left-8"><Home size={15} /> WRÓĆ DO JOYPAD</button>
+        <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-center px-4 py-16 sm:py-10">
           <div className="mb-4 flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-4 py-1.5 text-xs font-bold tracking-[0.25em] text-amber-400">
             <Swords className="h-3.5 w-3.5" /> LOKALNY MULTIPLAYER • KLAWIATURA LUB TELEFONY • 2–4 GRACZY
           </div>
@@ -241,8 +297,8 @@ export default function App() {
           {/* quick play */}
           <div className="mt-8 grid w-full max-w-3xl grid-cols-1 gap-3 sm:grid-cols-3">
             <button
-              onClick={() => { gameAudio.init(); gameAudio.uiClick(); startGame({ count: 2, bots: 0 }); }}
-              className="group metal-panel rivet rounded-2xl p-5 text-left transition-all hover:scale-[1.02] hover:border-amber-500/50"
+              onClick={() => { setMenuChoice(0); gameAudio.init(); gameAudio.uiClick(); startGame({ count: 2, bots: 0 }); }}
+              className={`group metal-panel rivet rounded-2xl p-5 text-left transition-all hover:scale-[1.02] hover:border-amber-500/50 ${menuChoice === 0 ? 'ring-2 ring-amber-400/70' : ''}`}
             >
               <Users className="h-7 w-7 text-amber-400" />
               <div className="mt-2 text-lg font-bold">Pojedynek 1v1</div>
@@ -250,8 +306,8 @@ export default function App() {
               <div className="mt-3 flex items-center gap-1 text-xs font-bold text-amber-400">GRAJ TERAZ <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></div>
             </button>
             <button
-              onClick={() => { gameAudio.init(); gameAudio.uiClick(); setPlayers(PLAYER_DEFS.map((p, i) => ({ ...p, enabled: i < 4, isBot: false }))); setScreen('setup'); }}
-              className="group metal-panel rivet rounded-2xl border-amber-500/40 p-5 text-left transition-all hover:scale-[1.02]"
+              onClick={() => { setMenuChoice(1); gameAudio.init(); gameAudio.uiClick(); setPlayers(PLAYER_DEFS.map((p, i) => ({ ...p, enabled: i < 4, isBot: false }))); setScreen('setup'); }}
+              className={`group metal-panel rivet rounded-2xl border-amber-500/40 p-5 text-left transition-all hover:scale-[1.02] ${menuChoice === 1 ? 'ring-2 ring-amber-400/70' : ''}`}
               style={{ animation: 'pulse-glow 2.5s ease-in-out infinite' }}
             >
               <Flame className="h-7 w-7 text-orange-500" />
@@ -260,8 +316,8 @@ export default function App() {
               <div className="mt-3 flex items-center gap-1 text-xs font-bold text-amber-400">DALEJ <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></div>
             </button>
             <button
-              onClick={() => { gameAudio.init(); gameAudio.uiClick(); setPlayers(PLAYER_DEFS.map((p, i) => ({ ...p, enabled: i < 3, isBot: i > 0 }))); setScreen('setup'); }}
-              className="group metal-panel rivet rounded-2xl p-5 text-left transition-all hover:scale-[1.02] hover:border-sky-500/50"
+              onClick={() => { setMenuChoice(2); gameAudio.init(); gameAudio.uiClick(); setPlayers(PLAYER_DEFS.map((p, i) => ({ ...p, enabled: i < 3, isBot: i > 0 }))); setScreen('setup'); }}
+              className={`group metal-panel rivet rounded-2xl p-5 text-left transition-all hover:scale-[1.02] hover:border-sky-500/50 ${menuChoice === 2 ? 'ring-2 ring-sky-400/70' : ''}`}
             >
               <Bot className="h-7 w-7 text-sky-400" />
               <div className="mt-2 text-lg font-bold">Trening z botami</div>
@@ -331,7 +387,7 @@ export default function App() {
               <Home className="h-4 w-4" /> MENU
             </button>
             <h2 className="font-display text-2xl tracking-wide text-amber-400 sm:text-3xl">KONFIGURACJA BITWY</h2>
-            <div className="w-24" />
+            <button onClick={onExit} className="flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-bold text-zinc-300 hover:text-amber-300"><Home className="h-4 w-4" /> <span className="hidden sm:inline">JOYPAD</span></button>
           </div>
 
           {/* phones as pads */}
@@ -548,7 +604,10 @@ export default function App() {
             ⚙️ ZMIEŃ ZASADY
           </button>
           <button onClick={() => setScreen('menu')} className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-8 py-3 font-bold text-zinc-200 hover:bg-white/10">
-            <Home className="h-5 w-5" /> MENU
+            <Home className="h-5 w-5" /> MENU BITWY
+          </button>
+          <button onClick={onExit} className="flex items-center gap-2 rounded-xl border border-violet-400/40 bg-violet-500/10 px-8 py-3 font-bold text-violet-200 hover:bg-violet-500/20">
+            <Gamepad2 className="h-5 w-5" /> JOYPAD
           </button>
         </div>
       </div>
@@ -584,9 +643,10 @@ export default function App() {
           <button onClick={() => gameRef.current?.togglePause()} title="Pauza (P)" className="rounded-lg border border-white/15 bg-white/5 p-2 text-zinc-300 hover:bg-white/10">
             {hud?.paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
           </button>
-          <button onClick={() => { gameAudio.uiClick(); setScreen('setup'); }} title="Zakończ bitwę" className="rounded-lg border border-red-500/40 bg-red-500/10 p-2 text-red-300 hover:bg-red-500/20">
+          <button onClick={() => { gameAudio.uiClick(); setScreen('setup'); }} title="Zakończ bitwę i wróć do ustawień" className="rounded-lg border border-red-500/40 bg-red-500/10 p-2 text-red-300 hover:bg-red-500/20">
             <Home className="h-4 w-4" />
           </button>
+          <button onClick={onExit} title="Wróć do JoyPad" className="rounded-lg border border-violet-400/40 bg-violet-500/10 p-2 text-violet-200 hover:bg-violet-500/20"><Gamepad2 className="h-4 w-4" /></button>
         </div>
       </div>
 

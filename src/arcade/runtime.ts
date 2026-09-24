@@ -3,7 +3,11 @@ import { gameAudio } from '../game/audio';
 
 export const WIDTH = 1200;
 export const HEIGHT = 720;
-export const COLORS = ['#4ade80', '#38bdf8', '#fb923c', '#c084fc'];
+/** Warm player colors read well on a graphite/orange UI and on low-brightness TVs. */
+export const COLORS = ['#fbbf24', '#fb923c', '#38bdf8', '#a3e635'];
+
+export type DisplayMode = 'shared' | 'split';
+export type RenderQuality = 'performance' | 'balanced' | 'quality';
 
 export interface Racer {
   slot: number;
@@ -23,6 +27,15 @@ export interface RoundPlayer {
   isBot: boolean;
 }
 
+/** Optional compact HUD payload for games with a held ability or item. */
+export interface RoundPowerUp {
+  label: string;
+  count: number;
+  color: string;
+  hint: string;
+  rolling?: boolean;
+}
+
 export interface RoundHud {
   timeLeft: number;
   countdown: number;
@@ -30,6 +43,7 @@ export interface RoundHud {
   objective: string;
   status: string;
   players: RoundPlayer[];
+  powerUp?: RoundPowerUp | null;
 }
 
 export interface RoundResult {
@@ -40,11 +54,21 @@ export interface RoundResult {
   players: RoundPlayer[];
 }
 
+export interface GameRound {
+  start(): void;
+  destroy(): void;
+  togglePause(): void;
+}
+
 export interface RoundConfig {
   players: Racer[];
   padInputs: PadInput[];
   primary: number;
   secondary: number;
+  /** Shared arena is the default; split uses lightweight local viewports. */
+  displayMode?: DisplayMode;
+  /** The 2D+ renderer can stay crisp without pushing small devices too hard. */
+  quality?: RenderQuality;
   onHud: (hud: RoundHud) => void;
   onFinish: (result: RoundResult) => void;
   onFx: (slot: number, fx: PadFx) => void;
@@ -68,8 +92,14 @@ export function glow(ctx: CanvasRenderingContext2D, x: number, y: number, radius
   ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
 }
 
-/** Jeden render loop, skalowanie canvasu i obsługa klawiatury dla czterech niezależnych slotów. */
-export abstract class CanvasRound {
+/**
+ * One render loop for all small arcade worlds.
+ *
+ * The games deliberately use a fixed 1200x720 design surface and a capped DPR.
+ * That gives a console-like composition while keeping phones and integrated GPUs
+ * out of the "4K canvas for a tiny game" trap.
+ */
+export abstract class CanvasRound implements GameRound {
   protected ctx: CanvasRenderingContext2D;
   protected config: RoundConfig;
   protected keys = new Set<string>();
@@ -132,7 +162,11 @@ export abstract class CanvasRound {
 
   private resize = () => {
     const rect = this.canvas.getBoundingClientRect();
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const deviceMemory = Number((navigator as Navigator & { deviceMemory?: number }).deviceMemory || 8);
+    const requested = this.config.quality === 'quality' ? 2 : this.config.quality === 'performance' ? 1 : 1.5;
+    // Balanced is intentionally capped on low-memory phones. CSS still scales the canvas up.
+    const lowMemoryCap = deviceMemory <= 4 ? 1 : requested;
+    const dpr = Math.min(lowMemoryCap, window.devicePixelRatio || 1);
     this.canvas.width = Math.max(1, Math.floor(rect.width * dpr));
     this.canvas.height = Math.max(1, Math.floor(rect.height * dpr));
   };
@@ -153,6 +187,58 @@ export abstract class CanvasRound {
     }
   };
 
+  private drawShared() {
+    const scale = Math.min(this.canvas.width / WIDTH, this.canvas.height / HEIGHT);
+    const ox = (this.canvas.width - WIDTH * scale) / 2;
+    const oy = (this.canvas.height - HEIGHT * scale) / 2;
+    this.ctx.setTransform(scale, 0, 0, scale, ox, oy);
+    this.render(this.ctx);
+  }
+
+  /**
+   * A real split surface rather than a CSS stretch. Each viewport is clipped and
+   * gets its own camera pass. Existing arenas share the world, while the new
+   * 3D-lite games use the same pass for a calm, low-cost couch mode.
+   */
+  private drawSplit() {
+    const count = Math.min(4, Math.max(2, this.config.players.length));
+    const columns = count <= 2 ? count : 2;
+    const rows = Math.ceil(count / columns);
+    const panelWidth = this.canvas.width / columns;
+    const panelHeight = this.canvas.height / rows;
+    this.ctx.fillStyle = '#07090d';
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+    for (let panel = 0; panel < count; panel++) {
+      const column = panel % columns;
+      const row = Math.floor(panel / columns);
+      const x = column * panelWidth;
+      const y = row * panelHeight;
+      const scale = Math.min(panelWidth / WIDTH, panelHeight / HEIGHT);
+      const ox = x + (panelWidth - WIDTH * scale) / 2;
+      const oy = y + (panelHeight - HEIGHT * scale) / 2;
+      this.ctx.save();
+      this.ctx.beginPath();
+      this.ctx.rect(x, y, panelWidth, panelHeight);
+      this.ctx.clip();
+      this.ctx.setTransform(scale, 0, 0, scale, ox, oy);
+      this.render(this.ctx);
+      this.ctx.restore();
+      this.ctx.save();
+      this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+      this.ctx.strokeStyle = 'rgba(255,255,255,.28)';
+      this.ctx.lineWidth = Math.max(1, this.canvas.width / 900);
+      this.ctx.strokeRect(x + .5, y + .5, panelWidth - 1, panelHeight - 1);
+      this.ctx.fillStyle = 'rgba(4,7,10,.76)';
+      this.ctx.fillRect(x + 10, y + 10, 74, 23);
+      this.ctx.fillStyle = this.config.players[panel]?.color || '#fbbf24';
+      this.ctx.font = '700 12px monospace';
+      this.ctx.textAlign = 'left';
+      this.ctx.fillText(`P${panel + 1}  ${this.config.players[panel]?.name?.toUpperCase().slice(0, 7) || ''}`, x + 17, y + 26);
+      this.ctx.restore();
+    }
+  }
+
   private frame = (now: number) => {
     if (!this.active || this.finished) return;
     const dt = Math.min(0.04, Math.max(0, (now - this.lastFrame) / 1000));
@@ -169,13 +255,10 @@ export abstract class CanvasRound {
         if (this.timeLeft <= 0 && !this.finished) this.timeout();
       }
     }
-    const scale = Math.min(this.canvas.width / WIDTH, this.canvas.height / HEIGHT);
-    const ox = (this.canvas.width - WIDTH * scale) / 2;
-    const oy = (this.canvas.height - HEIGHT * scale) / 2;
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    this.ctx.setTransform(scale, 0, 0, scale, ox, oy);
-    this.render(this.ctx);
+    if (this.config.displayMode === 'split' && this.config.players.length > 1) this.drawSplit();
+    else this.drawShared();
     this.hudDelay -= dt;
     if (this.hudDelay <= 0 && !this.finished) {
       this.hudDelay = 0.15;

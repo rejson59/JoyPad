@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from 'react';
 import type { PadSteer } from '../net/protocol';
+import { unlockHaptics } from './haptics';
 
 /** Martwa strefa (część promienia) — drżący palec nie rusza czołgu. */
 const DEAD_ZONE = 0.12;
@@ -183,6 +184,7 @@ export function Joystick({
 
   const onPointerDown = (e: RPointerEvent<HTMLDivElement>) => {
     if (disabled || pointerId.current !== null) return;
+    unlockHaptics();
     const el = zoneRef.current;
     if (!el) return;
     pointerId.current = e.pointerId;

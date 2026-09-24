@@ -1,6 +1,6 @@
 import Peer, { type DataConnection } from 'peerjs';
 import {
-  DEFAULT_PAD_STEER, PROTOCOL_VERSION, roomIdFromCode,
+  DEFAULT_PAD_STEER, PROTOCOL_VERSION, normalizeNick, roomIdFromCode,
   type ArcadeHud, type HostMessage, type HostScreen, type PadFx, type PadInput,
   type PadSteer, type RemoteCommand, type SessionOptions,
 } from './protocol';
@@ -36,7 +36,10 @@ export interface PadClientState {
   /** Nazwa używanego serwera sygnalizacji. */
   signaling: string;
   slot: number;
+  /** Dekoracyjna nazwa slotu (kolor / numer gracza), niezależna od nicku telefonu. */
   name: string;
+  /** Nick wybrany przez właściciela telefonu i używany w HUD-ach gier. */
+  nick: string;
   color: string;
   darkColor: string;
   screen: HostScreen;
@@ -71,6 +74,7 @@ const RELAY_WELCOME_TIMEOUT = 8_000;  // komputer milczy po hello na przekaźnik
 const LIVENESS_TIMEOUT = 6_000;
 
 const LS_PAD_PID = 'sf_pad_pid';
+const LS_PAD_NICK = 'sf_pad_nick';
 const LS_PAD_STEER = 'sf_pad_steer';
 
 /** Zapamiętany na telefonie tryb sterowania (domyślnie: jedziesz tam, gdzie pchasz). */
@@ -145,7 +149,7 @@ export class PadClient {
     status: 'idle', code: '', error: null, progress: '', phase: 'idle',
     attempt: 0, maxAttempts: MAX_ATTEMPTS, elapsed: 0, lastFailure: null,
     signaling: this.signaling.label,
-    slot: -1, name: '', color: '#fbbf24', darkColor: '#78350f',
+    slot: -1, name: '', nick: '', color: '#fbbf24', darkColor: '#78350f',
     screen: 'lobby', game: null, adminSlot: null, selection: 0, roster: [],
     hud: null, arcadeHud: null, latency: 0, result: null, viaRelay: false,
   };
@@ -182,7 +186,7 @@ export class PadClient {
   connect(code: string, nick: string) {
     this.teardown();
     this.code = code;
-    this.nick = nick;
+    this.nick = normalizeNick(nick);
     this.signaling = signalingFromLocation();
     this.active = true;
     this.attempt = 0;
@@ -193,7 +197,7 @@ export class PadClient {
     this.relayCid = newRelaySessionId();
     this.set({
       status: 'connecting', code, error: null, result: null, hud: null, arcadeHud: null,
-      game: null, roster: [], adminSlot: null, options: undefined, slot: -1,
+      game: null, roster: [], adminSlot: null, options: undefined, slot: -1, nick: this.nick,
       phase: 'signal', attempt: 1, maxAttempts: this.maxAttempts, elapsed: 0,
       lastFailure: null, signaling: this.signaling.label, viaRelay: false,
       progress: 'Łączę z serwerem sygnalizacji…',
@@ -451,8 +455,11 @@ export class PadClient {
         this.forceSend = true;
         this.startStreams();
         this.startLiveness();
+        const connectedNick = normalizeNick(typeof msg.nick === 'string' ? msg.nick : this.nick, msg.name);
+        this.nick = connectedNick;
+        try { localStorage.setItem(LS_PAD_NICK, connectedNick); } catch { /* pamięć może być niedostępna */ }
         this.set({
-          status: 'connected', slot: msg.slot, name: msg.name, color: msg.color, darkColor: msg.darkColor,
+          status: 'connected', slot: msg.slot, name: msg.name, nick: connectedNick, color: msg.color, darkColor: msg.darkColor,
           screen: msg.screen, error: null, progress: '', phase: 'idle', elapsed: 0, lastFailure: null,
           viaRelay: link.kind === 'relay',
         });
@@ -467,6 +474,13 @@ export class PadClient {
       case 'slot':
         this.set({ slot: msg.slot, name: msg.name, color: msg.color, darkColor: msg.darkColor });
         break;
+      case 'nick': {
+        const next = normalizeNick(typeof msg.nick === 'string' ? msg.nick : '', this.nick || 'Gracz');
+        this.nick = next;
+        try { localStorage.setItem(LS_PAD_NICK, next); } catch { /* pamięć może być niedostępna */ }
+        this.set({ nick: next });
+        break;
+      }
       case 'screen': {
         const effectiveScreen = this.state.game === null ? 'lobby' : msg.screen;
         this.set({
@@ -722,6 +736,19 @@ export class PadClient {
   /** Bieżący tryb sterowania joysticka (`direct` = jedziesz tam, gdzie pchasz). */
   get steer(): PadSteer {
     return this.steerMode;
+  }
+
+  /**
+   * Zmień nick bez zrywania sesji. Host odsyła go z powrotem jako wartość
+   * autorytatywną i równolegle odświeża roster wszystkim telefonom.
+   */
+  setNick(raw: string) {
+    const fallback = this.nick || (this.state.slot >= 0 ? `Telefon ${this.state.slot + 1}` : 'Gracz');
+    const next = normalizeNick(raw, fallback);
+    this.nick = next;
+    try { localStorage.setItem(LS_PAD_NICK, next); } catch { /* pamięć może być niedostępna */ }
+    this.set({ nick: next });
+    if (this.conn?.open) this.conn.send({ t: 'nick', nick: next });
   }
 
   /** Zmień tryb sterowania — zapamiętuje wybór i wysyła go komputerowi od razu. */

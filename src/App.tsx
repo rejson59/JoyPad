@@ -107,7 +107,12 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
   useEffect(() => {
     padHost.onSlotsChanged = (slots) => {
       // telefon zajmuje slot => gracz włączony i sterowany przez człowieka
-      setPlayers(pl => pl.map((p, i) => slots[i] ? { ...p, enabled: true, isBot: false } : p));
+      const names: Record<number, string> = {};
+      slots.forEach((pad, i) => { if (pad) names[i] = pad.nick; });
+      gameRef.current?.setPlayerNames(names);
+      setPlayers(pl => pl.map((p, i) => slots[i]
+        ? { ...p, name: slots[i]!.nick, enabled: true, isBot: false }
+        : { ...p, name: PLAYER_DEFS[i].name }));
     };
     padHost.onPauseRequest = () => gameRef.current?.togglePause();
     return () => { padHost.onSlotsChanged = null; padHost.onPauseRequest = null; };
@@ -148,7 +153,9 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
     }
     // sloty zajęte przez telefony zawsze grają jako ludzie
     const slots = padHost.slots();
-    cfg = cfg.map((p, i) => slots[i] ? { ...p, enabled: true, isBot: false } : p);
+    cfg = cfg.map((p, i) => slots[i]
+      ? { ...p, name: slots[i]!.nick, enabled: true, isBot: false }
+      : { ...p, name: PLAYER_DEFS[i].name });
     if (cfg !== players) setPlayers(cfg);
     setResults(null);
     setHud(null);
@@ -606,7 +613,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
           <button onClick={() => setScreen('menu')} className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-8 py-3 font-bold text-zinc-200 hover:bg-white/10">
             <Home className="h-5 w-5" /> MENU BITWY
           </button>
-          <button onClick={onExit} className="flex items-center gap-2 rounded-xl border border-violet-400/40 bg-violet-500/10 px-8 py-3 font-bold text-violet-200 hover:bg-violet-500/20">
+          <button onClick={onExit} className="flex items-center gap-2 rounded-xl border border-orange-400/40 bg-orange-500/10 px-8 py-3 font-bold text-orange-200 hover:bg-orange-500/20">
             <Gamepad2 className="h-5 w-5" /> JOYPAD
           </button>
         </div>
@@ -646,7 +653,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
           <button onClick={() => { gameAudio.uiClick(); setScreen('setup'); }} title="Zakończ bitwę i wróć do ustawień" className="rounded-lg border border-red-500/40 bg-red-500/10 p-2 text-red-300 hover:bg-red-500/20">
             <Home className="h-4 w-4" />
           </button>
-          <button onClick={onExit} title="Wróć do JoyPad" className="rounded-lg border border-violet-400/40 bg-violet-500/10 p-2 text-violet-200 hover:bg-violet-500/20"><Gamepad2 className="h-4 w-4" /></button>
+          <button onClick={onExit} title="Wróć do JoyPad" className="rounded-lg border border-orange-400/40 bg-orange-500/10 p-2 text-orange-200 hover:bg-orange-500/20"><Gamepad2 className="h-4 w-4" /></button>
         </div>
       </div>
 

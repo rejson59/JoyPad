@@ -1,6 +1,6 @@
 import Peer, { type DataConnection } from 'peerjs';
 import {
-  PROTOCOL_VERSION, REMOTE_COMMANDS, ZERO_INPUT, randomCode, roomIdFromCode,
+  PROTOCOL_VERSION, REMOTE_COMMANDS, ZERO_INPUT, normalizeNick, randomCode, roomIdFromCode,
   type ArcadeHud, type HostMessage, type HostScreen, type PadFx, type PadInput, type PadMessage,
   type PadSteer, type RemoteCommand, type SessionOptions, type SessionState,
 } from './protocol';
@@ -127,7 +127,7 @@ export class PadHost {
   /** Aktualne wejście dla każdego slotu gracza. */
   readonly inputs: PadInput[] = Array.from({ length: MAX_SLOTS }, () => ({ ...ZERO_INPUT }));
 
-  /** Wywoływane, gdy zmieni się przypisanie slotów (dołączył / odszedł telefon). */
+  /** Wywoływane, gdy zmienią się sloty albo nick jednego z telefonów. */
   onSlotsChanged: ((slots: (PadInfo | null)[]) => void) | null = null;
   onPauseRequest: (() => void) | null = null;
   /** Komendy menu są wykonywane wyłącznie dla pierwszego aktywnego telefonu. */
@@ -625,7 +625,7 @@ export class PadHost {
           const existing = this.pads.get(id)!;
           existing.lastSeen = Date.now();
           const m = this.slotMeta[existing.slot] ?? { name: `GRACZ ${existing.slot + 1}`, color: '#fbbf24', darkColor: '#78350f' };
-          this.send(id, { t: 'welcome', slot: existing.slot, ...m, screen: this.screen });
+          this.send(id, { t: 'welcome', slot: existing.slot, nick: existing.nick, ...m, screen: this.screen });
           this.send(id, { t: 'session', session: this.session() });
           return;
         }
@@ -651,7 +651,7 @@ export class PadHost {
           setTimeout(() => link.close(), 200);
           return;
         }
-        const nick = (typeof msg.nick === 'string' ? msg.nick.trim().slice(0, 14) : '') || `Telefon ${slot + 1}`;
+        const nick = normalizeNick(typeof msg.nick === 'string' ? msg.nick : '', `Telefon ${slot + 1}`);
         const info: PadInfo = { connId: id, slot, nick, connectedAt: Date.now(), lastSeen: Date.now(), latency: 0, via: link.kind, pid, steer: normSteer(msg.steer) };
         this.pads.set(id, info);
         if (pid) this.padsByPid.set(pid, id);
@@ -682,6 +682,17 @@ export class PadHost {
           aimX: clamp(msg.aimX),
           aimY: clamp(msg.aimY),
         };
+        break;
+      }
+      case 'nick': {
+        const p = this.pads.get(id);
+        if (!p) return;
+        p.lastSeen = Date.now();
+        p.nick = normalizeNick(typeof msg.nick === 'string' ? msg.nick : '', `Telefon ${p.slot + 1}`);
+        this.send(id, { t: 'nick', nick: p.nick });
+        this.emit();
+        this.broadcastSession();
+        this.onSlotsChanged?.(this.slots());
         break;
       }
       case 'pause': {

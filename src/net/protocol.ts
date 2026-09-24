@@ -17,6 +17,12 @@ export function normalizeCode(raw: string): string {
   return raw.toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/O/g, '0').replace(/I/g, '1').slice(0, CODE_LENGTH);
 }
 
+/** Nick wyświetlany w lobby i w HUD-ach — bez pustych wartości i bez nadmiarowych spacji. */
+export function normalizeNick(raw: string, fallback = ''): string {
+  const nick = raw.trim().replace(/\s+/g, ' ').slice(0, 14);
+  return nick || fallback;
+}
+
 export function roomIdFromCode(code: string): string {
   return ROOM_PREFIX + code.toUpperCase();
 }
@@ -117,11 +123,13 @@ export type PadMessage =
   | { t: 'pause' }
   | { t: 'command'; command: RemoteCommand }
   | { t: 'choose'; index: number }
+  | { t: 'nick'; nick: string }
   | { t: 'ping'; at: number };
 
 /** Komputer -> telefon */
 export type HostMessage =
-  | { t: 'welcome'; slot: number; name: string; color: string; darkColor: string; screen: HostScreen }
+  | { t: 'welcome'; slot: number; name: string; nick?: string; color: string; darkColor: string; screen: HostScreen }
+  | { t: 'nick'; nick: string }
   | { t: 'rejected'; reason: string }
   | { t: 'slot'; slot: number; name: string; color: string; darkColor: string }
   | { t: 'screen'; screen: HostScreen; winnerName?: string; winnerColor?: string; youWon?: boolean }

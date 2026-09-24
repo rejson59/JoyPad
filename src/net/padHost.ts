@@ -1,7 +1,7 @@
 import Peer, { type DataConnection } from 'peerjs';
 import {
   PROTOCOL_VERSION, ZERO_INPUT, randomCode, roomIdFromCode,
-  type HostMessage, type HostScreen, type PadFx, type PadInput, type PadMessage,
+  type HostMessage, type HostScreen, type PadFx, type PadInput, type PadMessage, type PadSteer,
 } from './protocol';
 import { buildPeerOptions, signalingFromLocation, type SignalingConfig } from './signaling';
 import { WebrtcLink, type PadLink } from './links';
@@ -18,6 +18,8 @@ export interface PadInfo {
   via: 'webrtc' | 'relay';
   /** Stały identyfikator telefonu (localStorage na telefonie). */
   pid?: string;
+  /** Tryb sterowania wybrany na tym telefonie (brak = stary pad: góra/dół = przód/tył). */
+  steer?: PadSteer;
 }
 
 export interface SlotMeta { name: string; color: string; darkColor: string }
@@ -60,6 +62,11 @@ const MAX_CONFLICT_RETRIES = 4;
 const STALE_PAD_MS = 10_000;
 /** Drugi „hello” z tego samego telefonu (inna ścieżka) ignorujemy, dopóki pierwsza jest świeża. */
 const PAD_SWITCH_GRACE_MS = 4_000;
+
+/** Walidacja trybu sterowania z telefonu (nic innego nie przechodzi — `undefined` = stary pad). */
+function normSteer(v: unknown): PadSteer | undefined {
+  return v === 'direct' || v === 'tank' ? v : undefined;
+}
 
 /**
  * Host (komputer): tworzy pokój w sieci PeerJS i przyjmuje telefony-pady.
@@ -583,7 +590,7 @@ export class PadHost {
           return;
         }
         const nick = (msg.nick || '').trim().slice(0, 14) || `Telefon ${slot + 1}`;
-        const info: PadInfo = { connId: id, slot, nick, connectedAt: Date.now(), lastSeen: Date.now(), latency: 0, via: link.kind, pid };
+        const info: PadInfo = { connId: id, slot, nick, connectedAt: Date.now(), lastSeen: Date.now(), latency: 0, via: link.kind, pid, steer: normSteer(msg.steer) };
         this.pads.set(id, info);
         if (pid) this.padsByPid.set(pid, id);
         this.inputs[slot] = { ...ZERO_INPUT };
@@ -599,7 +606,17 @@ export class PadHost {
         if (!p) return;
         p.lastSeen = Date.now();
         const clamp = (v: unknown) => Math.max(-1, Math.min(1, Number(v) || 0));
-        this.inputs[p.slot] = { fwd: clamp(msg.fwd), turn: clamp(msg.turn), fire: !!msg.fire };
+        const steer = normSteer(msg.steer);
+        if (steer) p.steer = steer;
+        this.inputs[p.slot] = {
+          fwd: clamp(msg.fwd),
+          turn: clamp(msg.turn),
+          fire: !!msg.fire,
+          // Brak `steer` = starszy telefon: silnik użyje wtedy fwd/turn (klasyczne sterowanie).
+          steer,
+          dirX: clamp(msg.dirX),
+          dirY: clamp(msg.dirY),
+        };
         break;
       }
       case 'pause': {

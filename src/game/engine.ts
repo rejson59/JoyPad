@@ -50,6 +50,14 @@ function angDiff(a: number, b: number) {
 }
 function dist(x1: number, y1: number, x2: number, y2: number) { return Math.hypot(x2 - x1, y2 - y1); }
 
+/* --- Telefon w trybie „KIERUNEK” (jedziesz tam, gdzie pchasz gałkę) --- */
+/** Jak szybko kadłub dogania kierunek z gałki [rad/s] — 180° zawrócenia trwa ~0,4 s. */
+const PAD_TURN_SPEED = 8.5;
+/** Jak szybko prędkość dogania gałkę [1/s] — lekka bezwładność, ale bez „pływania”. */
+const PAD_DIR_RESPONSE = 5.5;
+/** Martwa strefa wektora kierunku — drżący palec nie rusza czołgu. */
+const PAD_DIR_DEAD = 0.14;
+
 export class TankGame {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
@@ -430,23 +438,39 @@ export class TankGame {
     t.muzzle = Math.max(0, t.muzzle - dt * 6);
 
     let fwd = 0, turn = 0, fire = false;
+    /**
+     * Telefon w trybie „KIERUNEK”: wektor w przestrzeni ekranu (x = prawo, y = DÓŁ).
+     * Czołg jedzie wtedy dokładnie tam, gdzie pchasz gałkę, a kadłub sam obraca się
+     * w stronę jazdy — koniec z „pcham w dół, a on cofa się w bok”.
+     */
+    let padDir: { x: number; y: number; mag: number } | null = null;
     if (t.cfg.isBot && t.aiState) {
       const out = this.botControl(t, dt);
       fwd = out.fwd; turn = out.turn; fire = out.fire;
     } else {
       const c = t.cfg.controls;
       const down = (arr: string[]) => arr.some(k => this.keys.has(k));
-      if (down(c.forward)) fwd += 1;
-      if (down(c.back)) fwd -= 1;
-      if (down(c.left)) turn -= 1;
-      if (down(c.right)) turn += 1;
+      const kbFwd = (down(c.forward) ? 1 : 0) - (down(c.back) ? 1 : 0);
+      const kbTurn = (down(c.right) ? 1 : 0) - (down(c.left) ? 1 : 0);
       if (down(c.fire)) fire = true;
-      // telefon jako joystick (analog) — sumuje się z klawiaturą
+
       const pad = this.opts.padInputs?.[t.id];
-      if (pad) {
-        if (Math.abs(pad.fwd) > 0.08) fwd += pad.fwd;
-        if (Math.abs(pad.turn) > 0.08) turn += pad.turn;
-        if (pad.fire) fire = true;
+      if (pad?.fire) fire = true;
+
+      if (kbFwd !== 0 || kbTurn !== 0) {
+        // Klawiatura ma pierwszeństwo — ktoś przy komputerze przejął ten slot.
+        fwd = kbFwd;
+        turn = kbTurn;
+      } else if (pad) {
+        if (pad.steer === 'direct') {
+          const dx = pad.dirX ?? 0, dy = pad.dirY ?? 0;
+          const m = Math.hypot(dx, dy);
+          if (m > PAD_DIR_DEAD) padDir = { x: dx / m, y: dy / m, mag: Math.min(1, m) };
+        } else {
+          // Tryb „CZOŁG” oraz starsze telefony: góra = przód, dół = tył, lewo/prawo = obrót.
+          if (Math.abs(pad.fwd) > 0.08) fwd += pad.fwd;
+          if (Math.abs(pad.turn) > 0.08) turn += pad.turn;
+        }
       }
       fwd = clamp(fwd, -1, 1);
       turn = clamp(turn, -1, 1);
@@ -455,20 +479,36 @@ export class TankGame {
     const speedy = t.speedUntil > this.elapsed;
     const accel = (this.map.id === 'forest' ? 260 : 320) * (speedy ? 1.5 : 1);
     const maxSp = (this.map.id === 'forest' ? 195 : 235) * (speedy ? 1.4 : 1);
-    const turnSp = 2.6 * (fwd < 0 ? 0.8 : 1);
+    const drag = this.map.id === 'desert' ? 1.6 : this.map.id === 'forest' ? 2.6 : 2.1;
 
-    t.hullAngle += turn * turnSp * dt * (Math.abs(t.throttle) > 0.05 || turn !== 0 ? 1 : 1);
+    if (padDir) {
+      /* ---- jazda „po gałce”: kierunek z telefonu = kierunek na mapie ---- */
+      const want = Math.atan2(padDir.y, padDir.x);
+      // kadłub dogania kierunek jazdy krótszą drogą (pivot w miejscu, jak prawdziwy czołg)
+      const d = angDiff(t.hullAngle, want);
+      const step = PAD_TURN_SPEED * dt;
+      t.hullAngle += Math.abs(d) > step ? Math.sign(d) * step : d;
+      // prędkość podąża za gałką z niewielką bezwładnością; `boost` kasuje opór powietrza,
+      // żeby pełne wychylenie dawało taką samą prędkość jak jazda na klawiaturze
+      const k = Math.min(1, dt * PAD_DIR_RESPONSE);
+      const target = maxSp * padDir.mag * (1 + drag / PAD_DIR_RESPONSE);
+      t.vx += (padDir.x * target - t.vx) * k;
+      t.vy += (padDir.y * target - t.vy) * k;
+      t.throttle = lerp(t.throttle, padDir.mag, Math.min(1, dt * 8));
+      this.skidDust(t, dt);
+    } else {
+      /* ---- sterowanie klasyczne: gaz (przód/tył) + obrót kadłuba ---- */
+      const turnSp = 2.6 * (fwd < 0 ? 0.8 : 1);
+      t.hullAngle += turn * turnSp * dt;
+      // throttle with inertia
+      t.throttle = lerp(t.throttle, fwd, Math.min(1, dt * (fwd !== 0 ? 3.2 : 5)));
+      const fx = Math.cos(t.hullAngle), fy = Math.sin(t.hullAngle);
+      t.vx += fx * t.throttle * accel * dt;
+      t.vy += fy * t.throttle * accel * dt;
+    }
     // smooth turret follow hull
     t.turretAngle += angDiff(t.turretAngle, t.hullAngle) * Math.min(1, dt * 4.5);
-
-    // throttle with inertia
-    const targetThrottle = fwd;
-    t.throttle = lerp(t.throttle, targetThrottle, Math.min(1, dt * (fwd !== 0 ? 3.2 : 5)));
-    const fx = Math.cos(t.hullAngle), fy = Math.sin(t.hullAngle);
-    t.vx += fx * t.throttle * accel * dt;
-    t.vy += fy * t.throttle * accel * dt;
     // friction / drag
-    const drag = this.map.id === 'desert' ? 1.6 : this.map.id === 'forest' ? 2.6 : 2.1;
     t.vx -= t.vx * Math.min(1, drag * dt);
     t.vy -= t.vy * Math.min(1, drag * dt);
     const sp = Math.hypot(t.vx, t.vy);
@@ -542,6 +582,31 @@ export class TankGame {
     }
 
     gameAudio.updateEngine(t.id, t.throttle, true);
+  }
+
+  /**
+   * Kurz spod gąsienic przy ostrym skręcie „po gałce” (tryb KIERUNEK): pojawia się,
+   * gdy czołg jedzie wyraźnie bokiem do kadłuba. Czysto wizualne — daje wyczucie,
+   * że maszyna właśnie zawraca.
+   */
+  skidDust(t: TankState, dt: number) {
+    const speed = Math.hypot(t.vx, t.vy);
+    if (speed < 70) return;
+    const slip = Math.abs(angDiff(t.hullAngle, Math.atan2(t.vy, t.vx)));
+    if (slip < 0.5) return;
+    if (Math.random() > Math.min(0.85, slip * dt * 12)) return;
+    const sx = Math.cos(t.hullAngle + Math.PI / 2), sy = Math.sin(t.hullAngle + Math.PI / 2);
+    const color = this.map.id === 'desert' ? 'rgba(194,164,104,' : this.map.id === 'nightcity' ? 'rgba(120,120,130,' : 'rgba(110,125,85,';
+    for (const s of [-13, 13]) {
+      this.addParticle({
+        x: t.x + sx * s - Math.cos(t.hullAngle) * 10 + rand(-4, 4),
+        y: t.y + sy * s - Math.sin(t.hullAngle) * 10 + rand(-4, 4),
+        vx: -t.vx * 0.1 + rand(-30, 30), vy: -t.vy * 0.1 + rand(-30, 5),
+        life: rand(0.4, 0.9), maxLife: 0.9, size: rand(5, 10), grow: 16,
+        color, alpha: 0.45, type: 'dust', rotation: rand(0, 6), rotSpeed: rand(-2, 2),
+        gravity: -18, drag: 1.6, glow: false,
+      });
+    }
   }
 
   botControl(t: TankState, dt: number): { fwd: number; turn: number; fire: boolean } {

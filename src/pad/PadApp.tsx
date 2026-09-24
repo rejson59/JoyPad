@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Crosshair, Gamepad2, Heart, Loader2, LogOut, Maximize2, Pause, Shield, Signal, Skull, Smartphone, Wifi, WifiOff, Zap, Wind, RotateCcw, Trophy } from 'lucide-react';
 import { padClient, type PadClientState } from '../net/padClient';
-import { CODE_LENGTH, normalizeCode, padCodeFromHash, type PadFx } from '../net/protocol';
+import { CODE_LENGTH, normalizeCode, padCodeFromHash, type PadFx, type PadSteer } from '../net/protocol';
 import { Joystick } from './Joystick';
 import { ConnectionCheck } from './ConnectionCheck';
 
@@ -125,9 +125,21 @@ export default function PadApp() {
     } catch { /* ignore */ }
   };
 
+  /* Tryb sterowania: KIERUNEK (jedziesz tam, gdzie pchasz) albo CZOŁG (przód/tył + obrót). */
+  const [steer, setSteerState] = useState<PadSteer>(() => padClient.steer);
+  const changeSteer = (m: PadSteer) => {
+    if (m === steer) return;
+    padClient.setSteer(m);
+    setSteerState(m);
+    vibrate([15, 40, 15]);
+  };
+
   const onStick = useCallback((x: number, y: number) => {
-    padClient.setInput({ turn: x, fwd: y });
+    // y z joysticka: góra = +1. Dla trybu KIERUNEK wysyłamy wektor ekranowy (y w dół),
+    // dla trybu CZOŁG — gaz/obrót. Wysyłamy oba, gra wybiera wg trybu.
+    padClient.setInput({ turn: x, fwd: y, dirX: x, dirY: -y });
   }, []);
+  const onStickTick = useCallback(() => vibrate(6), []);
 
   const fireDown = useRef(false);
   const setFire = (v: boolean) => {
@@ -330,32 +342,50 @@ export default function PadApp() {
         )}
       </div>
 
-      {/* controls */}
-      <div className="absolute inset-x-0 bottom-0 z-20 flex items-end justify-between px-6" style={{ paddingBottom: 'max(18px, env(safe-area-inset-bottom))' }}>
-        <div className="flex flex-col items-center gap-2">
-          <Joystick size={Math.min(220, Math.max(150, Math.floor(Math.min(window.innerWidth * 0.38, window.innerHeight * 0.5))))} color={color} onChange={onStick} />
-          <span className="text-[10px] font-bold tracking-widest text-zinc-500">JAZDA / OBRÓT</span>
+      {/* joystick: cała lewa połowa ekranu to strefa dotyku (gałka pojawia się pod kciukiem) */}
+      <Joystick
+        size={Math.min(210, Math.max(140, Math.floor(Math.min(window.innerWidth * 0.34, window.innerHeight * 0.46))))}
+        color={color}
+        onChange={onStick}
+        onTick={onStickTick}
+        mode={steer}
+        zoneWidthPct={55}
+        caption={steer === 'direct' ? 'JEDZIESZ TAM, GDZIE PCHASZ' : 'GÓRA = PRZÓD • DÓŁ = TYŁ'}
+      >
+        <div className="flex overflow-hidden rounded-full border border-white/15 bg-black/60 text-[10px] font-black tracking-wider backdrop-blur-sm">
+          {([['direct', 'KIERUNEK'], ['tank', 'CZOŁG']] as const).map(([m, label]) => (
+            <button
+              key={m}
+              onClick={() => changeSteer(m)}
+              className="px-3 py-1.5 transition-colors"
+              style={steer === m ? { background: color, color: '#0a0a0b' } : { color: '#a1a1aa' }}
+            >
+              {label}
+            </button>
+          ))}
         </div>
-        <div className="flex flex-col items-center gap-2">
-          <button
-            onPointerDown={e => { e.preventDefault(); (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); setFire(true); }}
-            onPointerUp={() => setFire(false)}
-            onPointerCancel={() => setFire(false)}
-            onLostPointerCapture={() => setFire(false)}
-            onContextMenu={e => e.preventDefault()}
-            className="flex items-center justify-center rounded-full border-4 border-red-900 font-display text-2xl tracking-widest text-white active:scale-95"
-            style={{
-              width: Math.min(170, Math.max(120, Math.floor(window.innerHeight * 0.38))),
-              height: Math.min(170, Math.max(120, Math.floor(window.innerHeight * 0.38))),
-              background: 'radial-gradient(circle at 40% 30%, #f87171 0%, #dc2626 45%, #7f1d1d 100%)',
-              boxShadow: '0 10px 0 #450a0a, 0 14px 30px rgba(0,0,0,0.6), inset 0 -8px 16px rgba(0,0,0,0.35), 0 0 30px rgba(239,68,68,0.35)',
-              touchAction: 'none',
-            }}
-          >
-            OGIEŃ
-          </button>
-          <span className="text-[10px] font-bold tracking-widest text-zinc-500">PRZYTRZYMAJ = SERIA</span>
-        </div>
+      </Joystick>
+
+      {/* przycisk ognia */}
+      <div className="absolute bottom-0 right-0 z-20 flex flex-col items-center gap-2 px-6" style={{ paddingBottom: 'max(18px, env(safe-area-inset-bottom))' }}>
+        <button
+          onPointerDown={e => { e.preventDefault(); (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); setFire(true); }}
+          onPointerUp={() => setFire(false)}
+          onPointerCancel={() => setFire(false)}
+          onLostPointerCapture={() => setFire(false)}
+          onContextMenu={e => e.preventDefault()}
+          className="flex items-center justify-center rounded-full border-4 border-red-900 font-display text-2xl tracking-widest text-white active:scale-95"
+          style={{
+            width: Math.min(170, Math.max(120, Math.floor(window.innerHeight * 0.38))),
+            height: Math.min(170, Math.max(120, Math.floor(window.innerHeight * 0.38))),
+            background: 'radial-gradient(circle at 40% 30%, #f87171 0%, #dc2626 45%, #7f1d1d 100%)',
+            boxShadow: '0 10px 0 #450a0a, 0 14px 30px rgba(0,0,0,0.6), inset 0 -8px 16px rgba(0,0,0,0.35), 0 0 30px rgba(239,68,68,0.35)',
+            touchAction: 'none',
+          }}
+        >
+          OGIEŃ
+        </button>
+        <span className="text-[10px] font-bold tracking-widest text-zinc-500">PRZYTRZYMAJ = SERIA</span>
       </div>
 
       {landscapeHint && (

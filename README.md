@@ -7,7 +7,12 @@ Lokalny multiplayer 2–4 graczy na jednym ekranie: klawiatura **lub telefony ja
 - **Komputer / TV**: otwórz stronę gry, wybierz tryb i mapę.
 - **Telefon jako pad**: na komputerze kliknij **📱 TELEFON JAKO PAD** → pojawi się kod QR i 5‑znakowy kod.
   Na telefonie zeskanuj QR (lub wejdź na tę samą stronę z `#pad` i wpisz kod). Telefon dostaje pierwszy wolny slot gracza.
-  - Lewa strona: analogowy joystick (jazda + obrót), prawa: wielki przycisk **OGIEŃ** (przytrzymaj = seria).
+  - Lewa połowa ekranu: analogowy joystick — dotknij **gdziekolwiek** po lewej, a gałka pojawi się pod kciukiem.
+    Prawa strona: wielki przycisk **OGIEŃ** (przytrzymaj = seria).
+  - Dwa tryby sterowania (przełącznik nad joystickiem, wybór zapamiętuje się na telefonie):
+    - **KIERUNEK** (domyślny) — czołg jedzie tam, gdzie pchasz gałkę: w dół = w dół ekranu, w lewo = w lewo.
+      Kadłub sam obraca się w stronę jazdy, więc nie trzeba pamiętać, gdzie jest przód czołgu.
+    - **CZOŁG** — klasyczne sterowanie: góra = przód, dół = wsteczny, lewo/prawo = obrót kadłuba.
   - Wibracje przy strzale, trafieniu, zniszczeniu i bonusach; HUD z HP, fragami i czasem.
   - Połączenie działa peer‑to‑peer (WebRTC / PeerJS). Komputer i telefon potrzebują internetu, ale mogą być
     w **różnych sieciach** (Wi‑Fi ↔ LTE): łączenie idzie „na wyścig” — równolegle z próbami P2P telefon łączy się

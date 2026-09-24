@@ -144,6 +144,9 @@ export function PadHostPanel({ players, compact, onClose }: Props) {
                     {pad ? (
                       <span className="flex items-center gap-1 text-zinc-300" title={pad.via === 'relay' ? 'Łączy przez awaryjny przekaźnik (Internet)' : 'Łączy bezpośrednio (WebRTC)'}>
                         {pad.via === 'relay' ? <Antenna className="h-3 w-3 text-sky-400" /> : <Wifi className="h-3 w-3 text-green-400" />} {pad.nick}
+                        <span className="rounded bg-white/10 px-1 text-[9px] font-bold text-zinc-400" title={pad.steer === 'direct' ? 'Joystick: czołg jedzie tam, gdzie pchasz gałkę' : 'Joystick: góra/dół = przód/tył czołgu, lewo/prawo = obrót'}>
+                          {pad.steer === 'direct' ? 'kierunek' : 'czołg'}
+                        </span>
                       </span>
                     ) : (
                       <span className="text-zinc-600">{p.enabled ? (p.isBot ? 'bot' : 'klawiatura — czeka na telefon') : 'wyłączony'}</span>

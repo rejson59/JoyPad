@@ -1,5 +1,5 @@
 {
-  "name": "stalowy-front",
+  "name": "joypad",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
-    "selftest:relay": "esbuild scripts/relay-selftest.ts --bundle --format=esm --platform=node --outfile=.cache/relay-selftest.mjs --log-level=warning && node .cache/relay-selftest.mjs"
+    "selftest:relay": "esbuild scripts/relay-selftest.ts --bundle --format=esm --platform=node --outfile=.cache/relay-selftest.mjs --log-level=warning && node .cache/relay-selftest.mjs",
+    "selftest:arcade": "esbuild scripts/arcade-selftest.ts --bundle --format=esm --platform=node --define:import.meta.env={} --outfile=.cache/arcade-selftest.mjs --log-level=warning && node .cache/arcade-selftest.mjs"
   },
   "dependencies": {
     "clsx": "2.1.1",

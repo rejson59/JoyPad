@@ -16,9 +16,10 @@ interface Props {
   players: PlayerConfig[];
   compact?: boolean;
   onClose?: () => void;
+  context?: 'tanks' | 'arcade';
 }
 
-export function PadHostPanel({ players, compact, onClose }: Props) {
+export function PadHostPanel({ players, compact, onClose, context = 'tanks' }: Props) {
   const s = usePadHost();
   const [qr, setQr] = useState<string>('');
   const [copied, setCopied] = useState(false);
@@ -45,7 +46,7 @@ export function PadHostPanel({ players, compact, onClose }: Props) {
           {onClose && <button onClick={onClose} className="rounded-lg p-1 text-zinc-500 hover:bg-white/10"><X className="h-4 w-4" /></button>}
         </div>
         <p className="mt-2 text-xs leading-relaxed text-zinc-400">
-          Każdy gracz może sterować czołgiem ze swojego telefonu — joystick analogowy + przycisk ognia z wibracjami.
+          {context === 'tanks' ? 'Każdy gracz może sterować czołgiem ze swojego telefonu — joystick analogowy + przycisk ognia z wibracjami.' : 'Telefony zamieniają się w pady do wszystkich gier. Pierwszy połączony telefon otrzymuje pilota administratora.'}{' '}
           Telefon i komputer potrzebują internetu — mogą być nawet w <b className="text-zinc-300">różnych sieciach</b> (Wi‑Fi ↔ LTE):
           gdy łączenie bezpośrednie (WebRTC) nie przechodzi, gra automatycznie używa awaryjnego przekaźnika.
         </p>
@@ -119,7 +120,7 @@ export function PadHostPanel({ players, compact, onClose }: Props) {
           ) : (
             <>
               <div className="text-xs leading-relaxed text-zinc-400">
-                Na telefonie zeskanuj QR <b className="text-zinc-200">albo</b> wejdź na tę stronę i wpisz kod. Każdy telefon zajmuje pierwszy wolny slot gracza.
+                Na telefonie zeskanuj QR <b className="text-zinc-200">albo</b> wejdź na tę stronę i wpisz kod. Każdy telefon zajmuje pierwszy wolny slot gracza.{context === 'arcade' && ' Pierwszy telefon steruje menu i rundami.'}{' '}
                 Gra leci bezpośrednio między urządzeniami (WebRTC). Gdy sieć blokuje łączenie bezpośrednie,
                 gra automatycznie przełącza się na awaryjny przekaźnik — <b className="text-zinc-300">różne sieci (Wi‑Fi ↔ LTE) też działają</b>.
               </div>
@@ -144,9 +145,9 @@ export function PadHostPanel({ players, compact, onClose }: Props) {
                     {pad ? (
                       <span className="flex items-center gap-1 text-zinc-300" title={pad.via === 'relay' ? 'Łączy przez awaryjny przekaźnik (Internet)' : 'Łączy bezpośrednio (WebRTC)'}>
                         {pad.via === 'relay' ? <Antenna className="h-3 w-3 text-sky-400" /> : <Wifi className="h-3 w-3 text-green-400" />} {pad.nick}
-                        <span className="rounded bg-white/10 px-1 text-[9px] font-bold text-zinc-400" title={pad.steer === 'direct' ? 'Joystick: czołg jedzie tam, gdzie pchasz gałkę' : 'Joystick: góra/dół = przód/tył czołgu, lewo/prawo = obrót'}>
+                        {context === 'tanks' && <span className="rounded bg-white/10 px-1 text-[9px] font-bold text-zinc-400" title={pad.steer === 'direct' ? 'Joystick: czołg jedzie tam, gdzie pchasz gałkę' : 'Joystick: góra/dół = przód/tył czołgu, lewo/prawo = obrót'}>
                           {pad.steer === 'direct' ? 'kierunek' : 'czołg'}
-                        </span>
+                        </span>}
                       </span>
                     ) : (
                       <span className="text-zinc-600">{p.enabled ? (p.isBot ? 'bot' : 'klawiatura — czeka na telefon') : 'wyłączony'}</span>

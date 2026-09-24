@@ -1,7 +1,7 @@
 import { StrictMode, lazy, Suspense, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
-import App from "./App";
+import JoypadApp from "./arcade/JoypadApp";
 import { isPadRoute } from "./net/protocol";
 
 // Tryb pada (telefon) ładowany leniwie — komputer nie musi go pobierać.
@@ -21,7 +21,7 @@ function Root() {
       </Suspense>
     );
   }
-  return <App />;
+  return <JoypadApp />;
 }
 
 createRoot(document.getElementById("root")!).render(

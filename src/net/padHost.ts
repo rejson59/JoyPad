@@ -178,7 +178,15 @@ export class PadHost {
     for (const pad of this.pads.values()) this.send(pad.connId, msg);
   }
 
-  setGame(game: GameId | null) { this.game = game; this.menuOptions = undefined; this.broadcastSession(); }
+  setGame(game: GameId | null) {
+    this.game = game;
+    this.menuOptions = undefined;
+    // „Brak gry” jest zawsze powrotem do biblioteki. Wcześniej między
+    // setGame(null) a setScreen('lobby') telefon mógł dostać krótką sesję
+    // z game=null i ekranem starego menu, przez co pilot blokował wybór.
+    if (game === null) this.screen = 'lobby';
+    this.broadcastSession();
+  }
   setSelection(index: number) { this.selection = index; this.broadcastSession(); }
   setMenuOptions(options?: SessionOptions) { this.menuOptions = options; this.broadcastSession(); }
 

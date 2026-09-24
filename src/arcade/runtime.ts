@@ -100,6 +100,7 @@ export abstract class CanvasRound {
     window.addEventListener('keydown', this.keyDown);
     window.addEventListener('keyup', this.keyUp);
     window.addEventListener('blur', this.blur);
+    document.addEventListener('visibilitychange', this.visibilityChange);
     this.lastFrame = performance.now();
     this.raf = requestAnimationFrame(this.frame);
     this.config.onHud(this.hud());
@@ -112,6 +113,7 @@ export abstract class CanvasRound {
     window.removeEventListener('keydown', this.keyDown);
     window.removeEventListener('keyup', this.keyUp);
     window.removeEventListener('blur', this.blur);
+    document.removeEventListener('visibilitychange', this.visibilityChange);
     this.keys.clear();
   }
 
@@ -142,6 +144,14 @@ export abstract class CanvasRound {
   };
   private keyUp = (e: KeyboardEvent) => { this.keys.delete(e.code); };
   private blur = () => { this.keys.clear(); };
+  private visibilityChange = () => {
+    // Nie pozwalaj, aby przełączenie karty albo zablokowanie telefonu
+    // rozstrzygnęło rundę pod nieobecność gracza. Wznowienie pozostaje ręczne.
+    if (document.hidden && !this.paused && !this.finished && this.countdown <= 0) {
+      this.paused = true;
+      this.config.onHud(this.hud());
+    }
+  };
 
   private frame = (now: number) => {
     if (!this.active || this.finished) return;

@@ -135,6 +135,19 @@ export class TankGame {
     for (let i = 0; i < 40; i++) this.dust.push({ x: rand(0, WORLD_W), y: rand(0, WORLD_H), s: rand(60, 220), a: rand(0.03, 0.1), v: rand(40, 140) });
   }
 
+  /** Aktualizuje etykiety telefonów bez resetowania bieżącej rundy. */
+  setPlayerNames(names: Record<number, string>) {
+    for (const tank of this.tanks) {
+      const next = names[tank.id];
+      if (!next || tank.cfg.isBot) continue;
+      tank.cfg = { ...tank.cfg, name: next };
+    }
+    this.opts.players = this.opts.players.map(player => {
+      const next = names[player.id];
+      return next && !player.isBot ? { ...player, name: next } : player;
+    });
+  }
+
   initEntities() {
     this.walls = this.map.buildWalls();
     const enabled = this.opts.players.filter(p => p.enabled);

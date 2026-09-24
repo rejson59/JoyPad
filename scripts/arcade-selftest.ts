@@ -9,6 +9,9 @@ import { RaceRound } from '../src/arcade/games/Race';
 import { OrbitRound } from '../src/arcade/games/Orbit';
 import { SnakeRound } from '../src/arcade/games/Snake';
 import { TempleRound } from '../src/arcade/games/Temple';
+import { VoxelRound } from '../src/arcade/games/Voxel';
+import { LeagueRound } from '../src/arcade/games/League';
+import { mat4LookAt, mat4Multiply, mat4Perspective } from '../src/arcade/webgl/runtime3d';
 import type { CanvasRound, RoundConfig, RoundResult } from '../src/arcade/runtime';
 
 (globalThis as unknown as { window: Window }).window = globalThis as unknown as Window;
@@ -57,6 +60,10 @@ receive(0, { t: 'choose', index: 2 });
 assert.deepEqual(commands, ['select']); assert.deepEqual(picks, [2]);
 receive(0, { t: 'choose', index: 999 });
 assert.deepEqual(picks, [2]);
+receive(0, { t: 'nick', nick: '  Ada   Nowak  ' });
+assert.equal(host.padForSlot(0)?.nick, 'Ada Nowak');
+assert.equal(host.session().roster.find(p => p.slot === 0)?.nick, 'Ada Nowak');
+assert.ok(links[0].sent.some(m => (m as { t: string }).t === 'nick'));
 // Duplikat hello nie zabiera nowego slotu, a ponawia welcome po utraconym pakiecie.
 receive(0, { t: 'hello', nick: 'dup', ua: 'test', v: 1, pid: 'device-0' });
 assert.equal(host.snapshot().pads.length, 3);
@@ -79,6 +86,8 @@ assert.equal(host.session().screen, 'lobby');
 host.stop();
 
 const client = new PadClient();
+(client as unknown as { onMessage: (l: PadLink, m: unknown) => void }).onMessage(mockLink('server'), { t: 'nick', nick: 'Ada Nowak' });
+assert.equal(client.state.nick, 'Ada Nowak');
 (client as unknown as { onMessage: (l: PadLink, m: unknown) => void }).onMessage(mockLink('server'), { t: 'session', session: { game: 'snake', screen: 'menu', selection: 3, adminSlot: 1, roster: [{ slot: 1, nick: 'Nowy' }] } });
 assert.equal(client.state.game, 'snake'); assert.equal(client.state.adminSlot, 1);
 (client as unknown as { onMessage: (l: PadLink, m: unknown) => void }).onMessage(mockLink('server'), { t: 'arcadeHud', hud: { score: 4, timeLeft: 89, title: 'Test', detail: '3 życia' } });
@@ -110,7 +119,12 @@ const players = [
   { slot: 0, name: 'Ada', color: '#4ade80', isBot: false },
   { slot: 1, name: 'BOT 1', color: '#38bdf8', isBot: true },
 ];
-const rounds = [RaceRound, OrbitRound, SnakeRound, TempleRound] as const;
+const rounds = [RaceRound, OrbitRound, SnakeRound, TempleRound, VoxelRound, LeagueRound] as const;
+const projection = mat4Perspective(Math.PI / 3, 16 / 9, .1, 100);
+const camera = mat4LookAt([0, 8, 12], [0, 0, 0], [0, 1, 0]);
+const viewProjection = mat4Multiply(projection, camera);
+assert.equal(viewProjection.length, 16);
+assert.ok(Array.from(viewProjection).every(Number.isFinite), 'macierz WebGL2 musi być stabilna numerycznie');
 let simulations = 0;
 for (const Round of rounds) {
   let result: RoundResult | null = null;
@@ -130,4 +144,4 @@ for (const Round of rounds) {
   assert.ok(result, `${Round.name}: wynik powinien powstać`);
   simulations++;
 }
-console.log(`ARCADE SELFTEST: OK (role admina, uprawnienia, protokół, ${simulations} silniki)`);
+console.log(`ARCADE SELFTEST: OK (role admina, protokół, ${simulations} silniki + macierze WebGL2)`);

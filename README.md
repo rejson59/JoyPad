@@ -1,6 +1,6 @@
 # JoyPad 🎮
 
-Siedem gier multiplayer na **jednym ekranie**. Telefony stają się bezprzewodowymi padami; komputer lub TV wyświetla wspólną arenę. JoyPad ma teraz ciemny, pomarańczowy interfejs w stylu konsoli, dwa nowe światy 3D-lite (surowy WebGL2 z fallbackiem Canvas2D) oraz opcjonalny split-screen. Strona jest statyczna i może działać na GitHub Pages. Stalowy Front pozostaje pełną grą z dotychczasowym menu, mapami, botami i sterowaniem.
+Siedem gier multiplayer na **jednym ekranie**. Telefony stają się bezprzewodowymi padami; komputer lub TV wyświetla wspólną arenę. JoyPad ma teraz ciemny, pomarańczowy interfejs w stylu konsoli, sześć pozostałych światów 3D-lite (surowy WebGL2 z fallbackiem Canvas2D) oraz opcjonalny split-screen. Strona jest statyczna i może działać na GitHub Pages. Stalowy Front pozostaje pełną grą z dotychczasowym menu, mapami, botami i sterowaniem.
 
 | Gra | Co się dzieje | Telefon |
 | --- | --- | --- |

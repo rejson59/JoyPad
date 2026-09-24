@@ -69,14 +69,18 @@ in vec3 vNormal;
 in vec3 vWorld;
 uniform vec3 uColor;
 uniform vec3 uLightDir;
+uniform vec3 uFogColor;
+uniform float uFogNear;
+uniform float uFogFar;
 uniform float uEmissive;
 out vec4 outColor;
 void main() {
   vec3 n = normalize(vNormal);
   float diffuse = max(dot(n, normalize(uLightDir)), 0.0);
-  float rim = pow(1.0 - max(dot(n, vec3(0.0, 0.0, 1.0)), 0.0), 2.0) * 0.08;
-  vec3 color = uColor * (0.28 + diffuse * 0.72 + rim) + uColor * uEmissive;
-  outColor = vec4(color, 1.0);
+  float rim = pow(1.0 - max(dot(n, vec3(0.0, 0.0, 1.0)), 0.0), 2.0) * 0.1;
+  vec3 lit = uColor * (0.25 + diffuse * 0.75 + rim) + uColor * uEmissive;
+  float fog = smoothstep(uFogNear, uFogFar, length(vWorld));
+  outColor = vec4(mix(lit, uFogColor, fog), 1.0);
 }`;
 
 function compileShader(gl: WebGL2RenderingContext, type: number, source: string) {
@@ -105,7 +109,8 @@ function createProgram(gl: WebGL2RenderingContext) {
 }
 
 function addFace(out: number[], normal: Vec3, a: Vec3, b: Vec3, c: Vec3, d: Vec3) {
-  for (const point of [a, b, c, a, c, d]) out.push(...point, ...normal);
+  // The order is counter-clockwise when viewed from outside; this keeps back-face culling cheap.
+  for (const point of [a, c, b, a, d, c]) out.push(...point, ...normal);
 }
 
 function cubeVertices(): number[] {
@@ -133,7 +138,7 @@ function sphereVertices(rows = 8, columns = 12): number[] {
         [Math.sin(phi1) * Math.cos(theta1), Math.cos(phi1), Math.sin(phi1) * Math.sin(theta1)],
         [Math.sin(phi0) * Math.cos(theta1), Math.cos(phi0), Math.sin(phi0) * Math.sin(theta1)],
       ];
-      for (const point of [points[0], points[1], points[2], points[0], points[2], points[3]]) out.push(...point, ...point);
+      for (const point of [points[0], points[2], points[1], points[0], points[3], points[2]]) out.push(...point, ...point);
     }
   }
   return out;
@@ -146,7 +151,7 @@ function cylinderVertices(rows = 12): number[] {
     const p0: Vec3 = [Math.cos(a0), -1, Math.sin(a0)], p1: Vec3 = [Math.cos(a1), -1, Math.sin(a1)];
     const p2: Vec3 = [Math.cos(a1), 1, Math.sin(a1)], p3: Vec3 = [Math.cos(a0), 1, Math.sin(a0)];
     const n0: Vec3 = [Math.cos(a0), 0, Math.sin(a0)], n1: Vec3 = [Math.cos(a1), 0, Math.sin(a1)];
-    for (const [point, normal] of [[p0, n0], [p1, n1], [p2, n1], [p0, n0], [p2, n1], [p3, n0]] as [Vec3, Vec3][]) out.push(...point, ...normal);
+    for (const [point, normal] of [[p0, n0], [p2, n1], [p1, n1], [p0, n0], [p3, n0], [p2, n1]] as [Vec3, Vec3][]) out.push(...point, ...normal);
   }
   return out;
 }
@@ -175,7 +180,9 @@ export abstract class WebGLRound3D implements GameRound {
   private lastFrame = 0;
   private hudDelay = 0;
   private lastCount = 4;
-  private readonly uniforms: { projection: WebGLUniformLocation; view: WebGLUniformLocation; model: WebGLUniformLocation; color: WebGLUniformLocation; light: WebGLUniformLocation; emissive: WebGLUniformLocation };
+  private readonly uniforms: { projection: WebGLUniformLocation; view: WebGLUniformLocation; model: WebGLUniformLocation; color: WebGLUniformLocation; light: WebGLUniformLocation; fogColor: WebGLUniformLocation; fogNear: WebGLUniformLocation; fogFar: WebGLUniformLocation; emissive: WebGLUniformLocation };
+  private readonly colorCache = new Map<string, Vec3>();
+  private clearColor: Vec3 = [.025, .035, .04];
 
   constructor(canvas: HTMLCanvasElement, config: RoundConfig, duration: number) {
     this.canvas = canvas;
@@ -187,11 +194,12 @@ export abstract class WebGLRound3D implements GameRound {
     this.program = createProgram(gl);
     this.uniforms = {
       projection: gl.getUniformLocation(this.program, 'uProjection')!, view: gl.getUniformLocation(this.program, 'uView')!, model: gl.getUniformLocation(this.program, 'uModel')!,
-      color: gl.getUniformLocation(this.program, 'uColor')!, light: gl.getUniformLocation(this.program, 'uLightDir')!, emissive: gl.getUniformLocation(this.program, 'uEmissive')!,
+      color: gl.getUniformLocation(this.program, 'uColor')!, light: gl.getUniformLocation(this.program, 'uLightDir')!, fogColor: gl.getUniformLocation(this.program, 'uFogColor')!, fogNear: gl.getUniformLocation(this.program, 'uFogNear')!, fogFar: gl.getUniformLocation(this.program, 'uFogFar')!, emissive: gl.getUniformLocation(this.program, 'uEmissive')!,
     };
     this.meshes = { cube: this.createMesh(cubeVertices()), sphere: this.createMesh(sphereVertices()), cylinder: this.createMesh(cylinderVertices()) };
     gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK); gl.useProgram(this.program);
     gl.uniform3f(this.uniforms.light, -0.45, 0.85, 0.35);
+    this.setAtmosphere('#11181b', 18, 46);
   }
 
   start() {
@@ -237,10 +245,19 @@ export abstract class WebGLRound3D implements GameRound {
     return { x: x || y ? x / mag : px, y: x || y ? y / mag : py, aimX: pad?.aimX ?? 0, aimY: pad?.aimY ?? 0, action: !!pad?.fire || codes.action.some(code => this.inputKeys.has(code)) };
   }
 
+  protected setAtmosphere(fogColor: string, near = 18, far = 46) {
+    const rgb = hexToRgb(fogColor);
+    this.gl.uniform3fv(this.uniforms.fogColor, rgb); this.gl.uniform1f(this.uniforms.fogNear, near); this.gl.uniform1f(this.uniforms.fogFar, far);
+  }
+
+  protected setClearColor(color: string) { this.clearColor = hexToRgb(color); }
+
   protected draw(kind: keyof WebGLRound3D['meshes'], position: Vec3, size: Vec3, color: string, rotation = 0, emissive = 0) {
     const gl = this.gl, mesh = this.meshes[kind];
     const model = mat4Multiply(mat4Translate(position[0], position[1], position[2]), mat4Multiply(mat4RotateY(rotation), mat4Scale(size[0], size[1], size[2])));
-    gl.bindVertexArray(mesh.vao); gl.uniformMatrix4fv(this.uniforms.model, false, model); gl.uniform3fv(this.uniforms.color, hexToRgb(color)); gl.uniform1f(this.uniforms.emissive, emissive); gl.drawArrays(gl.TRIANGLES, 0, mesh.count); gl.bindVertexArray(null);
+    let rgb = this.colorCache.get(color);
+    if (!rgb) { rgb = hexToRgb(color); this.colorCache.set(color, rgb); }
+    gl.bindVertexArray(mesh.vao); gl.uniformMatrix4fv(this.uniforms.model, false, model); gl.uniform3fv(this.uniforms.color, rgb); gl.uniform1f(this.uniforms.emissive, emissive); gl.drawArrays(gl.TRIANGLES, 0, mesh.count); gl.bindVertexArray(null);
   }
 
   protected setView(viewIndex: number, aspect: number) {
@@ -274,7 +291,7 @@ export abstract class WebGLRound3D implements GameRound {
       if (this.countdown > 0) { this.countdown = Math.max(0, this.countdown - dt); const whole = Math.ceil(this.countdown); if (whole !== this.lastCount) { this.lastCount = whole; gameAudio.countdownBeep(whole === 0); } }
       else { this.clock += dt; this.timeLeft = Math.max(0, this.timeLeft - dt); this.update(dt); if (this.timeLeft <= 0 && !this.finished) this.timeout(); }
     }
-    const gl = this.gl; gl.useProgram(this.program); gl.clearColor(.025, .035, .04, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    const gl = this.gl; gl.useProgram(this.program); gl.clearColor(this.clearColor[0], this.clearColor[1], this.clearColor[2], 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     const count = this.config.displayMode === 'split' && this.config.players.length > 1 ? Math.min(4, Math.max(2, this.config.players.length)) : 1;
     const columns = count <= 2 ? count : 2, rows = Math.ceil(count / columns), panelWidth = this.canvas.width / columns, panelHeight = this.canvas.height / rows;
     for (let index = 0; index < count; index++) {

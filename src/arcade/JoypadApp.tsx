@@ -106,7 +106,8 @@ class GameErrorBoundary extends Component<GameErrorBoundaryProps, GameErrorBound
 
 export default function JoypadApp() {
   const [selected, setSelected] = useState<GameId | null>(null);
-  const [focus, setFocus] = useState(0);
+  // Startujemy od najbardziej demonstracyjnego świata 3D, żeby nowy renderer był widoczny od razu.
+  const [focus, setFocus] = useState(() => Math.max(0, GAMES.findIndex(game => game.id === 'league')));
   const [remote, setRemote] = useState<RemoteEvent | null>(null);
   const serial = useRef(0);
   const selectedRef = useRef<GameId | null>(null);

@@ -37,10 +37,22 @@ function hasWebGL2(canvas: HTMLCanvasElement) {
 async function createRound(id: ArcadeId, canvas: HTMLCanvasElement, config: RoundConfig): Promise<GameRound> {
   // Każdy silnik ładuje się dopiero po wybraniu gry — menu nie pobiera całej biblioteki naraz.
   switch (id) {
-    case 'race': return new (await import('./games/Race')).RaceRound(canvas, config);
-    case 'orbit': return new (await import('./games/Orbit')).OrbitRound(canvas, config);
-    case 'snake': return new (await import('./games/Snake')).SnakeRound(canvas, config);
-    case 'temple': return new (await import('./games/Temple')).TempleRound(canvas, config);
+    case 'race': {
+      if (hasWebGL2(canvas)) return new (await import('./webgl/Arcade3D')).Arcade3DRound(canvas, config, 'race');
+      return new (await import('./games/Race')).RaceRound(canvas, config);
+    }
+    case 'orbit': {
+      if (hasWebGL2(canvas)) return new (await import('./webgl/Arcade3D')).Arcade3DRound(canvas, config, 'orbit');
+      return new (await import('./games/Orbit')).OrbitRound(canvas, config);
+    }
+    case 'snake': {
+      if (hasWebGL2(canvas)) return new (await import('./webgl/Arcade3D')).Arcade3DRound(canvas, config, 'snake');
+      return new (await import('./games/Snake')).SnakeRound(canvas, config);
+    }
+    case 'temple': {
+      if (hasWebGL2(canvas)) return new (await import('./webgl/Arcade3D')).Arcade3DRound(canvas, config, 'temple');
+      return new (await import('./games/Temple')).TempleRound(canvas, config);
+    }
     case 'voxel': {
       if (hasWebGL2(canvas)) return new (await import('./webgl/Voxel3D')).Voxel3DRound(canvas, config);
       return new (await import('./games/Voxel')).VoxelRound(canvas, config);

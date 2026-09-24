@@ -185,6 +185,6 @@ export class RaceRound extends CanvasRound {
     // ambient city lamp lights
     for (const x of [66, 1130]) for (const y of [72, 642]) { glow(ctx, x, y, 67, 'rgba(143,78,250,.16)'); ctx.fillStyle = '#9b61db'; ctx.fillRect(x - 4, y - 4, 8, 8); }
     ctx.fillStyle = '#80a0bd'; ctx.font = 'bold 12px monospace'; ctx.textAlign = 'left';
-    ctx.fillText('NEON CIRCUIT  /  NOCNE MIASTO', 25, HEIGHT - 21);
+    ctx.fillText('NEONOWY PĘD  /  NOCNE MIASTO', 25, HEIGHT - 21);
   }
 }

@@ -54,6 +54,10 @@ export interface TankState {
   aiState?: BotBrain;
   muzzle: number;
   enginePitch: number;
+  /** Do kiedy (czas gry) wieża trzyma kierunek z joysticka celowania po jego puszczeniu. */
+  aimHoldUntil?: number;
+  /** Gracz właśnie celuje joystickiem (rysujemy linię celowania). */
+  aiming?: boolean;
 }
 
 export interface BotBrain {

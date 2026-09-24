@@ -58,6 +58,14 @@ const PAD_DIR_RESPONSE = 5.5;
 /** Martwa strefa wektora kierunku — drżący palec nie rusza czołgu. */
 const PAD_DIR_DEAD = 0.14;
 
+/* --- Joystick celowania (obrót wieży) --- */
+/** Szybkość obrotu wieży za gałką celowania [rad/s] — pół obrotu w ~0,3 s. */
+const PAD_AIM_SPEED = 11;
+/** Martwa strefa celowania. */
+const PAD_AIM_DEAD = 0.2;
+/** Ile sekund wieża trzyma cel po puszczeniu gałki, zanim wróci do kierunku kadłuba. */
+const PAD_AIM_HOLD = 1.6;
+
 export class TankGame {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
@@ -444,6 +452,8 @@ export class TankGame {
      * w stronę jazdy — koniec z „pcham w dół, a on cofa się w bok”.
      */
     let padDir: { x: number; y: number; mag: number } | null = null;
+    /** Kierunek wieży z joysticka celowania (kąt w świecie gry) albo null. */
+    let padAim: number | null = null;
     if (t.cfg.isBot && t.aiState) {
       const out = this.botControl(t, dt);
       fwd = out.fwd; turn = out.turn; fire = out.fire;
@@ -456,6 +466,10 @@ export class TankGame {
 
       const pad = this.opts.padInputs?.[t.id];
       if (pad?.fire) fire = true;
+      if (pad) {
+        const ax = pad.aimX ?? 0, ay = pad.aimY ?? 0;
+        if (Math.hypot(ax, ay) > PAD_AIM_DEAD) padAim = Math.atan2(ay, ax);
+      }
 
       if (kbFwd !== 0 || kbTurn !== 0) {
         // Klawiatura ma pierwszeństwo — ktoś przy komputerze przejął ten slot.
@@ -506,8 +520,20 @@ export class TankGame {
       t.vx += fx * t.throttle * accel * dt;
       t.vy += fy * t.throttle * accel * dt;
     }
-    // smooth turret follow hull
-    t.turretAngle += angDiff(t.turretAngle, t.hullAngle) * Math.min(1, dt * 4.5);
+    if (padAim !== null) {
+      // wieża celuje tam, gdzie wskazuje prawa gałka — niezależnie od jazdy
+      const d = angDiff(t.turretAngle, padAim);
+      const step = PAD_AIM_SPEED * dt;
+      t.turretAngle += Math.abs(d) > step ? Math.sign(d) * step : d;
+      t.aimHoldUntil = this.elapsed + PAD_AIM_HOLD;
+      t.aiming = true;
+    } else {
+      t.aiming = false;
+      // po puszczeniu gałki wieża chwilę trzyma cel, potem wraca nad kadłub
+      if (!(t.aimHoldUntil && this.elapsed < t.aimHoldUntil)) {
+        t.turretAngle += angDiff(t.turretAngle, t.hullAngle) * Math.min(1, dt * 4.5);
+      }
+    }
     // friction / drag
     t.vx -= t.vx * Math.min(1, drag * dt);
     t.vy -= t.vy * Math.min(1, drag * dt);
@@ -1036,6 +1062,7 @@ export class TankGame {
     t.x = bestSpawn.x + rand(-20, 20); t.y = bestSpawn.y + rand(-20, 20);
     t.vx = 0; t.vy = 0;
     t.hullAngle = bestSpawn.angle; t.turretAngle = bestSpawn.angle;
+    t.aimHoldUntil = 0; t.aiming = false;
     t.hp = t.maxHp; t.alive = true; t.spawnShield = 2.5;
     t.rapidUntil = 0; t.bigUntil = 0; t.speedUntil = 0; t.shield = 0;
     this.addLight(t.x, t.y, 200, '150,220,255', 0.8, 0.5, false);
@@ -1208,6 +1235,7 @@ export class TankGame {
 
     // shells (under tanks? no, over)
     for (const t of this.tanks) if (t.alive) this.drawTankShadow(t);
+    for (const t of this.tanks) if (t.alive && t.aiming) this.drawAimLine(t);
     for (const t of this.tanks) if (t.alive) this.drawTank(t);
 
     for (const s of this.shells) this.drawShell(s);
@@ -1558,6 +1586,27 @@ export class TankGame {
     const w = 56, h = 40;
     if (ctx.roundRect) ctx.roundRect(-w / 2, -h / 2, w, h, 8); else ctx.rect(-w / 2, -h / 2, w, h);
     ctx.fill();
+    ctx.restore();
+  }
+
+  /** Przerywana linia celowania dla gracza, który celuje joystickiem na telefonie. */
+  drawAimLine(t: TankState) {
+    const ctx = this.ctx;
+    const a = t.turretAngle;
+    const x0 = t.x + Math.cos(a) * 52, y0 = t.y + Math.sin(a) * 52;
+    const len = 300;
+    ctx.save();
+    const g = ctx.createLinearGradient(x0, y0, x0 + Math.cos(a) * len, y0 + Math.sin(a) * len);
+    g.addColorStop(0, t.cfg.color + 'aa');
+    g.addColorStop(1, t.cfg.color + '00');
+    ctx.strokeStyle = g;
+    ctx.lineWidth = 3;
+    ctx.setLineDash([10, 9]);
+    ctx.lineDashOffset = -this.elapsed * 40;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x0 + Math.cos(a) * len, y0 + Math.sin(a) * len);
+    ctx.stroke();
     ctx.restore();
   }
 

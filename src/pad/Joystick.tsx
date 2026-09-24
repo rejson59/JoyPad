@@ -31,6 +31,19 @@ export interface JoystickProps {
   caption?: string;
   /** Treść nad gałką w pozycji domowej (np. przełącznik trybu sterowania). */
   children?: ReactNode;
+  /** Treść obok gałki, od strony środka ekranu (np. przycisk ognia przy celowaniu). */
+  sideSlot?: ReactNode;
+  /** Po której stronie ekranu leży strefa joysticka. */
+  side?: 'left' | 'right';
+  /**
+   * Próg wychylenia (0..1), od którego zewnętrzny pierścień świeci na czerwono —
+   * wizualna podpowiedź auto-ognia przy joysticku celowania.
+   */
+  hotRing?: number;
+  /** Wywoływane, gdy gałka wchodzi / wychodzi z pierścienia `hotRing`. */
+  onHotChange?: (hot: boolean) => void;
+  /** Etykieta w środku gałki, gdy nie jest wciśnięta. */
+  label?: string;
   zIndex?: number;
 }
 
@@ -53,6 +66,11 @@ export function Joystick({
   onTick,
   caption,
   children,
+  sideSlot,
+  side = 'left',
+  hotRing,
+  onHotChange,
+  label,
   zIndex = 20,
 }: JoystickProps) {
   const zoneRef = useRef<HTMLDivElement>(null);
@@ -63,6 +81,9 @@ export function Joystick({
   const engaged = useRef(false);
   const onChangeRef = useRef(onChange);
   const onTickRef = useRef(onTick);
+  const onHotRef = useRef(onHotChange);
+  const hotRef = useRef(false);
+  useEffect(() => { onHotRef.current = onHotChange; }, [onHotChange]);
 
   const [knob, setKnob] = useState({ x: 0, y: 0 });
   const [floating, setFloating] = useState<{ x: number; y: number } | null>(null);
@@ -103,8 +124,10 @@ export function Joystick({
 
   /* ---- pozycja domowa i bieżący środek ---- */
   const bottomPad = 46;
+  const homeX = clampRange(radius + 16, zoneW * (sideSlot ? 0.34 : 0.42), zoneW - radius - 14);
   const home = {
-    x: clampRange(radius + 16, zoneW * 0.42, zoneW - radius - 14),
+    // strefa po prawej = lustrzane odbicie (gałka bliżej prawej krawędzi)
+    x: side === 'right' ? zoneW - homeX : homeX,
     y: clampRange(radius + 56, zoneH - radius - bottomPad, zoneH - radius - 12),
   };
   const cx = floating ? floating.x : home.x;
@@ -128,13 +151,17 @@ export function Joystick({
     } else {
       nx = 0; ny = 0;
     }
+    if (hotRing !== undefined) {
+      const isHot = d / maxTravel >= hotRing;
+      if (isHot !== hotRef.current) { hotRef.current = isHot; onHotRef.current?.(isHot); }
+    }
     const on = nx !== 0 || ny !== 0;
     if (on !== engaged.current) {
       engaged.current = on;
       onTickRef.current?.();
     }
     onChangeRef.current(nx, ny);
-  }, [maxTravel]);
+  }, [maxTravel, hotRing]);
 
   const localPoint = useCallback((clientX: number, clientY: number) => {
     const r = zoneRef.current?.getBoundingClientRect();
@@ -144,6 +171,7 @@ export function Joystick({
   const release = useCallback(() => {
     pointerId.current = null;
     engaged.current = false;
+    if (hotRef.current) { hotRef.current = false; onHotRef.current?.(false); }
     setFloating(null);
     setKnob({ x: 0, y: 0 });
     setActive(false);
@@ -188,6 +216,7 @@ export function Joystick({
 
   /* ---- wygląd ---- */
   const knobMag = Math.min(1, Math.hypot(knob.x, knob.y) / maxTravel);
+  const hot = hotRing !== undefined && knobMag >= hotRing;
   const knobAng = Math.atan2(knob.y, knob.x) * 180 / Math.PI; // 0 = prawo, 90 = dół
   /** Która strzałka jest „zapalona” (kierunek bliski wychyleniu). */
   const lit = (arrowDeg: number) => knobMag > 0.25 && Math.abs(((knobAng - arrowDeg + 540) % 360) - 180) < 45;
@@ -195,7 +224,7 @@ export function Joystick({
   return (
     <div
       ref={zoneRef}
-      className="fixed bottom-0 left-0 top-0 select-none"
+      className={`fixed bottom-0 top-0 select-none ${side === 'right' ? 'right-0' : 'left-0'}`}
       style={{ width: `${zoneWidthPct}%`, touchAction: 'none', zIndex, opacity: disabled ? 0.4 : 1 }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -215,6 +244,19 @@ export function Joystick({
         </div>
       )}
 
+      {/* treść obok gałki (od strony środka ekranu) — w pozycji domowej */}
+      {sideSlot && (
+        <div
+          className="pointer-events-auto absolute z-10 -translate-y-1/2"
+          style={side === 'right'
+            ? { right: zoneW - home.x + radius + 14, top: home.y - radius * 0.35 }
+            : { left: home.x + radius + 14, top: home.y - radius * 0.35 }}
+          onPointerDown={e => e.stopPropagation()}
+        >
+          {sideSlot}
+        </div>
+      )}
+
       {/* gałka */}
       <div
         className="absolute"
@@ -228,7 +270,9 @@ export function Joystick({
           className="relative h-full w-full rounded-full"
           style={{
             background: 'radial-gradient(circle at 50% 45%, #2a2a30 0%, #151518 70%, #0c0c0e 100%)',
-            boxShadow: `inset 0 4px 14px rgba(0,0,0,0.8), 0 0 0 3px #26262b, 0 0 ${active ? 34 : 14}px ${color}${active ? '77' : '33'}`,
+            boxShadow: hot
+              ? `inset 0 4px 14px rgba(0,0,0,0.8), 0 0 0 3px #ef4444, 0 0 34px #ef4444aa`
+              : `inset 0 4px 14px rgba(0,0,0,0.8), 0 0 0 3px #26262b, 0 0 ${active ? 34 : 14}px ${color}${active ? '77' : '33'}`,
             transition: 'box-shadow 120ms',
           }}
         >
@@ -238,6 +282,20 @@ export function Joystick({
             style={{ width: maxTravel * 2, height: maxTravel * 2 }}
           />
           <div className="absolute inset-[18%] rounded-full border border-white/5" />
+          {/* strefa auto-ognia: pierścień przy krawędzi */}
+          {hotRing !== undefined && (
+            <div
+              className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+              style={{
+                width: (hotRing * maxTravel + knobR) * 2,
+                height: (hotRing * maxTravel + knobR) * 2,
+                border: `2px solid ${hot ? '#ef4444' : '#ef444444'}`,
+              }}
+            />
+          )}
+          {label && knobMag < 0.05 && (
+            <span className="pointer-events-none absolute left-1/2 top-[26%] -translate-x-1/2 text-[8px] font-black tracking-[0.15em]" style={{ color: `${color}88` }}>{label}</span>
+          )}
 
           {/* cztery strzałki: góra / prawo / dół / lewo */}
           {[-90, 0, 90, 180].map(a => {

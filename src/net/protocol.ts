@@ -69,6 +69,12 @@ export interface PadInput {
   /** Wektor kierunku w przestrzeni ekranu (x = prawo, y = DÓŁ), -1..1 — tryb `direct`. */
   dirX?: number;
   dirY?: number;
+  /**
+   * Joystick celowania: kierunek wieży w przestrzeni ekranu (x = prawo, y = DÓŁ), -1..1.
+   * (0,0) = nie celujesz — wieża po chwili wraca do kierunku kadłuba.
+   */
+  aimX?: number;
+  aimY?: number;
 }
 
 export const ZERO_INPUT: PadInput = { fwd: 0, turn: 0, fire: false };
@@ -81,7 +87,7 @@ export type HostScreen = 'menu' | 'setup' | 'game' | 'over';
 export type PadMessage =
   /** `pid` = stały identyfikator telefonu (localStorage) — zapobiega dwóm slotom na tym samym telefonie po zmianie transportu. */
   | { t: 'hello'; nick: string; ua: string; v: number; pid?: string; steer?: PadSteer }
-  | { t: 'input'; fwd: number; turn: number; fire: boolean; steer?: PadSteer; dirX?: number; dirY?: number }
+  | { t: 'input'; fwd: number; turn: number; fire: boolean; steer?: PadSteer; dirX?: number; dirY?: number; aimX?: number; aimY?: number }
   | { t: 'pause' }
   | { t: 'ping'; at: number };
 

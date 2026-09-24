@@ -616,6 +616,8 @@ export class PadHost {
           steer,
           dirX: clamp(msg.dirX),
           dirY: clamp(msg.dirY),
+          aimX: clamp(msg.aimX),
+          aimY: clamp(msg.aimY),
         };
         break;
       }

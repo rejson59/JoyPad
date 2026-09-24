@@ -100,8 +100,8 @@ export class PadClient {
   private attemptTimer = 0;
   private retryTimer = 0;
   private tickTimer = 0;
-  private lastSent: PadInput = { fwd: 0, turn: 0, fire: false, dirX: 0, dirY: 0 };
-  private pending: PadInput = { fwd: 0, turn: 0, fire: false, dirX: 0, dirY: 0 };
+  private lastSent: PadInput = { fwd: 0, turn: 0, fire: false, dirX: 0, dirY: 0, aimX: 0, aimY: 0 };
+  private pending: PadInput = { fwd: 0, turn: 0, fire: false, dirX: 0, dirY: 0, aimX: 0, aimY: 0 };
   /** Tryb sterowania wybrany na telefonie (wysyłany razem z każdym stanem joysticka). */
   private steerMode: PadSteer = readSteerMode();
   /** Wymuś najbliższą wysyłkę niezależnie od tego, czy stan się zmienił. */
@@ -700,6 +700,8 @@ export class PadClient {
       || Math.abs(p.turn - l.turn) > 0.01
       || Math.abs((p.dirX ?? 0) - (l.dirX ?? 0)) > 0.01
       || Math.abs((p.dirY ?? 0) - (l.dirY ?? 0)) > 0.01
+      || Math.abs((p.aimX ?? 0) - (l.aimX ?? 0)) > 0.01
+      || Math.abs((p.aimY ?? 0) - (l.aimY ?? 0)) > 0.01
       || p.fire !== l.fire;
     if (!changed && !this.forceSend && now - this.lastSendAt < 250) return; // heartbeat co 250 ms
     this.forceSend = false;
@@ -709,6 +711,7 @@ export class PadClient {
       t: 'input',
       fwd: r2(p.fwd), turn: r2(p.turn), fire: p.fire,
       steer: this.steerMode, dirX: r2(p.dirX ?? 0), dirY: r2(p.dirY ?? 0),
+      aimX: r2(p.aimX ?? 0), aimY: r2(p.aimY ?? 0),
     });
   }
 }

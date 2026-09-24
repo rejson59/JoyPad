@@ -79,7 +79,7 @@ function RemoteController({ st, fullscreen }: { st: PadClientState; fullscreen: 
   const admin = st.slot === st.adminSlot;
   const selected = GAMES[st.selection] ?? GAMES[0];
   const game = st.game ? gameInfo(st.game) : null;
-  const accent = game?.accent || '#a78bfa';
+  const accent = game?.accent || '#f97316';
   const label = st.screen === 'lobby' ? 'BIBLIOTEKA GIER' : st.screen === 'over' ? 'KONIEC RUNDY' : st.screen === 'setup' ? 'USTAWIENIA' : 'MENU GRY';
   const actionText = st.screen === 'over'
     ? 'REWANŻ'
@@ -96,7 +96,7 @@ function RemoteController({ st, fullscreen }: { st: PadClientState; fullscreen: 
         <header className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="joy-logo flex h-9 w-9 items-center justify-center rounded-xl"><Gamepad2 size={20} /></span>
-            <div><div className="joy-brand text-xl font-extrabold leading-none">Joy<span className="text-violet-400">Pad.</span></div><div className="joy-kicker mt-1 text-[8px] text-slate-500">PILOT / {st.code}</div></div>
+            <div><div className="joy-brand text-xl font-extrabold leading-none">Joy<span className="text-orange-400">Pad.</span></div><div className="joy-kicker mt-1 text-[8px] text-slate-500">PILOT / {st.code}</div></div>
           </div>
           <div className="flex items-center gap-1">
             <button type="button" onClick={fullscreen} title="Pełny ekran" className="pad-icon"><Maximize2 size={17} /></button>
@@ -114,7 +114,7 @@ function RemoteController({ st, fullscreen }: { st: PadClientState; fullscreen: 
         {st.screen === 'lobby' ? (
           <>
             <div className="mt-8 rounded-[26px] border border-white/15 bg-white/[.045] p-6 text-center shadow-[0_20px_50px_rgba(0,0,0,.2)]">
-              <div className="joy-kicker" style={{ color: accent }}>WYBRANA GRA {String(st.selection + 1).padStart(2, '0')} / 05</div>
+              <div className="joy-kicker" style={{ color: accent }}>WYBRANA GRA {String(st.selection + 1).padStart(2, '0')} / {GAMES.length.toString().padStart(2, '0')}</div>
               <h1 className="joy-heading mt-3 text-3xl font-extrabold leading-tight">{selected.title}</h1>
               <p className="mt-2 text-xs leading-relaxed text-slate-400">{selected.genre} · {selected.players}</p>
               <div className="mt-5 h-1 rounded-full bg-white/10"><div className="h-full rounded-full" style={{ width: `${((st.selection + 1) / GAMES.length) * 100}%`, background: accent }} /></div>
@@ -183,7 +183,7 @@ function ArcadeController({ st, fullscreen }: { st: PadClientState; fullscreen: 
     {isOrbit ? <>
       <Joystick side="left" size={size} color={st.color} onChange={drive} zoneWidthPct={50} bottomPadding={78} label="LOT" caption="STEROWANIE STATKIEM" />
       <Joystick side="right" size={size} color="#7dd3fc" onChange={aim} zoneWidthPct={50} bottomPadding={78} label="CEL" caption="CELOWANIE · DO KOŃCA = OGIEŃ" hotRing={.8} onHotChange={hot} sideSlot={<button {...handlers} className="flex items-center justify-center rounded-full border-4 border-sky-300/40 text-xs font-black tracking-widest text-white active:scale-95" style={{ width: actionSize * .65, height: actionSize * .65, background: 'radial-gradient(circle at 35% 28%,#7dd3fc,#1454b2 65%,#0b2767)', boxShadow: '0 7px 0 #061745, 0 0 28px #7dd3fc66', touchAction: 'none' }}>OGIEŃ</button>} />
-    </> : <><Joystick side="left" size={size} color={st.color} onChange={drive} zoneWidthPct={56} bottomPadding={78} label="RUCH" caption={st.game === 'snake' ? 'SKRĘCAJ · UNIKAJ ŚCIAN' : st.game === 'race' ? 'KIERUNEK JAZDY' : 'PORUSZANIE POSTACIĄ'} /><div className="absolute bottom-0 right-3 z-20 flex w-[42%] flex-col items-center justify-end gap-2" style={{ paddingBottom: 'max(18px, env(safe-area-inset-bottom))' }}><button {...handlers} className="flex items-center justify-center rounded-full border-4 border-white/30 text-xs font-black tracking-widest text-[#081020] active:scale-95 sm:text-base" style={{ width: actionSize, height: actionSize, background: `radial-gradient(circle at 35% 25%,#fff,${info.accent} 55%,${info.accentSoft})`, boxShadow: `0 9px 0 ${info.accentSoft}, 0 14px 28px #0009, 0 0 28px ${info.accent}66`, touchAction: 'none' }}>{st.game === 'race' ? 'TURBO' : st.game === 'snake' ? 'SPRINT' : 'AKCJA'}</button><span className="text-[9px] font-bold tracking-wider text-slate-400">{st.game === 'temple' ? 'PRZY SKRZYNI = OTWÓRZ' : 'PRZYTRZYMAJ'}</span></div></>}
+    </> : <><Joystick side="left" size={size} color={st.color} onChange={drive} zoneWidthPct={56} bottomPadding={78} label="RUCH" caption={st.game === 'snake' ? 'SKRĘCAJ · UNIKAJ ŚCIAN' : st.game === 'race' || st.game === 'league' ? 'KIERUNEK JAZDY' : 'PORUSZANIE POSTACIĄ'} /><div className="absolute bottom-0 right-3 z-20 flex w-[42%] flex-col items-center justify-end gap-2" style={{ paddingBottom: 'max(18px, env(safe-area-inset-bottom))' }}><button {...handlers} className="flex items-center justify-center rounded-full border-4 border-white/30 text-xs font-black tracking-widest text-[#081020] active:scale-95 sm:text-base" style={{ width: actionSize, height: actionSize, background: `radial-gradient(circle at 35% 25%,#fff,${info.accent} 55%,${info.accentSoft})`, boxShadow: `0 9px 0 ${info.accentSoft}, 0 14px 28px #0009, 0 0 28px ${info.accent}66`, touchAction: 'none' }}>{st.game === 'race' || st.game === 'league' ? 'TURBO' : st.game === 'snake' ? 'SPRINT' : 'AKCJA'}</button><span className="text-[9px] font-bold tracking-wider text-slate-400">{st.game === 'temple' ? 'PRZY SKRZYNI = OTWÓRZ' : 'PRZYTRZYMAJ'}</span></div></>}
     {menuOpen && <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/75 p-5 backdrop-blur" onClick={() => setMenuOpen(false)}><div className="w-full max-w-sm rounded-2xl border border-white/15 bg-[#141a2b] p-5" onClick={e => e.stopPropagation()}><div className="flex items-center justify-between"><div className="text-base font-bold">Menu pada</div><button onClick={() => setMenuOpen(false)} className="pad-icon"><X size={17} /></button></div><p className="mt-2 text-xs text-slate-400">{admin ? 'Jako administrator możesz zatrzymać grę lub wrócić do biblioteki.' : 'Administrator zarządza rundą. Możesz rozłączyć ten telefon.'}</p>{admin && <><button onClick={() => { send('pause'); setMenuOpen(false); }} className="pad-secondary mt-5 w-full"><Pause size={16} /> PAUZA / WZNÓW</button><button onClick={() => { if (window.confirm('Zakończyć rundę i wrócić do JoyPad?')) send('home'); }} className="pad-secondary mt-2 w-full"><Home size={16} /> WSZYSTKIE GRY</button></>}<button onClick={() => padClient.disconnect()} className="pad-secondary mt-2 w-full text-red-300"><LogOut size={16} /> ODŁĄCZ TELEFON</button></div></div>}
   </div>;
 }

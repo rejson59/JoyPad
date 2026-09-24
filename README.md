@@ -1,6 +1,6 @@
 # JoyPad 🎮
 
-Pięć gier multiplayer na **jednym ekranie**. Telefony stają się bezprzewodowymi padami; komputer lub TV wyświetla wspólną arenę. Strona jest statyczna i może działać na GitHub Pages. Stalowy Front pozostaje pełną grą z dotychczasowym menu, mapami, botami i sterowaniem.
+Siedem gier multiplayer na **jednym ekranie**. Telefony stają się bezprzewodowymi padami; komputer lub TV wyświetla wspólną arenę. JoyPad ma teraz ciemny, pomarańczowy interfejs w stylu konsoli, dwa nowe światy 3D-lite (renderer Canvas bez ciężkiego silnika) oraz opcjonalny split-screen. Strona jest statyczna i może działać na GitHub Pages. Stalowy Front pozostaje pełną grą z dotychczasowym menu, mapami, botami i sterowaniem.
 
 | Gra | Co się dzieje | Telefon |
 | --- | --- | --- |
@@ -9,8 +9,14 @@ Pięć gier multiplayer na **jednym ekranie**. Telefony stają się bezprzewodow
 | **Orbitalna Fala** | Kooperacyjna obrona przed kolejnymi falami dronów i asteroid; życia, osłony, naprawy i szybki ogień | Lot, celowanie i strzał |
 | **Wężowy Wir** | Rywalizacja w neonowej arenie: rosnące węże, złote impulsy, kolizje, sprint i boty | Skręt + sprint |
 | **Skarbiec Świątyni** | Wspólna wyprawa przez labirynt: relikty, skrzynie, pułapki, strażnicy i portal ucieczki | Ruch + sprint / otwieranie |
+| **Voxel Frontier** | Lekki świat klocków: zbieranie surowców, rozbudowa bazy, dzień/noc i nocne crawlery | Ruch + akcja |
+| **Turbo League** | Car soccer w perspektywie 3D-lite: auta, boost, odbicia i bramki | Kierunek + turbo |
 
-Każda gra ma własny ekran wejściowy, zasady, ustawienia rundy, HUD i ekran wyników. Nowe gry obsługują 1–4 graczy (plus opcjonalne boty w wyścigu i arenie węży). Stalowy Front zachowuje swoje zasady 2–4 uczestników; możesz dobrać boty, gdy grasz sam.
+Każda gra ma własny ekran wejściowy, zasady, ustawienia rundy, HUD i ekran wyników. Gry arcade obsługują 1–4 graczy (plus opcjonalne boty tam, gdzie pasują). W ustawieniach można przełączyć **wspólną arenę / split-screen**, a profil sprzętu ogranicza DPR canvasa do płynnego trybu, balansu albo ostrego trybu jakości. Stalowy Front zachowuje swoje zasady 2–4 uczestników; możesz dobrać boty, gdy grasz sam.
+
+### Grafika i wydajność
+
+Nowe światy korzystają z proceduralnych tekstur, izometrycznych klocków, świateł, cieni i geometrii perspektywicznej zamiast ładować duży silnik 3D. Canvas ma stałą scenę 1200×720, adaptacyjny limit DPR, zatrzymuje się po ukryciu karty i ładuje silniki dopiero po wybraniu gry. Dzięki temu oprawa wygląda bogaciej, ale nie tworzy niepotrzebnego obciążenia urządzenia.
 
 ## Jak zagrać
 
@@ -45,8 +51,8 @@ Po scaleniu zmian do `main` możesz zmienić nazwę repozytorium na **JoyPad** w
 npm ci
 npm run dev                 # lokalnie http://localhost:5173/  |  pad: /#pad
 npm run build               # TypeScript + produkcyjny build
-npm run selftest:arcade     # role admina, protokół i silniki czterech gier
+npm run selftest:arcade     # role admina, protokół i silniki sześciu gier arcade
 npm run selftest:relay      # warstwa MQTT / awaryjnego przekaźnika
 ```
 
-Stack: Vite, React, TypeScript, Canvas 2D, PeerJS, QRCode. `src/arcade/catalog.ts` to biblioteka; `src/arcade/games/` to cztery niezależne silniki z jedną warstwą obsługi klawiatury/pada (`src/arcade/runtime.ts`); `src/App.tsx` i `src/game/` zawierają Stalowy Front. `src/net/` zachowuje istniejący transport, poszerzony o stan sesji i komendy admina. Używany jest hash `#pad`, więc GitHub Pages nie potrzebuje routingu serwerowego.
+Stack: Vite, React, TypeScript, Canvas 2D/3D-lite, PeerJS, QRCode. `src/arcade/catalog.ts` to biblioteka; `src/arcade/games/` to sześć niezależnych silników z jedną warstwą obsługi klawiatury/pada (`src/arcade/runtime.ts`). `src/arcade/games/Voxel.ts` i `League.ts` dodają izometryczne klocki, światło, cienie oraz perspektywę stadionu bez ciężkiej biblioteki 3D. `src/App.tsx` i `src/game/` zawierają Stalowy Front. `src/net/` zachowuje istniejący transport, poszerzony o stan sesji i komendy admina. Używany jest hash `#pad`, więc GitHub Pages nie potrzebuje routingu serwerowego.

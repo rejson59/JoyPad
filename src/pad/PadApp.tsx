@@ -226,13 +226,13 @@ export default function PadApp() {
     // „lost” też jest zajęte — klient sam próbuje wrócić do gry.
     const busy = st.status === 'connecting' || st.status === 'lost';
     return (
-      <div className="pad-joy flex min-h-[100dvh] flex-col items-center justify-center px-5 py-8 text-white" style={{ background: 'radial-gradient(ellipse at 50% 4%,rgba(108,60,202,.22),transparent 52%),#0d1021' }}>
-        <div className="fixed left-0 right-0 top-0 h-1 bg-gradient-to-r from-violet-600 via-sky-400 to-fuchsia-500" />
-        <div className="mb-3 flex items-center gap-2 rounded-full border border-violet-400/30 bg-violet-500/10 px-4 py-1.5 text-[11px] font-bold tracking-[0.2em] text-violet-300">
+      <div className="pad-joy flex min-h-[100dvh] flex-col items-center justify-center px-5 py-8 text-white" style={{ background: 'radial-gradient(ellipse at 50% 4%,rgba(249,115,22,.16),transparent 52%),#0b0e0f' }}>
+        <div className="fixed left-0 right-0 top-0 h-1 bg-gradient-to-r from-orange-600 via-amber-300 to-orange-700" />
+        <div className="mb-3 flex items-center gap-2 rounded-full border border-orange-400/30 bg-orange-500/10 px-4 py-1.5 text-[11px] font-bold tracking-[0.2em] text-orange-300">
           <Smartphone className="h-3.5 w-3.5" /> TELEFON JAKO PAD
         </div>
-        <h1 className="joy-brand text-center text-5xl font-extrabold tracking-[-.06em]">Joy<span className="text-violet-400">Pad.</span></h1>
-        <p className="mt-2 max-w-sm text-center text-sm text-slate-400">Jeden ekran, pięć gier i telefon w roli kontrolera.</p>
+        <h1 className="joy-brand text-center text-5xl font-extrabold tracking-[-.06em]">Joy<span className="text-orange-400">Pad.</span></h1>
+        <p className="mt-2 max-w-sm text-center text-sm text-slate-400">Jeden ekran, siedem gier i telefon w roli kontrolera.</p>
 
         <div className="joy-room mt-6 w-full max-w-sm rounded-2xl p-5">
           <label className="block text-[11px] font-bold tracking-widest text-zinc-400">KOD Z EKRANU KOMPUTERA</label>
@@ -246,7 +246,7 @@ export default function PadApp() {
             autoCorrect="off"
             spellCheck={false}
             maxLength={CODE_LENGTH}
-            className="font-mono2 mt-1.5 w-full rounded-xl border border-white/15 bg-black/60 px-4 py-3 text-center text-3xl font-extrabold tracking-[0.4em] text-violet-300 outline-none focus:border-violet-400"
+            className="font-mono2 mt-1.5 w-full rounded-xl border border-white/15 bg-black/60 px-4 py-3 text-center text-3xl font-extrabold tracking-[0.4em] text-orange-300 outline-none focus:border-orange-400"
           />
           <label className="mt-4 block text-[11px] font-bold tracking-widest text-zinc-400">TWÓJ NICK</label>
           <input
@@ -255,12 +255,12 @@ export default function PadApp() {
             onKeyDown={e => { if (e.key === 'Enter') connect(); }}
             placeholder="np. Alex"
             maxLength={14}
-            className="mt-1.5 w-full rounded-xl border border-white/15 bg-black/60 px-4 py-2.5 text-base font-bold text-white outline-none focus:border-violet-400"
+            className="mt-1.5 w-full rounded-xl border border-white/15 bg-black/60 px-4 py-2.5 text-base font-bold text-white outline-none focus:border-orange-400"
           />
           <button
             onClick={connect}
             disabled={busy || normalizeCode(code).length !== CODE_LENGTH}
-            className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-400 to-sky-300 py-3.5 text-lg font-black tracking-widest text-[#0d1021] shadow-[0_0_30px_rgba(139,92,246,0.25)] disabled:opacity-40 disabled:shadow-none"
+            className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-400 to-amber-200 py-3.5 text-lg font-black tracking-widest text-[#0b0e0f] shadow-[0_0_30px_rgba(249,115,22,0.24)] disabled:opacity-40 disabled:shadow-none"
           >
             {busy ? <><Loader2 className="h-5 w-5 animate-spin" /> ŁĄCZENIE…</> : <><Wifi className="h-5 w-5" /> POŁĄCZ</>}
           </button>
@@ -342,7 +342,7 @@ export default function PadApp() {
             <Signal className="h-3 w-3" />{st.latency} ms
           </span>
           {st.viaRelay && (
-            <span className="rounded bg-sky-500/20 px-1.5 py-0.5 text-[10px] font-bold text-sky-300" title="Łączenie przez awaryjny przekaźnik (bezpośrednie WebRTC nie przeszło)">
+            <span className="rounded bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-200" title="Łączenie przez awaryjny przekaźnik (bezpośrednie WebRTC nie przeszło)">
               przekaźnik
             </span>
           )}
@@ -350,7 +350,7 @@ export default function PadApp() {
           <button onClick={goFullscreen} className="rounded-lg border border-white/15 bg-white/5 p-1.5 text-zinc-300"><Maximize2 className="h-4 w-4" /></button>
           {st.slot === st.adminSlot && <>
             <button onClick={() => { padClient.requestPause(); vibrate(15); }} title="Pauza" className="rounded-lg border border-white/15 bg-white/5 p-1.5 text-zinc-300"><Pause className="h-4 w-4" /></button>
-            <button onClick={() => { if (window.confirm('Zakończyć bitwę i wrócić do JoyPad?')) padClient.sendCommand('home'); }} title="Wróć do JoyPad" className="rounded-lg border border-violet-400/30 bg-violet-500/10 p-1.5 text-violet-200"><Gamepad2 className="h-4 w-4" /></button>
+            <button onClick={() => { if (window.confirm('Zakończyć bitwę i wrócić do JoyPad?')) padClient.sendCommand('home'); }} title="Wróć do JoyPad" className="rounded-lg border border-orange-400/30 bg-orange-500/10 p-1.5 text-orange-200"><Gamepad2 className="h-4 w-4" /></button>
           </>}
           <button onClick={() => { padClient.disconnect(); }} title="Odłącz telefon" className="rounded-lg border border-red-500/40 bg-red-500/10 p-1.5 text-red-300"><LogOut className="h-4 w-4" /></button>
         </div>
@@ -375,7 +375,7 @@ export default function PadApp() {
               <div className="flex gap-2 text-[10px] font-bold">
                 {hud.rapid && <span className="flex items-center gap-0.5 text-amber-400"><Zap className="h-3 w-3" />SZYBKI</span>}
                 {hud.big && <span className="flex items-center gap-0.5 text-red-400"><Crosshair className="h-3 w-3" />CIĘŻKI</span>}
-                {hud.speed && <span className="flex items-center gap-0.5 text-sky-400"><Wind className="h-3 w-3" />TURBO</span>}
+                {hud.speed && <span className="flex items-center gap-0.5 text-amber-300"><Wind className="h-3 w-3" />TURBO</span>}
                 {hud.shield && <span className="flex items-center gap-0.5 text-cyan-300"><Shield className="h-3 w-3" />TARCZA</span>}
               </div>
             )}

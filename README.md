@@ -33,6 +33,24 @@ Telefony podłączone **w trakcie rundy** dostają miejsce w pokoju, ale dołąc
 - Prawy joystick: kierunek wieży niezależny od jazdy. Wychylenie do czerwonego pierścienia może automatycznie strzelać; jest też przycisk **OGIEŃ**. W ustawieniach pada można wyłączyć prawy joystick, auto-ogień i zamienić strony.
 - Wibracje sygnalizują strzał, trafienie, bonusy i wynik. Oryginalny silnik Canvas, mapy i efekty audio nie zostały zastąpione.
 
+### Telefon bez zbędnych uprawnień
+
+Pad nie prosi o kamerę, mikrofon, geolokalizację ani powiadomienia — QR jest odczytywany na drugim urządzeniu, a połączenie nie wymaga tych danych.
+
+- **Wibracje** nie mają standardowego okna „Zezwól”. API wymaga prawdziwego tapnięcia, więc ekran pada pokazuje `TEST` i odblokowuje je synchronicznie przy przycisku, akcji lub joysticku. `navigator.vibrate()` nie jest dostępne np. w iOS Safari; wtedy zostaje wizualny flash i status „Brak wibracji”, bez udawania sukcesu.
+- **Wake Lock** jest domyślnie wyłączony. Włącza się go w `FUNKCJE TELEFONU`, tylko gdy użytkownik chce, a interfejs pokazuje `aktywny`, `brak wsparcia` albo `odrzucony przez system`. Po powrocie do widocznej karty blokada jest ponawiana.
+- **Pełny ekran i blokada obrotu** uruchamiają się wyłącznie po naciśnięciu przycisku. Brak wsparcia lub odrzucenie nie blokuje gry i jest widoczne w statusie.
+- **Sterowanie przechyłem** jest osobnym, wyłączonym domyślnie trybem. Na iOS przycisk wywołuje jawne `DeviceOrientationEvent.requestPermission()`; odmowa nie wpływa na zwykłe sterowanie dotykowe.
+
+### Dwa proste układy pada
+
+W menu telefonu można w trakcie rundy, bez rozłączania, przełączyć i zapamiętać na tym telefonie:
+
+- **Minimalny** — jedna duża, pływająca gałka i jeden przycisk akcji. Krótkie etykiety oraz brak drugiego joysticka ułatwiają grę jedną ręką; w Orbitalnej Fali celowanie automatycznie wybiera najbliższy cel.
+- **Twin-stick** — obecny układ dla jazdy i niezależnego celowania. W Orbitalnej Fali zachowuje osobną gałkę celu, a w Stalowym Froncie nadal dostępne są jazda, wieża, auto-ogień i zamiana stron.
+
+Przełączenie układu wpływa tylko na telefon, nie na sesję ani split-screen pozostałych graczy. Haptyka jest dodatkiem: każdy kierunek i akcja ma pełny fallback dotykowy, więc brak Vibration API nie odbiera sterowania.
+
 ## Łączność i ograniczenia
 
 Zachowano dotychczasową ścieżkę połączenia: **PeerJS / WebRTC**, opcjonalny **TURN** oraz awaryjny przekaźnik przez publiczne brokery MQTT-over-WebSocket. Host i telefon ścigają WebRTC z przekaźnikiem; działa to także między Wi‑Fi a LTE, o ile urządzenia mają internet i przynajmniej jedna z tych zewnętrznych usług jest dostępna. **GitHub Pages nie udostępnia własnego serwera sygnalizacji ani gwarantowanego przekaźnika** — publiczne usługi mogą czasem zawodzić. W panelu hosta i telefonu dostępny jest test „Sprawdź połączenie”.

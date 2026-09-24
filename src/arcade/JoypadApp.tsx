@@ -89,12 +89,19 @@ export default function JoypadApp() {
   const state = usePadHost();
 
   const open = useCallback((id: GameId) => {
+    // Polecenia z pilota są zdarzeniami jednorazowymi. Po powrocie do biblioteki
+    // nie mogą zostać wykonane ponownie przy montowaniu kolejnego ekranu gry
+    // (np. stare „WSTECZ” natychmiast zamykałoby właśnie otwarte menu).
+    setRemote(null);
     selectedRef.current = id;
     padHost.setGame(id);
     padHost.setScreen('menu');
     setSelected(id);
   }, []);
   const exit = useCallback(() => {
+    // Nie przenoś ostatniej komendy do następnej gry. Dzieci mają własny licznik
+    // zdarzeń, więc po remoncie mogłyby potraktować ją jako nową komendę.
+    setRemote(null);
     selectedRef.current = null;
     padHost.setGame(null);
     padHost.setMenuOptions(undefined);

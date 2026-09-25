@@ -6,6 +6,7 @@ import { PLAYER_DEFS } from '../game/types';
 import { padHost } from '../net/padHost';
 import type { RemoteCommand, RemoteEvent } from '../net/protocol';
 import { usePadHost, PadHostPanel } from '../pad/PadHostPanel';
+import { CountUp, ScreenCurtain, SegmentedControl, useCurtain } from '../components/motion';
 import { gameInfo, type GameId } from './catalog';
 import { useMenuMusic } from '../lib/useMenuMusic';
 import { COLORS, type DisplayMode, type GameRound, type Racer, type RenderQuality, type RoundConfig, type RoundHud, type RoundResult } from './runtime';
@@ -76,11 +77,13 @@ async function createRound(id: ArcadeId, canvas: HTMLCanvasElement, config: Roun
 }
 
 function OptionStepper({ title, value, change, accent, help }: { title: string; value: string; change: (step: number) => void; accent: string; help: string }) {
-  return <div className="arcade-option rounded-2xl p-4"><div className="joy-kicker text-slate-400">{title}</div><div className="mt-3 flex items-center justify-between gap-2"><button onClick={() => change(-1)} aria-label={`Poprzednie: ${title}`} className="joy-arrow"><ChevronLeft size={18} /></button><span className="text-center text-sm font-bold sm:text-base" style={{ color: accent }}>{value}</span><button onClick={() => change(1)} aria-label={`Następne: ${title}`} className="joy-arrow"><ChevronRight size={18} /></button></div><div className="mt-3 text-center text-[11px] text-slate-500">{help}</div></div>;
+  return <div className="arcade-option rounded-2xl p-4"><div className="joy-kicker text-slate-400">{title}</div><div className="mt-3 flex items-center justify-between gap-2"><button onClick={() => change(-1)} aria-label={`Poprzednie: ${title}`} className="joy-arrow"><ChevronLeft size={18} /></button><span key={value} className="flip-in block min-h-[26px] text-center text-sm font-bold sm:text-base" style={{ color: accent }}>{value}</span><button onClick={() => change(1)} aria-label={`Następne: ${title}`} className="joy-arrow"><ChevronRight size={18} /></button></div><div className="mt-3 text-center text-[11px] text-slate-500">{help}</div></div>;
 }
 
 function Segmented<T extends string>({ title, values, value, onChange, accent, labels }: { title: string; values: readonly T[]; value: T; onChange: (value: T) => void; accent: string; labels: Record<T, string> }) {
-  return <div className="arcade-option rounded-2xl p-4"><div className="joy-kicker text-slate-400">{title}</div><div className="mt-3 grid grid-cols-2 gap-1.5">{values.map(option => <button key={option} onClick={() => onChange(option)} className={`rounded-lg border px-2 py-2 text-[11px] font-bold transition ${value === option ? 'border-white/30 bg-white/15 text-white' : 'border-white/10 bg-black/15 text-slate-500 hover:text-slate-300'}`} style={value === option ? { color: accent, borderColor: `${accent}88` } : undefined}>{labels[option]}</button>)}</div><div className="mt-3 text-center text-[11px] text-slate-500">{value === 'split' ? '2–4 widoki na jednym ekranie' : 'Wspólna arena dla całej kanapy'}</div></div>;
+  return <div className="arcade-option rounded-2xl p-4"><div className="joy-kicker text-slate-400">{title}</div>
+    <div className="mt-3"><SegmentedControl options={values.map(v => ({ value: v, label: labels[v] }))} value={value} onChange={onChange} accent={accent} label={title} /></div>
+    <div className="mt-3 text-center text-[11px] text-slate-500">{value === 'split' ? '2–4 widoki na jednym ekranie' : 'Wspólna arena dla całej kanapy'}</div></div>;
 }
 
 export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: () => void; remote: RemoteEvent | null }) {
@@ -98,6 +101,20 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   const [showPads, setShowPads] = useState(false);
   const [muted, setMuted] = useState(gameAudio.muted);
   const [menuMusicOn, toggleMenuMusic] = useMenuMusic();
+  const curtain = useCurtain();
+  // „START” miga, gdy odliczanie przekracza zero.
+  const [startFlash, setStartFlash] = useState(false);
+  const prevCountdown = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    const c = hud?.countdown;
+    const prev = prevCountdown.current;
+    prevCountdown.current = c;
+    if (prev !== undefined && prev > 0 && (c === undefined || c <= 0)) {
+      setStartFlash(true);
+      const t = window.setTimeout(() => setStartFlash(false), 950);
+      return () => window.clearTimeout(t);
+    }
+  }, [hud?.countdown]);
   // Muzyka menu: gra w lobby/ustawieniach rundy, cichnie na czas gry.
   useEffect(() => { menuMusic.setContext(stage === 'game' ? 'game' : 'menu'); }, [stage]);
   const host = usePadHost();
@@ -123,21 +140,24 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   const changeQuality = (next: RenderQuality) => { setQuality(next); try { localStorage.setItem('joypad-render-quality', next); } catch { /* optional */ } };
 
   const start = useCallback(() => {
-    const pads = padHost.slots().filter((p): p is NonNullable<typeof p> => p !== null);
-    const humans: Racer[] = pads.length ? pads.map(p => ({ slot: p.slot, name: p.nick, color: COLORS[p.slot], isBot: false })) : [{ slot: 0, name: 'GRACZ 1', color: COLORS[0], isBot: false }];
-    const bots: Racer[] = [];
-    if (id === 'race' || id === 'snake' || id === 'league') {
-      for (let slot = 0; slot < 4 && bots.length < secondary; slot++) {
-        if (humans.some(h => h.slot === slot)) continue;
-        bots.push({ slot, name: `BOT ${bots.length + 1}`, color: COLORS[slot], isBot: true });
+    // Start rundy idzie pod kurtyną w kolorze gry — menu znika, arena wstaje.
+    curtain.begin(info.accent, () => {
+      const pads = padHost.slots().filter((p): p is NonNullable<typeof p> => p !== null);
+      const humans: Racer[] = pads.length ? pads.map(p => ({ slot: p.slot, name: p.nick, color: COLORS[p.slot], isBot: false })) : [{ slot: 0, name: 'GRACZ 1', color: COLORS[0], isBot: false }];
+      const bots: Racer[] = [];
+      if (id === 'race' || id === 'snake' || id === 'league') {
+        for (let slot = 0; slot < 4 && bots.length < secondary; slot++) {
+          if (humans.some(h => h.slot === slot)) continue;
+          bots.push({ slot, name: `BOT ${bots.length + 1}`, color: COLORS[slot], isBot: true });
+        }
       }
-    }
-    setParticipants([...humans, ...bots]);
-    setResult(null); setHud(null);
-    setRoundKey(i => i + 1);
-    setStage('game');
-    gameAudio.init(); gameAudio.uiClick();
-  }, [id, secondary]);
+      setParticipants([...humans, ...bots]);
+      setResult(null); setHud(null);
+      setRoundKey(i => i + 1);
+      setStage('game');
+      gameAudio.init(); gameAudio.uiClick();
+    });
+  }, [curtain, id, info.accent, secondary]);
 
   useEffect(() => {
     padHost.onPauseRequest = () => round.current?.togglePause();
@@ -230,6 +250,7 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   const cssVars = { '--game-accent': info.accent, '--game-soft': info.accentSoft } as React.CSSProperties;
 
   if (stage === 'menu') return (
+    <>
     <div className={`arcade-page arcade-${id} relative min-h-screen overflow-hidden text-white`} style={cssVars}>
       <div className="arcade-texture pointer-events-none absolute inset-0" />
       <div className="relative mx-auto max-w-[1280px] px-4 pb-16 sm:px-7">
@@ -242,24 +263,24 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
           </div>
         </header>
 
-        <section className="arcade-hero relative mt-7 flex min-h-[390px] items-end overflow-hidden rounded-[30px] border border-white/15 p-6 sm:min-h-[440px] sm:p-10">
+        <section className="arcade-hero rise-in relative mt-7 flex min-h-[390px] items-end overflow-hidden rounded-[30px] border border-white/15 p-6 sm:min-h-[440px] sm:p-10">
           <img src={background} alt="" className="absolute inset-0 h-full w-full object-cover" />
           <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(5,8,12,.96)_0%,rgba(5,8,12,.78)_45%,rgba(5,8,12,.12)_100%),linear-gradient(0deg,rgba(5,8,12,.92),transparent_70%)]" />
           <div className="relative z-10 max-w-[650px]"><div className="joy-kicker" style={{ color: info.accent }}>◆ {info.eyebrow} / {info.genre.toUpperCase()}</div>
             <h1 className="arcade-title mt-4 text-[44px] font-extrabold leading-[.96] tracking-[-.055em] sm:text-[76px]">{info.title}</h1>
             <p className="mt-5 max-w-[510px] text-sm leading-relaxed text-white/80 sm:text-base">{info.description}</p>
-            <div className="mt-6 flex flex-wrap items-center gap-3"><button onClick={start} className="arcade-start flex items-center gap-3 rounded-xl px-6 py-3.5 text-sm font-black text-[#101117] transition hover:-translate-y-0.5 hover:brightness-110" style={{ background: info.accent, boxShadow: `0 16px 45px ${info.accent}50` }}><Play size={18} fill="currentColor" /> ROZPOCZNIJ GRĘ <ArrowRight size={17} /></button><span className="rounded-full border border-white/20 bg-black/40 px-3 py-2 text-xs text-white/80">{info.players}</span><span className="rounded-full border border-white/15 bg-black/35 px-3 py-2 text-xs font-bold" style={{ color: info.accent }}>{info.renderTag}</span></div>
+            <div className="mt-6 flex flex-wrap items-center gap-3"><button onClick={start} className="arcade-start press flex items-center gap-3 rounded-xl px-6 py-3.5 text-sm font-black text-[#101117] transition hover:-translate-y-0.5 hover:brightness-110" style={{ background: info.accent, boxShadow: `0 16px 45px ${info.accent}50` }}><Play size={18} fill="currentColor" /> ROZPOCZNIJ GRĘ <ArrowRight size={17} /></button><span className="rounded-full border border-white/20 bg-black/40 px-3 py-2 text-xs text-white/80">{info.players}</span><span className="rounded-full border border-white/15 bg-black/35 px-3 py-2 text-xs font-bold" style={{ color: info.accent }}>{info.renderTag}</span></div>
           </div>
           <span className="pointer-events-none absolute right-7 top-3 text-[140px] font-black leading-none text-white/[.08]">{info.number}</span>
         </section>
 
         <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(280px,1fr)]">
-          <div className="arcade-panel rounded-[26px] p-5 sm:p-6"><div className="mb-4 flex items-center gap-2 font-bold"><Settings2 size={18} style={{ color: info.accent }} /> Ustawienia rozgrywki</div>
+          <div className="arcade-panel rise-in rounded-[26px] p-5 sm:p-6" style={{ animationDelay: '90ms' }}><div className="mb-4 flex items-center gap-2 font-bold"><Settings2 size={18} style={{ color: info.accent }} /> Ustawienia rozgrywki</div>
             <div className="grid gap-3 sm:grid-cols-2"><OptionStepper title={rules.primaryLabel} value={rules.primary[primary]} accent={info.accent} change={stepPrimary} help="Pilot: ← / →" /><OptionStepper title={rules.secondaryLabel} value={rules.secondary[secondary]} accent={info.accent} change={stepSecondary} help="Pilot: ↑ / ↓" /><Segmented title="WIDOK ARENY" values={['shared', 'split'] as const} value={displayMode} onChange={changeDisplay} accent={info.accent} labels={{ shared: 'WSPÓLNY', split: 'SPLIT-SCREEN' }} /><Segmented title="PROFIL SPRZĘTU" values={['performance', 'balanced', 'quality'] as const} value={quality} onChange={changeQuality} accent={info.accent} labels={{ performance: 'PŁYNNOŚĆ', balanced: 'BALANS', quality: 'DETAL' }} /></div>
             <div className="mt-4 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-xs leading-relaxed text-slate-300"><b style={{ color: info.accent }}>JAK GRAĆ</b> · {rules.hint}<br /><span className="text-slate-400">{rules.win} Telefon: {info.controls}</span></div>
             <div className="mt-3 flex items-center gap-2 text-[10px] text-slate-500"><span className="status-dot" /> Render 60 FPS · tekstury proceduralne · {quality === 'performance' ? 'DPR 1× / priorytet płynności' : quality === 'quality' ? 'DPR do 2× / maksymalna ostrość' : 'DPR adaptacyjny / bezpieczny balans'}</div>
           </div>
-          <div className="arcade-panel rounded-[26px] p-5 sm:p-6"><div className="mb-4 flex items-center justify-between"><div className="flex items-center gap-2 font-bold"><Users size={18} style={{ color: info.accent }} /> Gracze</div><span className="text-xs text-slate-400">{host.pads.length} podłączonych</span></div>
+          <div className="arcade-panel rise-in rounded-[26px] p-5 sm:p-6" style={{ animationDelay: '170ms' }}><div className="mb-4 flex items-center justify-between"><div className="flex items-center gap-2 font-bold"><Users size={18} style={{ color: info.accent }} /> Gracze</div><span className="text-xs text-slate-400">{host.pads.length} podłączonych</span></div>
             <div className="grid grid-cols-2 gap-2">{PLAYER_DEFS.map((p, i) => { const pad = host.pads.find(x => x.slot === i); return <div key={p.id} className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: COLORS[i] }} /><span className="min-w-0 truncate text-xs font-semibold text-white/85">{pad?.nick || (i === 0 && !host.pads.length ? 'Klawiatura' : 'Wolne')}</span></div>; })}</div>
             <div className="mt-5 grid grid-cols-3 gap-2 text-center text-[10px] text-slate-500"><div className="rounded-xl border border-white/10 bg-black/20 p-2"><b className="block text-sm text-white">{info.features[0]}</b>MECHANIKA</div><div className="rounded-xl border border-white/10 bg-black/20 p-2"><b className="block text-sm text-white">{info.features[1]}</b>TRYB</div><div className="rounded-xl border border-white/10 bg-black/20 p-2"><b className="block text-sm text-white">{info.features[2]}</b>DNA GRY</div></div>
             <button onClick={() => setShowPads(true)} className="mt-4 flex items-center gap-2 text-xs font-semibold hover:underline" style={{ color: info.accent }}><Smartphone size={15} /> Zaproś telefon · kod {host.code} <ArrowRight size={14} /></button>
@@ -270,24 +291,30 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
       </div>
       {showPads && <div className="fixed inset-0 z-50 flex items-center justify-center overflow-auto bg-black/80 p-4 backdrop-blur" onClick={() => setShowPads(false)}><div className="w-full max-w-2xl" onClick={e => e.stopPropagation()}><PadHostPanel players={PLAYER_DEFS} onClose={() => setShowPads(false)} context="arcade" /></div></div>}
     </div>
+    <ScreenCurtain state={curtain.state} />
+    </>
   );
 
   if (stage === 'over' && result) return (
+    <>
     <div className={`arcade-page arcade-${id} relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-4 py-10 text-white`} style={cssVars}>
       <img src={background} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-25" /><div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#0a101d]/70 via-[#0a101d]/95 to-[#0a101d]" />
-      <div className="relative z-10 w-full max-w-[700px] text-center"><div className="joy-kicker" style={{ color: info.accent }}>{info.eyebrow} / KONIEC RUNDY</div>
-        {result.allWon ? <Sparkles className="mx-auto mt-5 h-14 w-14" style={{ color: info.accent }} /> : <Trophy className="mx-auto mt-5 h-14 w-14" style={{ color: info.accent }} />}
+      <div className="rise-in relative z-10 w-full max-w-[700px] text-center" style={{ animationDelay: '120ms' }}><div className="joy-kicker" style={{ color: info.accent }}>{info.eyebrow} / KONIEC RUNDY</div>
+        <span className="crown-drop mx-auto mt-5 block h-14 w-14" style={{ color: info.accent, filter: `drop-shadow(0 0 18px ${info.accent}88)` }}>{result.allWon ? <Sparkles className="h-14 w-14" /> : <Trophy className="h-14 w-14" />}</span>
         <h1 className="arcade-title mt-4 text-4xl font-extrabold leading-tight sm:text-6xl">{result.title}</h1><p className="mt-3 text-sm text-slate-300">{result.subtitle}</p>
-        <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/30 px-3 py-1.5 text-[11px] text-slate-300"><span className="text-slate-500">LOKALNY REKORD</span><b style={{ color: info.accent }}>{record}</b></div>
+        <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/30 px-3 py-1.5 text-[11px] text-slate-300"><span className="text-slate-500">LOKALNY REKORD</span><b className="font-mono2" style={{ color: info.accent }}><CountUp value={record} duration={1100} /></b></div>
         <div className="mt-8 overflow-hidden rounded-2xl border border-white/15 bg-black/35 text-left"><div className="joy-kicker flex justify-between border-b border-white/10 px-5 py-3 text-slate-400"><span>DRUŻYNA / KLASYFIKACJA</span><span>WYNIK</span></div>
-          {result.players.map((p, i) => <div key={p.slot} className="flex items-center justify-between gap-2 border-b border-white/[.08] px-5 py-3 last:border-none"><div className="flex items-center gap-3"><span className="font-mono2 text-xs text-slate-500">{String(i + 1).padStart(2, '0')}</span><span className="h-2.5 w-2.5 rounded-full" style={{ background: p.color }} /><span className="text-sm font-bold">{p.name}</span>{p.isBot && <span className="text-[10px] text-slate-500">BOT</span>}</div><div className="text-right"><b className="font-mono2 text-lg" style={{ color: p.color }}>{p.score}</b><span className="ml-3 text-[11px] text-slate-400">{p.detail}</span></div></div>)}
+          {result.players.map((p, i) => { const winner = !result.allWon && p.slot === result.winnerSlot; return <div key={p.slot} className="rise-in flex items-center justify-between gap-2 border-b border-white/[.08] px-5 py-3 last:border-none" style={{ animationDelay: `${300 + i * 80}ms`, background: winner ? `color-mix(in srgb, ${p.color} 10%, transparent)` : undefined, boxShadow: winner ? `inset 3px 0 0 ${p.color}` : undefined }}><div className="flex items-center gap-3"><span className="font-mono2 text-xs text-slate-500">{String(i + 1).padStart(2, '0')}</span><span className="h-2.5 w-2.5 rounded-full" style={{ background: p.color, boxShadow: `0 0 8px ${p.color}` }} /><span className="text-sm font-bold">{p.name}</span>{p.isBot && <span className="text-[10px] text-slate-500">BOT</span>}</div><div className="text-right"><b className="font-mono2 text-lg" style={{ color: p.color }}><CountUp value={p.score} duration={900} /></b><span className="ml-3 text-[11px] text-slate-400">{p.detail}</span></div></div>; })}
         </div>
-        <div className="mt-8 flex flex-wrap justify-center gap-3"><button onClick={start} className="flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-black text-[#101117] hover:brightness-110" style={{ background: info.accent }}><RotateCcw size={17} /> REWANŻ</button><button onClick={() => setStage('menu')} className="arcade-secondary"><Settings2 size={17} /> ZMIEŃ USTAWIENIA</button><button onClick={onExit} className="arcade-secondary"><Home size={17} /> WSZYSTKIE GRY</button></div>
+        <div className="mt-8 flex flex-wrap justify-center gap-3"><button onClick={start} className="press flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-black text-[#101117] hover:brightness-110" style={{ background: info.accent }}><RotateCcw size={17} /> REWANŻ</button><button onClick={() => curtain.begin(info.accent, () => setStage('menu'))} className="arcade-secondary"><Settings2 size={17} /> ZMIEŃ USTAWIENIA</button><button onClick={onExit} className="arcade-secondary"><Home size={17} /> WSZYSTKIE GRY</button></div>
       </div>
     </div>
+    <ScreenCurtain state={curtain.state} />
+    </>
   );
 
   return (
+    <>
     <div className={`arcade-page arcade-${id} flex h-screen min-h-[360px] flex-col overflow-hidden text-white`} style={cssVars}>
       <div className="z-20 flex shrink-0 items-center justify-between gap-2 border-b border-white/10 bg-[#0b0e12]/95 px-3 py-2 sm:px-5"><div className="flex min-w-0 items-center gap-2 sm:gap-4"><div className="arcade-title truncate text-sm font-bold sm:text-lg" style={{ color: info.accent }}>{info.title}</div><span className="hidden rounded-full border border-white/10 px-2 py-1 text-[10px] font-bold text-slate-300 sm:block">{hud?.status || 'ŁADOWANIE ARENY…'}</span></div>
         <div className="flex items-center gap-1.5 font-mono2 text-sm font-bold sm:gap-2 sm:text-lg"><Timer size={16} style={{ color: info.accent }} /> {formatTime(hud?.timeLeft ?? 0)}</div>
@@ -300,12 +327,15 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
           <div className="mt-1 flex items-center justify-between gap-2"><b className="truncate text-sm font-black" style={{ color: hud.powerUp.color }}>{hud.powerUp.label}</b>{hud.powerUp.count > 1 && <span className="shrink-0 rounded-full px-1.5 py-0.5 font-mono2 text-[11px] font-bold text-black" style={{ background: hud.powerUp.color }}>×{hud.powerUp.count}</span>}</div>
           <div className="mt-1 text-[10px] leading-tight text-white/60">{hud.powerUp.hint}</div>
         </div>}
-        {hud?.countdown !== undefined && hud.countdown > 0 && <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/30"><span className="joy-kicker text-white/70">PRZYGOTUJ SIĘ</span><span className="arcade-title text-8xl font-black drop-shadow-lg" style={{ color: info.accent }}>{Math.ceil(hud.countdown)}</span></div>}
+        {hud?.countdown !== undefined && hud.countdown > 0 && <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/30"><span className="joy-kicker text-white/70">PRZYGOTUJ SIĘ</span><span key={Math.ceil(hud.countdown)} className="count-pop arcade-title text-8xl font-black drop-shadow-lg sm:text-9xl" style={{ color: info.accent, textShadow: `0 0 70px ${info.accent}99` }}>{Math.ceil(hud.countdown)}</span></div>}
+        {startFlash && <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"><span className="start-flash arcade-title text-7xl font-black sm:text-9xl" style={{ color: info.accent, textShadow: `0 0 90px ${info.accent}` }}>START</span></div>}
         {hud?.paused && <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm"><Pause className="h-12 w-12" style={{ color: info.accent }} /><h2 className="arcade-title mt-3 text-4xl font-bold">PAUZA</h2><p className="mt-2 text-xs text-slate-400">P / ESC lub pilot administratora, aby kontynuować</p><button onClick={() => round.current?.togglePause()} className="mt-5 flex items-center gap-2 rounded-xl px-6 py-2.5 font-bold text-[#101117]" style={{ background: info.accent }}><Play size={17} /> KONTYNUUJ</button></div>}
         {!hud && <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 text-sm text-slate-300"><LoaderCircle size={20} className="animate-spin" /> Ładowanie areny…</div>}
         {showPads && <div className="absolute inset-0 z-40 flex items-center justify-center overflow-auto bg-black/80 p-4 backdrop-blur" onClick={() => setShowPads(false)}><div className="w-full max-w-2xl" onClick={e => e.stopPropagation()}><PadHostPanel players={PLAYER_DEFS} onClose={() => setShowPads(false)} context="arcade" /></div></div>}
       </div>
       <div className="z-10 flex min-h-[76px] shrink-0 gap-2 overflow-x-auto border-t border-white/10 bg-[#0b0e12] p-2 sm:justify-center sm:p-3">{hud?.players.map(p => <div key={p.slot} className="min-w-[142px] flex-1 rounded-xl border border-white/10 bg-white/[.035] px-3 py-2 sm:max-w-[250px]"><div className="flex items-center justify-between gap-2"><span className="truncate text-xs font-bold" style={{ color: p.color }}>{p.name}{p.isBot && <span className="ml-1 text-[9px] text-slate-500">BOT</span>}</span><b className="font-mono2 text-base" style={{ color: p.color }}>{p.score}</b></div><div className="mt-1 truncate text-[11px] text-slate-400">{p.detail}</div>{p.value !== undefined && <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, p.value / (p.maxValue || 100) * 100))}%`, background: p.color }} /></div>}</div>)}</div>
     </div>
+    <ScreenCurtain state={curtain.state} />
+    </>
   );
 }

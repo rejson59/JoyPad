@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Antenna, Check, Copy, LoaderCircle, RefreshCw, Wifi, WifiOff, X } from 'lucide-react';
+import { Antenna, Check, Copy, RefreshCw, Wifi, WifiOff, X } from 'lucide-react';
 import { padHost } from '../net/padHost';
 import { padUrlFor } from '../net/protocol';
 import { usePadHost } from '../pad/PadHostPanel';
 import { ConnectionCheck } from '../pad/ConnectionCheck';
 import { PLAYER_DEFS } from '../game/types';
+import { QrFrame } from './QrFrame';
 
 /**
  * Osobny ekran połączeń dla komputera: kto jest w pokoju, przez jaki kanał (P2P/relay),
@@ -45,9 +46,7 @@ export function ConnectionsScreen({ onClose }: { onClose: () => void }) {
 
         <div className="mt-6 grid gap-5 md:grid-cols-[240px_minmax(0,1fr)]">
           <div className="flex flex-col items-center rounded-2xl border border-white/10 bg-[#0b0d0e] p-4">
-            <div className="flex h-[210px] w-[210px] items-center justify-center rounded-2xl bg-white p-2 shadow-[0_0_36px_rgba(249,115,22,.12)]">
-              {qr ? <img src={qr} alt="Kod QR do podłączenia telefonu" className="h-full w-full" /> : <LoaderCircle className="h-8 w-8 animate-spin text-orange-500" />}
-            </div>
+            <QrFrame src={qr} size={172} />
             <div className="joy-kicker mt-4 text-slate-500">KOD POKOJU</div>
             <div className="mt-1 font-mono2 text-[30px] font-extrabold tracking-[.24em] text-white">{state.code || '·····'}</div>
             <button onClick={copy} disabled={!url} className="mt-3 flex items-center gap-2 rounded-full border border-white/10 bg-white/[.06] px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-orange-400/40 hover:bg-orange-500/10 disabled:opacity-50">

@@ -63,6 +63,21 @@ const FX_VIBE: Record<PadFx, number | number[]> = {
   lose: [300],
 };
 
+/** Witamy kolejne telefony w pokoju — pierwszy ma swoją chwilę (Lab kontrolera). */
+function PadJoinSplash({ color, slot }: { color: string; slot: number }) {
+  return (
+    <div className="pointer-events-none fixed inset-0 z-[70] flex items-center justify-center" aria-live="polite">
+      <div className="join-splash-card" style={{ '--pc': color, padding: '26px 42px' } as React.CSSProperties}>
+        <div className="joy-kicker flex items-center justify-center gap-2 text-white/60">
+          <Smartphone size={12} /> DOŁĄCZONO DO POKOJU
+        </div>
+        <div className="join-splash-num mt-2" style={{ fontSize: 64 }}>{String(slot + 1).padStart(2, '0')}</div>
+        <div className="joy-heading mt-1 text-lg font-extrabold text-white">JESTEŚ GRACZEM</div>
+      </div>
+    </div>
+  );
+}
+
 export default function PadApp() {
   const [st, setSt] = useState<PadClientState>(padClient.state);
   const [booted, setBooted] = useState(false);
@@ -118,6 +133,20 @@ export default function PadApp() {
       padClient.connect(c, localStorage.getItem(LS_NICK) || '');
     }
   }, []);
+
+  // Splash „DOŁĄCZONO” — dla każdego telefonu, który nie jest administratorem
+  // (pierwszy telefon ma swoją chwilę: Lab kontrolera).
+  const [joinFx, setJoinFx] = useState<{ key: number } | null>(null);
+  const wasConnected = useRef(st.status === 'connected');
+  useEffect(() => {
+    if (st.status === 'connected' && !wasConnected.current && st.slot !== st.adminSlot) {
+      wasConnected.current = true;
+      const t1 = window.setTimeout(() => { haptic([60, 50, 120]); setJoinFx({ key: Date.now() }); }, 550);
+      const t2 = window.setTimeout(() => setJoinFx(null), 550 + 2500);
+      return () => { window.clearTimeout(t1); window.clearTimeout(t2); };
+    }
+    if (st.status !== 'connected') wasConnected.current = false;
+  }, [st.status, st.slot, st.adminSlot]);
 
   // Slot bez czołgu w trwającej bitwie: brak HUD-u przez >2 s
   const [noTank, setNoTank] = useState(false);
@@ -451,7 +480,7 @@ export default function PadApp() {
   if (st.status === 'connected' && st.screen === 'lobby' && !labDone) {
     return <JoyLabPad nick={st.nick || st.name} color={st.color} onDone={() => setLabDone(true)} />;
   }
-  if (st.screen !== 'game' || st.game !== 'tanks') return <><JoypadController st={st} fullscreen={goFullscreen} fullscreenStatus={fullscreenStatus} wakeLockEnabled={wakeLockEnabled} onWakeLockChange={changeWakeLock} wakeLockStatus={wakeLockStatus} tiltEnabled={tiltEnabled} onTiltChange={changeTilt} tiltStatus={tiltStatus} />{flash && <div className="pointer-events-none fixed inset-0 z-[60]" style={{ background: flash }} />}</>;
+  if (st.screen !== 'game' || st.game !== 'tanks') return <><JoypadController st={st} fullscreen={goFullscreen} fullscreenStatus={fullscreenStatus} wakeLockEnabled={wakeLockEnabled} onWakeLockChange={changeWakeLock} wakeLockStatus={wakeLockStatus} tiltEnabled={tiltEnabled} onTiltChange={changeTilt} tiltStatus={tiltStatus} />{flash && <div className="pointer-events-none fixed inset-0 z-[60]" style={{ background: flash }} />}{joinFx && <PadJoinSplash color={st.color} slot={st.slot} key={joinFx.key} />}</>;
 
   /* ---------- Controller screen ---------- */
   const hud = st.hud;
@@ -464,6 +493,7 @@ export default function PadApp() {
     >
       {/* flash overlay */}
       {flash && <div className="pointer-events-none absolute inset-0 z-40" style={{ background: flash }} />}
+      {joinFx && <PadJoinSplash color={st.color} slot={st.slot} key={joinFx.key} />}
 
       {/* top bar — tylko kolor, nick i ikony; wyniki są na ekranie głównym */}
       <div className="absolute left-0 right-0 top-0 z-30 flex items-center justify-between gap-2 px-3 py-2" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>

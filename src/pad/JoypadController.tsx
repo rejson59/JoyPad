@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Crown, Gamepad2, Home, LogOut, Maximize2, Menu, Pause, Pencil, Play, RotateCcw, Settings, Signal, Smartphone, Trophy, X } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Crown, Gamepad2, Home, LogOut, Maximize2, Menu, Pause, Pencil, Play, RotateCcw, Settings, Trophy, X } from 'lucide-react';
 import { GAMES, gameInfo } from '../arcade/catalog';
 import { padClient, type PadClientState } from '../net/padClient';
 import { normalizeNick, type RemoteCommand } from '../net/protocol';
 import { Joystick } from './Joystick';
 import { getHapticStatus, haptic, unlockHaptics } from './haptics';
 import { DeviceFeatures, type FullscreenStatus, type TiltStatus, type WakeLockStatus } from './DeviceFeatures';
-
-function vibrate(n = 14) { haptic(n); }
-function send(command: RemoteCommand) { if (getHapticStatus() !== 'ready') unlockHaptics(); haptic(14); padClient.sendCommand(command); }
 
 type ControllerFeatures = {
   fullscreen: () => void;
@@ -21,13 +18,8 @@ type ControllerFeatures = {
   tiltStatus: TiltStatus;
 };
 
-function Roster({ st }: { st: PadClientState }) {
-  return <div className="grid grid-cols-2 gap-2">{Array.from({ length: 4 }, (_, slot) => {
-    const player = st.roster.find(p => p.slot === slot);
-    const colors = ['#4ade80', '#38bdf8', '#fb923c', '#c084fc'];
-    return <div key={slot} className={`flex min-w-0 items-center gap-2 rounded-xl border p-2.5 ${player ? 'border-white/15 bg-white/[.07]' : 'border-white/[.06] bg-white/[.02]'}`}><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold" style={{ color: colors[slot], background: `${colors[slot]}22` }}>{slot + 1}</span><div className="min-w-0"><div className="truncate text-xs font-bold text-white">{player?.nick ?? 'Wolne'}</div><div className="text-[10px] text-slate-400">{player ? st.adminSlot === slot ? '★ Admin' : 'Połączono' : 'Czeka na pada'}</div></div></div>;
-  })}</div>;
-}
+function vibrate(n = 14) { haptic(n); }
+function send(command: RemoteCommand) { if (getHapticStatus() !== 'ready') unlockHaptics(); haptic(14); padClient.sendCommand(command); }
 
 /** Edycja nicku działa po welcome — nie zrywa połączenia ani nie zmienia slotu. */
 export function NickEditor({ st, compact = false }: { st: PadClientState; compact?: boolean }) {
@@ -154,7 +146,7 @@ function RemoteController({ st, ...features }: { st: PadClientState } & Controll
         <header className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="joy-logo flex h-9 w-9 items-center justify-center rounded-xl"><Gamepad2 size={20} /></span>
-            <div><div className="joy-brand text-xl font-extrabold leading-none">Joy<span className="text-orange-400">Pad.</span></div><div className="joy-kicker mt-1 text-[8px] text-slate-500">PILOT / {st.code}</div></div>
+            <div><div className="joy-brand text-xl font-extrabold leading-none">Joy<span className="text-orange-400">Pad.</span></div><div className="joy-kicker mt-1 text-[8px] text-slate-500">PILOT</div></div>
           </div>
           <div className="flex items-center gap-1">
             <button type="button" onClick={() => setDeviceSettings(true)} title="Funkcje telefonu" className="pad-icon"><Settings size={17} /></button>
@@ -169,7 +161,6 @@ function RemoteController({ st, ...features }: { st: PadClientState } & Controll
             {admin ? <span className="flex items-center gap-1"><Crown size={12} /> ADMINISTRATOR</span> : `GRACZ ${st.slot + 1}`}
           </span>
         </div>
-        <NickEditor st={st} />
 
         {st.screen === 'lobby' ? (
           <>
@@ -201,48 +192,31 @@ function RemoteController({ st, ...features }: { st: PadClientState } & Controll
             </>}
           </>
         )}
-
-        <div className="mt-auto pt-7">
-          <div className="mb-3 flex items-center justify-between"><span className="joy-kicker text-slate-400">POŁĄCZENI / {st.roster.length} Z 4</span><span className="flex items-center gap-1 text-[10px] text-slate-500"><Signal size={12} /> {st.latency} ms</span></div>
-          <Roster st={st} />
-          <div className="mt-4 flex items-center justify-center gap-1 text-[10px] text-slate-500"><Smartphone size={12} /> {st.viaRelay ? 'Połączenie przez przekaźnik' : 'Połączenie bezpośrednie P2P'}</div>
-        </div>
       </div>
-      {deviceSettings && <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/75 p-5 backdrop-blur-sm" onClick={() => setDeviceSettings(false)}><div className="w-full max-w-sm rounded-2xl border border-white/15 bg-[#141a2b] p-4" onClick={e => e.stopPropagation()}><div className="mb-2 flex items-center justify-between"><div className="flex items-center gap-2 text-sm font-black text-orange-200"><Settings size={16} /> FUNKCJE TELEFONU</div><button type="button" onClick={() => setDeviceSettings(false)} className="pad-icon"><X size={17} /></button></div><DeviceFeatures wakeLockEnabled={wakeLockEnabled} onWakeLockChange={onWakeLockChange} wakeLockStatus={wakeLockStatus} fullscreenStatus={fullscreenStatus} onFullscreen={fullscreen} tiltEnabled={tiltEnabled} onTiltChange={onTiltChange} tiltStatus={tiltStatus} /></div></div>}
+      {deviceSettings && <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/75 p-5 backdrop-blur-sm" onClick={() => setDeviceSettings(false)}><div className="w-full max-w-sm rounded-2xl border border-white/15 bg-[#141a2b] p-4" onClick={e => e.stopPropagation()}><div className="mb-2 flex items-center justify-between"><div className="flex items-center gap-2 text-sm font-black text-orange-200"><Settings size={16} /> USTAWIENIA</div><button type="button" onClick={() => setDeviceSettings(false)} className="pad-icon"><X size={17} /></button></div><NickEditor st={st} compact /><DeviceFeatures wakeLockEnabled={wakeLockEnabled} onWakeLockChange={onWakeLockChange} wakeLockStatus={wakeLockStatus} fullscreenStatus={fullscreenStatus} onFullscreen={fullscreen} tiltEnabled={tiltEnabled} onTiltChange={onTiltChange} tiltStatus={tiltStatus} /></div></div>}
     </div>
   );
 }
 
-type ArcadeLayout = 'minimal' | 'twin';
-const LS_ARCADE_LAYOUT = 'joypad-arcade-layout';
-function readArcadeLayout(): ArcadeLayout {
-  try { return localStorage.getItem(LS_ARCADE_LAYOUT) === 'minimal' ? 'minimal' : 'twin'; } catch { return 'twin'; }
-}
+
 
 function ArcadeController({ st, ...features }: { st: PadClientState } & ControllerFeatures) {
   const { fullscreen, fullscreenStatus, wakeLockEnabled, onWakeLockChange, wakeLockStatus, tiltEnabled, onTiltChange, tiltStatus } = features;
   const info = st.game ? gameInfo(st.game) : GAMES[0];
   const [menuOpen, setMenuOpen] = useState(false);
   const [deviceSettings, setDeviceSettings] = useState(false);
-  const [layout, setLayout] = useState<ArcadeLayout>(readArcadeLayout);
-  const auto = useRef(false), button = useRef(false);
-  const isOrbit = st.game === 'orbit';
-  const twoStick = isOrbit && layout === 'twin';
+  const button = useRef(false);
   const admin = st.slot === st.adminSlot;
-  const chooseLayout = (next: ArcadeLayout) => {
-    setLayout(next);
-    try { localStorage.setItem(LS_ARCADE_LAYOUT, next); } catch { /* optional */ }
-    vibrate(12);
-  };
-  const size = Math.min(200, Math.max(135, Math.floor(Math.min(window.innerWidth * (twoStick ? .32 : .36), window.innerHeight * .46))));
-  const actionSize = Math.min(170, Math.max(100, Math.floor(window.innerHeight * (twoStick ? .22 : .31))), Math.floor(window.innerWidth * .42) - 8);
+  const size = Math.min(210, Math.max(145, Math.floor(Math.min(window.innerWidth * .38, window.innerHeight * .48))));
+  const actionSize = Math.min(180, Math.max(110, Math.floor(window.innerHeight * .33)), Math.floor(window.innerWidth * .44) - 8);
 
-  const syncFire = useCallback(() => padClient.setInput({ fire: auto.current || button.current }), []);
-  const setButton = (pressed: boolean) => { button.current = pressed; if (pressed) { if (getHapticStatus() !== 'ready') unlockHaptics(); vibrate(10); } syncFire(); };
+  const setButton = (pressed: boolean) => {
+    button.current = pressed;
+    if (pressed) { if (getHapticStatus() !== 'ready') unlockHaptics(); vibrate(10); }
+    padClient.setInput({ fire: pressed });
+  };
   useEffect(() => () => { padClient.setInput({ fwd: 0, turn: 0, dirX: 0, dirY: 0, aimX: 0, aimY: 0, fire: false }); }, []);
   const drive = useCallback((x: number, y: number) => padClient.setInput({ turn: x, fwd: y, dirX: x, dirY: -y }), []);
-  const aim = useCallback((x: number, y: number) => padClient.setInput({ aimX: x, aimY: -y }), []);
-  const hot = useCallback((on: boolean) => { auto.current = on; syncFire(); }, [syncFire]);
   const handlers = {
     onPointerDown: (e: RPointerEvent<HTMLButtonElement>) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.setPointerCapture(e.pointerId); setButton(true); },
     onPointerUp: () => setButton(false), onPointerCancel: () => setButton(false), onLostPointerCapture: () => setButton(false),
@@ -250,18 +224,24 @@ function ArcadeController({ st, ...features }: { st: PadClientState } & Controll
   };
   return <div className="fixed inset-0 select-none overflow-hidden text-white" style={{ background: `radial-gradient(ellipse at 50% 110%, ${info.accentSoft}55, #080d19 67%)`, touchAction: 'none' }}>
     <div className="pointer-events-none absolute inset-0 opacity-[.07]" style={{ backgroundImage: 'linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px)', backgroundSize: '35px 35px' }} />
-    <header className="absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-2 border-b border-white/10 bg-[#080d19]/80 px-3 py-2 backdrop-blur" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>
-      <div className="min-w-0"><div className="truncate text-sm font-black" style={{ color: info.accent }}>{info.title}</div><div className="text-[10px] text-slate-400">GRACZ {st.slot + 1} · {st.nick || st.name}{admin ? ' · ★ ADMIN' : ''}</div></div>
-      <div className="flex shrink-0 items-center gap-1"><span className="mr-1 hidden text-[10px] text-slate-400 sm:block">{st.latency} ms</span><button className="pad-icon" onClick={() => setDeviceSettings(true)} title="Funkcje telefonu"><Settings size={16} /></button><button className="pad-icon" onClick={fullscreen} title="Pełny ekran"><Maximize2 size={16} /></button>{admin && <button className="pad-icon" onClick={() => send('pause')} title="Pauza"><Pause size={16} /></button>}<button className="pad-icon" onClick={() => setMenuOpen(v => !v)} title="Menu"><Menu size={17} /></button></div>
+    {/* Tylko przyciski — wyniki, czasy i lista graczy są na ekranie głównym. */}
+    <header className="absolute inset-x-0 top-0 z-30 flex items-center justify-end gap-1 border-b border-white/10 bg-[#080d19]/80 px-3 py-2 backdrop-blur" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>
+      <span className="mr-auto h-2.5 w-2.5 rounded-full" title={`${st.nick || st.name} · slot ${st.slot + 1}`} style={{ background: st.color, boxShadow: `0 0 10px ${st.color}` }} />
+      <button className="pad-icon" onClick={() => setDeviceSettings(true)} title="Ustawienia"><Settings size={16} /></button>
+      <button className="pad-icon" onClick={fullscreen} title="Pełny ekran"><Maximize2 size={16} /></button>
+      {admin && <button className="pad-icon" onClick={() => send('pause')} title="Pauza"><Pause size={16} /></button>}
+      <button className="pad-icon" onClick={() => setMenuOpen(v => !v)} title="Menu"><Menu size={17} /></button>
     </header>
-    {st.arcadeHud ? <div className="pointer-events-none absolute left-1/2 top-[60px] z-10 w-[min(92%,400px)] -translate-x-1/2 rounded-xl border border-white/15 bg-black/60 px-4 py-2 backdrop-blur-sm" style={{ marginTop: 'env(safe-area-inset-top)' }}><div className="flex items-center justify-between gap-2 text-[11px] font-bold"><span className="truncate" style={{ color: info.accent }}>{st.arcadeHud.title}</span><span className="shrink-0 font-mono2">{Math.floor(st.arcadeHud.timeLeft / 60)}:{String(Math.floor(st.arcadeHud.timeLeft % 60)).padStart(2, '0')}</span></div><div className="mt-1 flex items-center justify-between text-xs text-slate-200"><span>{st.arcadeHud.detail}</span><b className="font-mono2" style={{ color: info.accent }}>{st.arcadeHud.score} PKT</b></div>{st.arcadeHud.value !== undefined && <div className="mt-1.5 h-1 rounded-full bg-white/10"><div className="h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, st.arcadeHud.value / (st.arcadeHud.maxValue || 100) * 100))}%`, background: info.accent }} /></div>}</div>
-      : <div className="pointer-events-none absolute inset-x-0 top-1/3 z-10 px-8 text-center text-sm font-bold text-amber-200">Runda trwa. Dołączysz od następnej rozgrywki.</div>}
-    {twoStick ? <>
-      <Joystick side="left" size={size} color={st.color} onChange={drive} disabled={tiltEnabled} zoneWidthPct={50} bottomPadding={78} label="LOT" caption="RUCH" />
-      <Joystick side="right" size={size} color="#7dd3fc" onChange={aim} disabled={tiltEnabled} zoneWidthPct={50} bottomPadding={78} label="CEL" caption="CEL" hotRing={.8} onHotChange={hot} sideSlot={<button {...handlers} className="flex items-center justify-center rounded-full border-4 border-sky-300/40 text-xs font-black tracking-widest text-white active:scale-95" style={{ width: actionSize * .65, height: actionSize * .65, background: 'radial-gradient(circle at 35% 28%,#7dd3fc,#1454b2 65%,#0b2767)', boxShadow: '0 7px 0 #061745, 0 0 28px #7dd3fc66', touchAction: 'none' }}>OGIEŃ</button>} />
-    </> : <><Joystick side="left" size={size} color={st.color} onChange={drive} disabled={tiltEnabled} zoneWidthPct={56} bottomPadding={78} label="RUCH" caption={layout === 'minimal' ? 'RUCH' : st.game === 'snake' ? 'SKRĘCAJ · UNIKAJ ŚCIAN' : st.game === 'race' || st.game === 'league' ? 'KIERUNEK JAZDY' : 'PORUSZANIE POSTACIĄ'} /><div className="absolute bottom-0 right-3 z-20 flex w-[42%] flex-col items-center justify-end gap-2" style={{ paddingBottom: 'max(18px, env(safe-area-inset-bottom))' }}><button {...handlers} className="flex items-center justify-center rounded-full border-4 border-white/30 text-xs font-black tracking-widest text-[#081020] active:scale-95 sm:text-base" style={{ width: actionSize, height: actionSize, background: `radial-gradient(circle at 35% 25%,#fff,${info.accent} 55%,${info.accentSoft})`, boxShadow: `0 9px 0 ${info.accentSoft}, 0 14px 28px #0009, 0 0 28px ${info.accent}66`, touchAction: 'none' }}>{st.game === 'orbit' ? 'OGIEŃ' : st.game === 'race' ? 'AKCJA' : st.game === 'league' ? 'TURBO' : st.game === 'snake' ? 'SPRINT' : 'AKCJA'}</button>{layout !== 'minimal' && <span className="text-[9px] font-bold tracking-wider text-slate-400">{st.game === 'temple' ? 'PRZY SKRZYNI = OTWÓRZ' : st.game === 'race' ? 'BONUS / TURBO' : 'PRZYTRZYMAJ'}</span>}</div></>}
-    {menuOpen && <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/75 p-5 backdrop-blur" onClick={() => setMenuOpen(false)}><div className="w-full max-w-sm rounded-2xl border border-white/15 bg-[#141a2b] p-5" onClick={e => e.stopPropagation()}><div className="flex items-center justify-between"><div className="text-base font-bold">Menu pada</div><button onClick={() => setMenuOpen(false)} className="pad-icon"><X size={17} /></button></div><p className="mt-2 text-xs text-slate-400">{admin ? 'Jako administrator możesz zatrzymać grę lub wrócić do biblioteki.' : 'Administrator zarządza rundą. Możesz rozłączyć ten telefon.'}</p><NickEditor st={st} compact /><div className="mt-4"><div className="mb-1 text-[10px] font-black tracking-[.18em] text-slate-500">UKŁAD PADA</div><div className="grid grid-cols-2 gap-1.5">{([['minimal', 'MINIMALNY', '1 gałka + akcja'], ['twin', 'TWIN-STICK', isOrbit ? 'ruch + celowanie' : 'pełny układ']] as const).map(([mode, label, desc]) => <button key={mode} type="button" onClick={() => chooseLayout(mode)} className={`rounded-xl border px-2 py-2 text-left ${layout === mode ? 'border-orange-400/70 bg-orange-400/15' : 'border-white/10 bg-black/20'}`}><div className="text-[11px] font-black" style={{ color: layout === mode ? info.accent : '#e5e7eb' }}>{label}</div><div className="text-[10px] text-slate-500">{desc}</div></button>)}</div></div>{admin && <><button onClick={() => { send('pause'); setMenuOpen(false); }} className="pad-secondary mt-5 w-full"><Pause size={16} /> PAUZA / WZNÓW</button><button onClick={() => { if (window.confirm('Zakończyć rundę i wrócić do JoyPad?')) send('home'); }} className="pad-secondary mt-2 w-full"><Home size={16} /> WSZYSTKIE GRY</button></>}<button onClick={() => padClient.disconnect()} className="pad-secondary mt-2 w-full text-red-300"><LogOut size={16} /> ODŁĄCZ TELEFON</button></div></div>}
-    {deviceSettings && <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/75 p-5 backdrop-blur" onClick={() => setDeviceSettings(false)}><div className="w-full max-w-sm rounded-2xl border border-white/15 bg-[#141a2b] p-4" onClick={e => e.stopPropagation()}><div className="mb-2 flex items-center justify-between"><div className="flex items-center gap-2 text-sm font-black text-orange-200"><Settings size={16} /> FUNKCJE TELEFONU</div><button type="button" onClick={() => setDeviceSettings(false)} className="pad-icon"><X size={17} /></button></div><DeviceFeatures wakeLockEnabled={wakeLockEnabled} onWakeLockChange={onWakeLockChange} wakeLockStatus={wakeLockStatus} fullscreenStatus={fullscreenStatus} onFullscreen={fullscreen} tiltEnabled={tiltEnabled} onTiltChange={onTiltChange} tiltStatus={tiltStatus} /></div></div>}
+    {!st.arcadeHud && (
+      <div className="pointer-events-none absolute inset-x-0 top-1/3 z-10 px-8 text-center text-sm font-bold text-amber-200">Runda trwa. Dołączysz od następnej rozgrywki.</div>
+    )}
+    <Joystick side="left" size={size} color={st.color} onChange={drive} disabled={tiltEnabled} zoneWidthPct={56} bottomPadding={78} label="RUCH" caption={st.game === 'snake' ? 'SKRĘCAJ · UNIKAJ ŚCIAN' : st.game === 'race' || st.game === 'league' ? 'KIERUNEK JAZDY' : st.game === 'orbit' ? 'LOT · PEŁNIE = DOPALACZ' : 'PORUSZANIE POSTACIĄ'} />
+    <div className="absolute bottom-0 right-3 z-20 flex w-[42%] flex-col items-center justify-end gap-2" style={{ paddingBottom: 'max(18px, env(safe-area-inset-bottom))' }}>
+      <button {...handlers} className="flex items-center justify-center rounded-full border-4 border-white/30 text-xs font-black tracking-widest text-[#081020] active:scale-95 sm:text-base" style={{ width: actionSize, height: actionSize, background: `radial-gradient(circle at 35% 25%,#fff,${info.accent} 55%,${info.accentSoft})`, boxShadow: `0 9px 0 ${info.accentSoft}, 0 14px 28px #0009, 0 0 28px ${info.accent}66`, touchAction: 'none' }}>{st.game === 'orbit' ? 'OGIEŃ' : st.game === 'race' ? 'AKCJA' : st.game === 'league' ? 'TURBO' : st.game === 'snake' ? 'SPRINT' : 'AKCJA'}</button>
+      <span className="text-[9px] font-bold tracking-wider text-slate-400">{st.game === 'temple' ? 'PRZY SKRZYNI = OTWÓRZ' : st.game === 'race' ? 'BONUS / TURBO' : 'PRZYTRZYMAJ'}</span>
+    </div>
+    {menuOpen && <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/75 p-5 backdrop-blur" onClick={() => setMenuOpen(false)}><div className="w-full max-w-sm rounded-2xl border border-white/15 bg-[#141a2b] p-5" onClick={e => e.stopPropagation()}><div className="flex items-center justify-between"><div className="text-base font-bold">{info.title}</div><button onClick={() => setMenuOpen(false)} className="pad-icon"><X size={17} /></button></div><p className="mt-2 text-xs text-slate-400">{admin ? 'Jako administrator możesz zatrzymać grę lub wrócić do biblioteki.' : 'Administrator zarządza rundą. Możesz rozłączyć ten telefon.'}</p><NickEditor st={st} compact />{admin && <><button onClick={() => { send('pause'); setMenuOpen(false); }} className="pad-secondary mt-5 w-full"><Pause size={16} /> PAUZA / WZNÓW</button><button onClick={() => { if (window.confirm('Zakończyć rundę i wrócić do JoyPad?')) send('home'); }} className="pad-secondary mt-2 w-full"><Home size={16} /> WSZYSTKIE GRY</button></>}<button onClick={() => padClient.disconnect()} className="pad-secondary mt-2 w-full text-red-300"><LogOut size={16} /> ODŁĄCZ TELEFON</button></div></div>}
+    {deviceSettings && <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/75 p-5 backdrop-blur" onClick={() => setDeviceSettings(false)}><div className="w-full max-w-sm rounded-2xl border border-white/15 bg-[#141a2b] p-4" onClick={e => e.stopPropagation()}><div className="mb-2 flex items-center justify-between"><div className="flex items-center gap-2 text-sm font-black text-orange-200"><Settings size={16} /> USTAWIENIA</div><button type="button" onClick={() => setDeviceSettings(false)} className="pad-icon"><X size={17} /></button></div><DeviceFeatures wakeLockEnabled={wakeLockEnabled} onWakeLockChange={onWakeLockChange} wakeLockStatus={wakeLockStatus} fullscreenStatus={fullscreenStatus} onFullscreen={fullscreen} tiltEnabled={tiltEnabled} onTiltChange={onTiltChange} tiltStatus={tiltStatus} /></div></div>}
   </div>;
 }
 

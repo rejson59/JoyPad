@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import { CatmullRomCurve3, Vector3 } from 'three';
 
 export const ROAD_HALF = 12; // połowa szerokości jezdni (m)
 export const BARRIER = ROAD_HALF - 0.2;
@@ -44,7 +44,7 @@ export interface Projection {
 }
 
 export class Track {
-  curve: THREE.CatmullRomCurve3;
+  curve: CatmullRomCurve3;
   length: number;
   N: number;
   spacing: number;
@@ -63,8 +63,8 @@ export class Track {
   itemRows: number[] = [];
 
   constructor() {
-    const pts = CONTROL_POINTS.map((c) => new THREE.Vector3(c[0], c[1], c[2]));
-    this.curve = new THREE.CatmullRomCurve3(pts, true, 'centripetal', 0.5);
+    const pts = CONTROL_POINTS.map((c) => new Vector3(c[0], c[1], c[2]));
+    this.curve = new CatmullRomCurve3(pts, true, 'centripetal', 0.5);
     const approxLen = this.curve.getLength();
     this.N = Math.round(approxLen / 1.0);
     const spaced = this.curve.getSpacedPoints(this.N);
@@ -201,7 +201,7 @@ export class Track {
     return out;
   }
 
-  sample(s: number, lateral: number, out: THREE.Vector3): { yaw: number; idx: number } {
+  sample(s: number, lateral: number, out: Vector3): { yaw: number; idx: number } {
     const ss = this.wrapS(s) / this.spacing;
     const j = Math.floor(ss) % this.N;
     const f = ss - Math.floor(ss);

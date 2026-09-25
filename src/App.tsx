@@ -8,6 +8,7 @@ import { TankGame, type HudState, type HudTank } from './game/engine';
 import { PLAYER_DEFS, type GameMode, type MapId, type PlayerConfig } from './game/types';
 import { MAPS } from './game/maps';
 import { gameAudio } from './game/audio';
+import { menuMusic } from './game/menuMusic';
 import { padHost } from './net/padHost';
 import type { RemoteCommand, RemoteEvent } from './net/protocol';
 import { PadHostPanel, usePadHost } from './pad/PadHostPanel';
@@ -16,6 +17,8 @@ import { Smartphone } from 'lucide-react';
 type Screen = 'menu' | 'setup' | 'game' | 'over';
 
 const MAP_ICONS: Record<MapId, string> = { desert: '🏜️', nightcity: '🌃', forest: '🌲' };
+/** Czas rundy w sekundach (stała — niezmienny limit w konfiguracji gry). */
+const TIME_LIMIT_S = 300;
 
 function KeyCap({ children, color = '#27272a' }: { children: React.ReactNode; color?: string }) {
   return (
@@ -89,7 +92,6 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
   const [mode, setMode] = useState<GameMode>('deathmatch');
   const [killLimit, setKillLimit] = useState(5);
   const [lives, setLives] = useState(3);
-  const [timeLimit] = useState(300);
   const [hud, setHud] = useState<HudState | null>(null);
   const [muted, setMuted] = useState(false);
   const [results, setResults] = useState<{ winner: number | null; tanks: HudTank[] } | null>(null);
@@ -101,7 +103,18 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameRef = useRef<TankGame | null>(null);
   const screenRef = useRef(screen);
-  screenRef.current = screen;
+  /**
+   * Migawka ustawień rundy czytana dokładnie w chwili uruchomienia silnika.
+   * Dzięki refowi efekt zależy wyłącznie od ekranu — zmiana opcji w trakcie
+   * rundy nie restartuje gry, ale start zawsze bierze bieżące ustawienia.
+   * Refy aktualizują się w efekcie (nie w trakcie renderu), a kolejność
+   * deklaracji PRZED efektem silnika gwarantuje świeżą migawkę na starcie.
+   */
+  const roundSetupRef = useRef({ players, mapId, mode, killLimit, lives });
+  useEffect(() => {
+    screenRef.current = screen;
+    roundSetupRef.current = { players, mapId, mode, killLimit, lives };
+  });
 
   // --- telefony jako pady: synchronizacja slotów / ekranu ---
   useEffect(() => {
@@ -129,6 +142,9 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
       padHost.setScreen(screen);
     }
   }, [screen, results]);
+
+  // Muzyka menu: gra w menu Stalowego Frontu, cichnie na czas bitwy.
+  useEffect(() => { menuMusic.setContext(screen === 'game' ? 'game' : 'menu'); }, [screen]);
 
   useEffect(() => {
     padHost.setMenuOptions(screen === 'setup' ? {
@@ -210,6 +226,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
     if (screen !== 'game') return;
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const { players, mapId, mode, killLimit, lives } = roundSetupRef.current;
     const t = setTimeout(() => {
       gameAudio.init();
       const game = new TankGame(canvas, {
@@ -218,7 +235,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
         mode,
         killLimit,
         lives,
-        timeLimit,
+        timeLimit: TIME_LIMIT_S,
         onHud: (h) => { if (screenRef.current === 'game') setHud(h); },
         onKill: () => {},
         padInputs: padHost.inputs,
@@ -241,7 +258,6 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
       gameRef.current?.destroy();
       gameRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen]);
 
   const toggleMute = () => {
@@ -262,7 +278,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
       <div className="relative flex min-h-screen flex-col overflow-hidden bg-[#0a0a0b] text-white">
         {/* animated bg */}
         <div className="pointer-events-none absolute inset-0">
-          <img src={`${import.meta.env.BASE_URL}images/menu-tanks.jpg`} alt="" className="absolute inset-0 h-full w-full object-cover opacity-25" />
+          <img src={`${import.meta.env.BASE_URL}images/menu-tanks.webp`} alt="" width={1280} height={720} className="absolute inset-0 h-full w-full object-cover opacity-25" />
           <div className="absolute inset-0 bg-gradient-to-b from-[#0a0a0b]/70 via-[#0a0a0b]/55 to-[#0a0a0b]" />
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_20%,rgba(251,146,60,0.12),transparent_50%),radial-gradient(ellipse_at_70%_80%,rgba(56,189,248,0.10),transparent_50%)]" />
           <div className="hazard-stripes absolute left-0 right-0 top-0 h-2 opacity-80" />
@@ -633,7 +649,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
         </div>
         <div className="flex items-center gap-2">
           <div className={`flex items-center gap-1.5 rounded-lg border px-3 py-1 font-mono2 text-lg font-extrabold ${(hud?.timeLeft ?? 99) < 30 ? 'border-red-500/60 bg-red-500/15 text-red-300' : 'border-white/15 bg-black/50 text-amber-300'}`}>
-            <Timer className="h-4 w-4" />{fmtTime(hud?.timeLeft ?? timeLimit)}
+            <Timer className="h-4 w-4" />{fmtTime(hud?.timeLeft ?? TIME_LIMIT_S)}
           </div>
         </div>
         <div className="flex items-center gap-1.5">

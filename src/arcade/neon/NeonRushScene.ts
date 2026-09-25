@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import { ACESFilmicToneMapping, BufferGeometry, Color, DirectionalLight, Float32BufferAttribute, FogExp2, HalfFloatType, HemisphereLight, Material, Mesh, Object3D, PCFSoftShadowMap, PerspectiveCamera, PointLight, SRGBColorSpace, Scene, SpotLight, Vector2, Vector3, WebGLRenderTarget, WebGLRenderer } from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
@@ -99,22 +99,22 @@ export interface TouchState {
   item: boolean;
 }
 
-function mergeStatic(parent: THREE.Object3D, skip: Set<THREE.Object3D>) {
-  const byMat = new Map<THREE.Material, THREE.BufferGeometry[]>();
-  const cast = new Map<THREE.Material, boolean>();
-  const remove: THREE.Mesh[] = [];
+function mergeStatic(parent: Object3D, skip: Set<Object3D>) {
+  const byMat = new Map<Material, BufferGeometry[]>();
+  const cast = new Map<Material, boolean>();
+  const remove: Mesh[] = [];
   for (const ch of parent.children) {
-    if (!(ch instanceof THREE.Mesh) || skip.has(ch) || ch.children.length) continue;
-    const mat = ch.material as THREE.Material;
+    if (!(ch instanceof Mesh) || skip.has(ch) || ch.children.length) continue;
+    const mat = ch.material as Material;
     ch.updateMatrix();
     let g = ch.geometry.index ? ch.geometry.toNonIndexed() : ch.geometry.clone();
     g.applyMatrix4(ch.matrix);
     for (const name of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(name)) g.deleteAttribute(name);
     if (!g.attributes.uv) {
-      g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
+      g.setAttribute('uv', new Float32BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
     }
     g.clearGroups();
-    g = g as THREE.BufferGeometry;
+    g = g as BufferGeometry;
     if (!byMat.has(mat)) byMat.set(mat, []);
     byMat.get(mat)!.push(g);
     cast.set(mat, cast.get(mat) || ch.castShadow);
@@ -124,7 +124,7 @@ function mergeStatic(parent: THREE.Object3D, skip: Set<THREE.Object3D>) {
   byMat.forEach((geos, mat) => {
     const merged = mergeGeometries(geos, false);
     if (!merged) return;
-    const m = new THREE.Mesh(merged, mat);
+    const m = new Mesh(merged, mat);
     m.castShadow = !!cast.get(mat);
     m.receiveShadow = true;
     parent.add(m);
@@ -163,9 +163,9 @@ const FinalShader = {
 };
 
 export class NeonRushScene {
-  private renderer: THREE.WebGLRenderer;
-  private scene = new THREE.Scene();
-  private camera: THREE.PerspectiveCamera;
+  private renderer: WebGLRenderer;
+  private scene = new Scene();
+  private camera: PerspectiveCamera;
   private composer: EffectComposer;
   private bloom: UnrealBloomPass;
   private finalPass: ShaderPass;
@@ -174,15 +174,15 @@ export class NeonRushScene {
   private karts: Kart[] = [];
   private players: Kart[] = [];
   player: Kart;
-  private splitCameras: THREE.PerspectiveCamera[] = [];
+  private splitCameras: PerspectiveCamera[] = [];
   private externalAction = new Map<number, boolean>();
   private sparks: Particles;
   private smoke: Particles;
   private items: ItemManager;
   audio = new AudioFX();
-  private moon: THREE.DirectionalLight;
-  private headlight: THREE.SpotLight;
-  private boostLight: THREE.PointLight;
+  private moon: DirectionalLight;
+  private headlight: SpotLight;
+  private boostLight: PointLight;
   private raf = 0;
   private last = 0;
   private acc = 0;
@@ -193,9 +193,9 @@ export class NeonRushScene {
   private keys = new Set<string>();
   touch: TouchState = { left: false, right: false, gas: false, brake: false, drift: false, item: false };
   private paused = false;
-  private camPos = new THREE.Vector3();
-  private camLook = new THREE.Vector3();
-  private camVel = new THREE.Vector3();
+  private camPos = new Vector3();
+  private camLook = new Vector3();
+  private camVel = new Vector3();
   private camYaw = 0;
   private shake = 0;
   private hitFx = 0;
@@ -215,8 +215,8 @@ export class NeonRushScene {
   private frame = 0;
   private padCooldown = new Map<Kart, number>();
   private itemPressed = false;
-  private tmp = new THREE.Vector3();
-  private tmp2 = new THREE.Vector3();
+  private tmp = new Vector3();
+  private tmp2 = new Vector3();
   private disposed = false;
 
   constructor(
@@ -229,14 +229,14 @@ export class NeonRushScene {
     const height = Math.max(1, container.clientHeight);
     const dpr = window.devicePixelRatio || 1;
     const pr = q === 0 ? Math.min(dpr, 1) * 0.75 : q === 1 ? Math.min(dpr, 1.25) : Math.min(dpr, 2);
-    this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+    this.renderer = new WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(pr);
     this.renderer.setSize(width, height);
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMapping = ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 0.82;
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = PCFSoftShadowMap;
     container.appendChild(this.renderer.domElement);
     this.renderer.domElement.style.display = 'block';
     this.renderer.domElement.style.position = 'absolute';
@@ -245,14 +245,14 @@ export class NeonRushScene {
     this.renderer.domElement.style.height = '100%';
     this.renderer.domElement.setAttribute('aria-label', 'Neonowy Pęd 3D');
 
-    this.camera = new THREE.PerspectiveCamera(70, width / height, 0.25, 6000);
-    this.scene.fog = new THREE.FogExp2(new THREE.Color(0.11, 0.04, 0.1), 0.0017);
+    this.camera = new PerspectiveCamera(70, width / height, 0.25, 6000);
+    this.scene.fog = new FogExp2(new Color(0.11, 0.04, 0.1), 0.0017);
     this.scene.environment = makeEnvironment(this.renderer);
 
     // światła
-    const hemi = new THREE.HemisphereLight(0x5a66ff, 0x2a1020, 0.24);
+    const hemi = new HemisphereLight(0x5a66ff, 0x2a1020, 0.24);
     this.scene.add(hemi);
-    this.moon = new THREE.DirectionalLight(0xa8b8ff, 0.72);
+    this.moon = new DirectionalLight(0xa8b8ff, 0.72);
     this.moon.castShadow = true;
     const sm = q === 0 ? 512 : q === 1 ? 1024 : 2048;
     this.moon.shadow.mapSize.set(sm, sm);
@@ -325,15 +325,15 @@ export class NeonRushScene {
       }
     });
     this.player = this.players[0] || this.karts[0];
-    this.splitCameras = this.players.map(() => new THREE.PerspectiveCamera(68, 1, 0.25, 6000));
+    this.splitCameras = this.players.map(() => new PerspectiveCamera(68, 1, 0.25, 6000));
 
     // reflektory gracza
-    this.headlight = new THREE.SpotLight(0xe8f0ff, 38, 90, 0.5, 0.55, 1.6);
+    this.headlight = new SpotLight(0xe8f0ff, 38, 90, 0.5, 0.55, 1.6);
     this.headlight.position.set(0, 0.6, 1.4);
     this.headlight.target.position.set(0, 0, 20);
     this.player.body.add(this.headlight);
     this.player.body.add(this.headlight.target);
-    this.boostLight = new THREE.PointLight(0xff8a30, 0, 10, 2);
+    this.boostLight = new PointLight(0xff8a30, 0, 10, 2);
     this.boostLight.position.set(0, 0.7, -2.2);
     this.player.body.add(this.boostLight);
 
@@ -365,15 +365,15 @@ export class NeonRushScene {
     this.scene.add(this.items.group);
 
     // postprocessing
-    const size = new THREE.Vector2();
+    const size = new Vector2();
     this.renderer.getDrawingBufferSize(size);
-    const rt = new THREE.WebGLRenderTarget(size.x, size.y, {
-      type: THREE.HalfFloatType,
+    const rt = new WebGLRenderTarget(size.x, size.y, {
+      type: HalfFloatType,
       samples: q === 2 ? 4 : q === 1 ? 2 : 0,
     });
     this.composer = new EffectComposer(this.renderer, rt);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.34, 0.38, 0.94);
+    this.bloom = new UnrealBloomPass(new Vector2(size.x / 2, size.y / 2), 0.34, 0.38, 0.94);
     this.composer.addPass(this.bloom);
     this.finalPass = new ShaderPass(FinalShader);
     this.composer.addPass(this.finalPass);
@@ -397,7 +397,7 @@ export class NeonRushScene {
     // kamera startowa
     this.player.forward(this.tmp);
     this.camYaw = this.player.yaw;
-    this.camPos.copy(this.player.pos).addScaledVector(this.tmp, 10).add(new THREE.Vector3(0, 3, 0));
+    this.camPos.copy(this.player.pos).addScaledVector(this.tmp, 10).add(new Vector3(0, 3, 0));
     this.camLook.copy(this.player.pos);
 
     window.addEventListener('keydown', this.onKeyDown);
@@ -444,7 +444,7 @@ export class NeonRushScene {
     document.removeEventListener('visibilitychange', this.onVisibility);
     this.audio.dispose();
     this.scene.traverse((o) => {
-      const m = o as THREE.Mesh;
+      const m = o as Mesh;
       if (m.geometry) m.geometry.dispose();
     });
     this.composer.dispose();
@@ -575,7 +575,7 @@ export class NeonRushScene {
 
   /** Shared world, multiple chase cameras. Bloom is intentionally reduced in split mode. */
   private renderSplit() {
-    const size = new THREE.Vector2();
+    const size = new Vector2();
     this.renderer.getDrawingBufferSize(size);
     const count = Math.min(4, this.players.length);
     const columns = count <= 2 ? count : 2;
@@ -1007,8 +1007,8 @@ export class NeonRushScene {
       cam.fov = 60;
     } else if (this.phase === 'finished' && this.finishTimer < 3.5) {
       const a = this.time * 0.35;
-      this.camPos.lerp(new THREE.Vector3(p.pos.x + Math.sin(a) * 9, p.pos.y + 3.5, p.pos.z + Math.cos(a) * 9), 1 - Math.exp(-3 * dt));
-      this.camLook.lerp(new THREE.Vector3(p.pos.x, p.pos.y + 1, p.pos.z), 1 - Math.exp(-6 * dt));
+      this.camPos.lerp(new Vector3(p.pos.x + Math.sin(a) * 9, p.pos.y + 3.5, p.pos.z + Math.cos(a) * 9), 1 - Math.exp(-3 * dt));
+      this.camLook.lerp(new Vector3(p.pos.x, p.pos.y + 1, p.pos.z), 1 - Math.exp(-6 * dt));
       cam.position.copy(this.camPos);
       cam.lookAt(this.camLook);
       cam.fov += (60 - cam.fov) * dt * 2;
@@ -1033,7 +1033,7 @@ export class NeonRushScene {
       const fz = Math.cos(this.camYaw) * dir;
       const dist = 6.4 + speedRatio * 1.2 + (boosting ? 0.8 : 0);
       const hgt = 2.35 + speedRatio * 0.2;
-      const target = new THREE.Vector3(p.pos.x - fx * dist, p.pos.y + hgt, p.pos.z - fz * dist);
+      const target = new Vector3(p.pos.x - fx * dist, p.pos.y + hgt, p.pos.z - fz * dist);
       const groundAtCam = p.pos.y;
       target.y = Math.max(target.y, groundAtCam + 1.2);
       const kxz = 1 - Math.exp(-12 * dt);
@@ -1041,7 +1041,7 @@ export class NeonRushScene {
       this.camPos.x += (target.x - this.camPos.x) * kxz;
       this.camPos.z += (target.z - this.camPos.z) * kxz;
       this.camPos.y += (target.y - this.camPos.y) * ky;
-      const look = new THREE.Vector3(p.pos.x + fx * 4, p.pos.y + 1.15, p.pos.z + fz * 4);
+      const look = new Vector3(p.pos.x + fx * 4, p.pos.y + 1.15, p.pos.z + fz * 4);
       this.camLook.lerp(look, 1 - Math.exp(-15 * dt));
       cam.position.copy(this.camPos);
       // wstrząsy

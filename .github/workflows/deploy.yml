@@ -24,6 +24,12 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Ten sam zestaw co w CI — bramka jakości przed publikacją na Pages.
+      - name: Selftesty przed deployem
+        run: |
+          npm run lint
+          npm run selftest:arcade
+          npm run selftest:relay
       # Strona projektu leży pod https://<user>.github.io/<repo>/ → base = /<repo>/
       # (dla repo <user>.github.io ustaw VITE_BASE=/)
       - name: Build

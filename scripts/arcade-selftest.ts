@@ -38,9 +38,9 @@ const { PLAYER_DEFS } = await import('../src/game/types');
 const host = new PadHost();
 host.setSlotMeta(PLAYER_DEFS.map(p => ({ name: p.name, color: p.color, darkColor: p.darkColor })));
 host.setScreen('lobby');
-let commands: string[] = [];
+const commands: string[] = [];
 host.onAdminCommand = command => { commands.push(command); };
-let picks: number[] = [];
+const picks: number[] = [];
 host.onGameChoice = index => { picks.push(index); };
 const links = ['first', 'second', 'third'].map(mockLink);
 for (const [i, link] of links.entries()) {

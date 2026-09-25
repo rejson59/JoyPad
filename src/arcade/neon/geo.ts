@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import { BufferGeometry, Float32BufferAttribute } from 'three';
 
 type V3 = [number, number, number];
 
@@ -60,12 +60,12 @@ export class GeoBuilder {
     }
   }
 
-  build(): THREE.BufferGeometry {
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
-    g.setAttribute('normal', new THREE.Float32BufferAttribute(this.nor, 3));
-    g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
-    if (this.useColor) g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
+  build(): BufferGeometry {
+    const g = new BufferGeometry();
+    g.setAttribute('position', new Float32BufferAttribute(this.pos, 3));
+    g.setAttribute('normal', new Float32BufferAttribute(this.nor, 3));
+    g.setAttribute('uv', new Float32BufferAttribute(this.uv, 2));
+    if (this.useColor) g.setAttribute('color', new Float32BufferAttribute(this.col, 3));
     g.setIndex(this.idx);
     g.computeBoundingSphere();
     return g;

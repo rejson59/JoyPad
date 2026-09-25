@@ -1,8 +1,8 @@
-import * as THREE from 'three';
+import { MathUtils, Vector3 } from 'three';
 import { Track } from './track';
 import { Kart } from './kart';
 
-const tmp = new THREE.Vector3();
+const tmp = new Vector3();
 
 function wrapAngle(a: number) {
   while (a > Math.PI) a -= Math.PI * 2;
@@ -45,16 +45,16 @@ export function driveAI(k: Kart, track: Track, karts: Kart[], leaderRef: Kart, b
       lane += o.proj.lateral > lane ? -4 : 4;
     }
   }
-  lane = THREE.MathUtils.clamp(lane, -8.5, 8.5);
+  lane = MathUtils.clamp(lane, -8.5, 8.5);
 
   const look = 11 + Math.max(0, k.vf) * 0.5;
   track.sample(k.s + look, lane, tmp);
   const desired = Math.atan2(tmp.x - k.pos.x, tmp.z - k.pos.z);
   const err = wrapAngle(desired - k.yaw);
-  let steer = THREE.MathUtils.clamp(err * 2.6, -1, 1);
+  let steer = MathUtils.clamp(err * 2.6, -1, 1);
 
   const curv = track.curvatureAhead(k.s, 30 + Math.max(0, k.vf) * 1.2);
-  const targetSpeed = k.maxSpeed * (1 - THREE.MathUtils.clamp(curv - 0.5, 0, 1) * 0.3);
+  const targetSpeed = k.maxSpeed * (1 - MathUtils.clamp(curv - 0.5, 0, 1) * 0.3);
   c.throttle = 1;
   c.brake = 0;
   if (k.vf > targetSpeed + 3) {
@@ -84,19 +84,19 @@ export function driveAI(k: Kart, track: Track, karts: Kart[], leaderRef: Kart, b
   }
 }
 
-export function aiUseItem(k: Kart, karts: Kart[], use: () => void, dt: number) {
+export function aiUseItem(k: Kart, karts: Kart[], activate: () => void, dt: number) {
   if (!k.item || k.rolling > 0) return;
   k.aiItemTimer -= dt;
   if (k.aiItemTimer > 0) return;
   const it = k.item;
-  let should = false;
+  let should: boolean;
   if (it === 'rocket') should = k.place > 1;
   else if (it === 'mine') {
     should = karts.some((o) => o !== k && k.progress - o.progress > 3 && k.progress - o.progress < 40) || Math.random() < 0.01;
   } else if (it === 'shield') should = true;
   else should = Math.random() < 0.05;
   if (should) {
-    use();
+    activate();
     k.aiItemTimer = 0.6 + Math.random() * 2.5;
   }
 }

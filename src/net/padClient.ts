@@ -7,7 +7,7 @@ import {
 import { buildPeerOptions, signalingFromLocation, type SignalingConfig } from './signaling';
 import { WebrtcLink, type PadLink } from './links';
 import { ClientRelayLink, RELAY_BROKERS, RelayChannel, newRelaySessionId, relayTopicFor } from './relay';
-import type { GameId } from '../arcade/catalog';
+import { isGameId, type GameId } from '../arcade/catalog';
 
 export type PadStatus = 'idle' | 'connecting' | 'connected' | 'rejected' | 'lost' | 'error';
 
@@ -442,7 +442,7 @@ export class PadClient {
   private onMessage(link: PadLink, msg: HostMessage) {
     if (!msg || typeof msg !== 'object') return;
     switch (msg.t) {
-      case 'welcome':
+      case 'welcome': {
         if (this.state.status === 'connected') return;
         this.active = false;
         this.p2pSettled = true;
@@ -464,6 +464,7 @@ export class PadClient {
           viaRelay: link.kind === 'relay',
         });
         break;
+      }
       case 'rejected':
         this.active = false;
         this.p2pSettled = true;
@@ -492,7 +493,10 @@ export class PadClient {
         break;
       }
       case 'session': {
-        const { game, screen, adminSlot, selection, roster, options } = msg.session;
+        const { game: rawGame, screen, adminSlot, selection, roster, options } = msg.session;
+        // Twarda walidacja id gry z protokółu: nieznane id traktujemy jak brak
+        // gry (biblioteka) zamiast łamać ekran pada w gameInfo().
+        const game = isGameId(rawGame) ? rawGame : null;
         // Sesja bez gry oznacza bibliotekę. Wymuszamy to także po stronie
         // telefonu, żeby pojedynczy opóźniony pakiet „menu gry” nie zablokował
         // ponownego wyboru po powrocie z rozgrywki.

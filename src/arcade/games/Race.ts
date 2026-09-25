@@ -68,7 +68,7 @@ export class RaceRound extends CanvasRound {
     const magnitude = Math.min(1, Math.hypot(x, y));
     if (magnitude > .16) {
       const wanted = Math.atan2(y, x);
-      let diff = ((wanted - car.angle + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+      const diff = ((wanted - car.angle + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
       const turn = Math.min(1, dt * (car.isBot ? 5.8 : 5));
       car.angle += diff * turn;
     }

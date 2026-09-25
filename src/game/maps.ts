@@ -15,9 +15,7 @@ export interface MapDef {
   spawns: { x: number; y: number; angle: number }[];
 }
 
-let wallId = 0;
 function w(x: number, y: number, wdt: number, h: number, type: WallState['type'], hp?: number): WallState {
-  wallId++;
   const baseHp = hp ?? (type === 'concrete' ? 3 : type === 'brick' ? 2 : type === 'metal' ? 4 : type === 'sandbag' ? 2 : 1);
   return { x, y, w: wdt, h, hp: baseHp, maxHp: baseHp, type, destroyed: false, shake: 0 };
 }

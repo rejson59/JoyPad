@@ -264,8 +264,8 @@ export async function runDiagnostics(
   /* 3. STUN (ta sama sieć / adres publiczny) ---------------------------------- */
   report({ id: 'stun', label: 'STUN (adres publiczny)', status: 'running', detail: 'zbieram kandydatów…' });
   // Główna próba — pełna lista STUN
-  let stun = await probeIce(STUN_SERVERS, 10_000);
-  let srflx = stun.kinds.get('srflx');
+  const stun = await probeIce(STUN_SERVERS, 10_000);
+  const srflx = stun.kinds.get('srflx');
   let hostCandidates = stun.kinds.get('host');
   // Jeśli nic nie zebrano, spróbuj bez STUN — czy w ogóle działa zbieranie lokalnych kandydatów?
   let localProbe: IceProbe | null = null;

@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import { AdditiveBlending, BufferAttribute, BufferGeometry, DynamicDrawUsage, NormalBlending, Points, ShaderMaterial, Vector3 } from 'three';
 
 export interface EmitOpts {
   gravity?: number;
@@ -8,7 +8,7 @@ export interface EmitOpts {
 
 /** System cząsteczek na GPU (pozycja/kolor/rozmiar/alfa), symulacja na CPU */
 export class Particles {
-  points: THREE.Points;
+  points: Points;
   private max: number;
   private pos: Float32Array;
   private col: Float32Array;
@@ -23,7 +23,7 @@ export class Particles {
   private grow: Float32Array;
   private baseCol: Float32Array;
   private cursor = 0;
-  private geo: THREE.BufferGeometry;
+  private geo: BufferGeometry;
 
   constructor(max: number, additive: boolean, pixelRatio: number) {
     this.max = max;
@@ -40,15 +40,15 @@ export class Particles {
     this.drag = new Float32Array(max);
     this.grow = new Float32Array(max);
     for (let i = 0; i < max; i++) this.pos[i * 3 + 1] = -9999;
-    this.geo = new THREE.BufferGeometry();
-    this.geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
-    this.geo.setAttribute('color', new THREE.BufferAttribute(this.col, 3).setUsage(THREE.DynamicDrawUsage));
-    this.geo.setAttribute('aSize', new THREE.BufferAttribute(this.size, 1).setUsage(THREE.DynamicDrawUsage));
-    this.geo.setAttribute('aAlpha', new THREE.BufferAttribute(this.alpha, 1).setUsage(THREE.DynamicDrawUsage));
-    const mat = new THREE.ShaderMaterial({
+    this.geo = new BufferGeometry();
+    this.geo.setAttribute('position', new BufferAttribute(this.pos, 3).setUsage(DynamicDrawUsage));
+    this.geo.setAttribute('color', new BufferAttribute(this.col, 3).setUsage(DynamicDrawUsage));
+    this.geo.setAttribute('aSize', new BufferAttribute(this.size, 1).setUsage(DynamicDrawUsage));
+    this.geo.setAttribute('aAlpha', new BufferAttribute(this.alpha, 1).setUsage(DynamicDrawUsage));
+    const mat = new ShaderMaterial({
       transparent: true,
       depthWrite: false,
-      blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
+      blending: additive ? AdditiveBlending : NormalBlending,
       uniforms: { uPR: { value: pixelRatio } },
       vertexShader: /* glsl */ `
         attribute float aSize; attribute float aAlpha; attribute vec3 color;
@@ -77,7 +77,7 @@ export class Particles {
           gl_FragColor = vec4(vColor, a);
         }`,
     });
-    this.points = new THREE.Points(this.geo, mat);
+    this.points = new Points(this.geo, mat);
     this.points.frustumCulled = false;
     this.points.renderOrder = 5;
   }
@@ -115,7 +115,7 @@ export class Particles {
     this.grow[i] = o.grow ?? 0;
   }
 
-  burst(p: THREE.Vector3, count: number, speed: number, color: [number, number, number], size: number, life: number, o: EmitOpts = {}) {
+  burst(p: Vector3, count: number, speed: number, color: [number, number, number], size: number, life: number, o: EmitOpts = {}) {
     for (let k = 0; k < count; k++) {
       const u = Math.random() * 2 - 1;
       const th = Math.random() * Math.PI * 2;

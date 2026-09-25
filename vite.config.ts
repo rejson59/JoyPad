@@ -26,6 +26,26 @@ export default defineConfig({
   },
   build: {
     outDir: "dist",
-    sourcemap: false,
+    // Projekt jest open source — pełne sourcemapy ułatwiają diagnozę zgłoszeń
+    // graczy (konsola pokazuje prawdziwe pliki źródłowe).
+    sourcemap: true,
+    // ~596 kB to leniwy chunk z Three.js (ładowany dopiero przy Neonowym
+    // Pędzie) — poniżej tego progu ostrzeżenie o dużych chunkach nie pomaga.
+    chunkSizeWarningLimit: 650,
+    rollupOptions: {
+      output: {
+        // Osobne chunki vendorów => stabilne cache'owanie przez przeglądarki
+        // między wydaniami (zmiany kodu aplikacji nie unieważniają Reacta/Three).
+        // Forma funkcyjna, bo object-form nie dopasowuje podścieżek pakietów
+        // (np. react-dom/client). scheduler jest zależnością Reacta.
+        manualChunks(id: string) {
+          if (id.includes("node_modules/three/")) return "three";
+          if (id.includes("node_modules/peerjs/")) return "peerjs";
+          if (id.includes("node_modules/react/") || id.includes("node_modules/react-dom/") || id.includes("node_modules/scheduler/")) {
+            return "react";
+          }
+        },
+      },
+    },
   },
 });

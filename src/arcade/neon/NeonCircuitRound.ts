@@ -3,11 +3,11 @@ import type { GameRound, Racer, RoundConfig, RoundHud, RoundPowerUp, RoundResult
 import { KART_COLORS, NEON_RACE_DURATION, NeonRushScene, type HudState } from './NeonRushScene';
 
 /**
- * Adapter for the uploaded futuristic-3d-racing-game archive.
+ * Adapter silnika Neonowy Pęd (Three.js) do runtime'u JoyPad.
  *
- * The archive is a standalone Three.js game. This bridge keeps its city, track,
- * kart physics, items and post-processing, while giving JoyPad ownership of the
- * lifecycle, remote inputs, HUD, haptics and split-screen cameras.
+ * Silnik wywodzi się z niezależnego projektu wyścigowego. Ten mostek zachowuje
+ * jego miasto, tor, fizykę kartów, itemy i post-processing, a JoyPad zarządza
+ * cyklem życia, wejściami z telefonów, HUD-em, haptyką i kamerami split-screen.
  */
 export class NeonCircuitRound implements GameRound {
   private readonly scene: NeonRushScene;

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Antenna, Copy, Check, Loader2, RefreshCw, Smartphone, Wifi, WifiOff, X, Power } from 'lucide-react';
+import { Antenna, Copy, Check, Loader2, RefreshCw, Smartphone, Wifi, X, Power } from 'lucide-react';
 import { padHost, type PadHostState } from '../net/padHost';
 import { padUrlFor } from '../net/protocol';
 import { ConnectionCheck } from './ConnectionCheck';
 import type { PlayerConfig } from '../game/types';
+import { QrFrame, QrFrameError } from '../components/QrFrame';
 
 export function usePadHost() {
   const [s, setS] = useState<PadHostState>(padHost.snapshot());
@@ -96,15 +97,9 @@ export function PadHostPanel({ players, compact, onClose, context = 'tanks' }: P
       <div className={`mt-3 grid gap-4 ${compact ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-[auto_1fr]'}`}>
         {/* QR + code */}
         <div className="flex flex-col items-center gap-2">
-          <div className="flex h-44 w-44 items-center justify-center overflow-hidden rounded-xl border-4 border-amber-400/70 bg-amber-400">
-            {codeUsable && qr ? (
-              <img src={qr} alt="QR" className="h-full w-full" />
-            ) : s.status === 'error' ? (
-              <WifiOff className="h-10 w-10 text-black/70" />
-            ) : (
-              <Loader2 className="h-10 w-10 animate-spin text-black/70" />
-            )}
-          </div>
+          {s.status === 'error'
+            ? <QrFrameError size={168} />
+            : <QrFrame src={codeUsable ? qr : ''} size={168} loadingLabel="Czekam na serwer sygnalizacji…" />}
           <div className="text-[10px] font-bold tracking-widest text-zinc-500">KOD POKOJU</div>
           <div className="font-mono2 rounded-lg border border-amber-400/40 bg-black/60 px-4 py-1.5 text-3xl font-extrabold tracking-[0.35em] text-amber-300">{s.code}</div>
         </div>

@@ -164,11 +164,16 @@ function RemoteController({ st, ...features }: { st: PadClientState } & Controll
 
         {st.screen === 'lobby' ? (
           <>
-            <div className="mt-8 rounded-[26px] border border-white/15 bg-white/[.045] p-6 text-center shadow-[0_20px_50px_rgba(0,0,0,.2)]">
-              <div className="joy-kicker" style={{ color: accent }}>WYBRANA GRA {String(st.selection + 1).padStart(2, '0')} / {GAMES.length.toString().padStart(2, '0')}</div>
-              <h1 className="joy-heading mt-3 text-3xl font-extrabold leading-tight">{selected.title}</h1>
-              <p className="mt-2 text-xs leading-relaxed text-slate-400">{selected.genre} · {selected.players}</p>
-              <div className="mt-5 h-1 rounded-full bg-white/10"><div className="h-full rounded-full" style={{ width: `${((st.selection + 1) / GAMES.length) * 100}%`, background: accent }} /></div>
+            {/* Lobby jako poczekalnia: okładka wybranej gry crossfaduje przy każdej zmianie wyboru. */}
+            <div className="rise-in relative mt-8 overflow-hidden rounded-[26px] border border-white/15 bg-white/[.045] shadow-[0_20px_50px_rgba(0,0,0,.2)]">
+              <img key={selected.id} src={`${import.meta.env.BASE_URL}${selected.cover}`} alt="" width={1280} height={720} className="cover-in absolute inset-0 h-full w-full object-cover opacity-25" />
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0b0e0f] via-[#0b0e0f]/72 to-transparent" />
+              <div className="relative p-6 text-center">
+                <div className="joy-kicker" style={{ color: accent }}>WYBRANA GRA {String(st.selection + 1).padStart(2, '0')} / {GAMES.length.toString().padStart(2, '0')}</div>
+                <h1 className="joy-heading mt-3 text-3xl font-extrabold leading-tight">{selected.title}</h1>
+                <p className="mt-2 text-xs leading-relaxed text-slate-400">{selected.genre} · {selected.players}</p>
+                <div className="mt-5 h-1 rounded-full bg-white/10"><div className="h-full rounded-full" style={{ width: `${((st.selection + 1) / GAMES.length) * 100}%`, background: accent, transition: 'width 420ms var(--ease-out-quart)' }} /></div>
+              </div>
             </div>
             <p className="mt-5 text-center text-sm leading-relaxed text-slate-300">{admin ? 'Pilotem wybierz grę strzałkami, a następnie naciśnij OK.' : 'Poczekaj, aż administrator wybierze grę.'}</p>
             {admin && <RemoteNavigation admin accent={accent} />}

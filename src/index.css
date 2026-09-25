@@ -138,8 +138,7 @@ canvas {
 .joy-intro { animation: joy-rise .55s cubic-bezier(.2,.7,.2,1) both; }
 .joy-feature { animation: joy-rise .65s .08s cubic-bezier(.2,.7,.2,1) both; }
 .joy-feature::after { content: ""; position: absolute; left: -40%; top: 0; width: 22%; height: 100%; pointer-events: none; background: linear-gradient(90deg,transparent,rgba(255,221,173,.08),transparent); transform: skewX(-18deg); animation: joy-sweep 12s 1.2s ease-in-out infinite; }
-.joy-feature-image { transition: transform .65s cubic-bezier(.2,.7,.2,1), opacity .35s; }
-.joy-feature:hover .joy-feature-image { transform: scale(1.025); }
+.joy-feature-image { transition: opacity .35s; }
 .joy-feature-shade { background: linear-gradient(90deg,rgba(7,10,10,.97) 0%,rgba(7,10,10,.82) 39%,rgba(7,10,10,.22) 100%), linear-gradient(0deg,rgba(7,10,10,.93),transparent 70%); }
 .joy-feature-number { font-family: var(--font-joy-heading); }
 .joy-arrow, .pad-nav, .pad-icon, .arcade-icon { display: inline-flex; justify-content: center; align-items: center; flex-shrink: 0; border: 1px solid rgba(255,255,255,.16); color: #e1e5e0; background: rgba(255,255,255,.055); transition: background .16s, border-color .16s, transform .16s; }
@@ -198,4 +197,117 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .joy-enter-3 { animation-delay: 210ms; }
 @keyframes joy-card-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes joy-sweep { from { transform: translateX(-120%); } to { transform: translateX(120%); } }
-@media (prefers-reduced-motion: reduce) { .joy-intro, .joy-feature, .joy-feature::after, .joy-feature-image, .joy-game-card, .joy-arrow, .arcade-start, .joy-enter, .joy-enter-1, .joy-enter-2, .joy-enter-3 { transition-duration: 0s !important; animation: none !important; } }
+
+/* ============================= SYSTEM RUCHU (motion tokens) ============================= */
+/* Jeden zestaw krzywych i czasów dla CAŁEGO interfejsu — animacje są choreografiowane,
+   nie przyklejane ad hoc. Nowe efekty muszą korzystać z tych tokenów. */
+:root {
+  --ease-out-quart: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 140ms;
+  --dur-base: 260ms;
+  --dur-slow: 480ms;
+}
+
+@layer base {
+  /* Tailwind v4 nie nadaje już przyciskom kursora — przywracamy go spójnie. */
+  button:not(:disabled), a, [role="button"]:not(:disabled), select { cursor: pointer; }
+  input, textarea { cursor: text; }
+  ::selection { background: #fb923c; color: #17110b; }
+}
+
+/* Fizyczne „wciśnięcie” przycisku — podpinane klasą .press */
+.press { transition: transform var(--dur-fast) var(--ease-out-quart); }
+.press:active { transform: scale(0.96); }
+
+/* Wejścia treści (kaskada: rodzic nadaje delay inline) */
+@keyframes rise-in { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+.rise-in { animation: rise-in var(--dur-slow) var(--ease-out-quart) both; }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.fade-in { animation: fade-in var(--dur-base) ease-out both; }
+
+/* Kurtyna przejścia ekranów — akcent gry zasłania scenę, podmiana odbywa się pod nią. */
+@keyframes curtain-in { from { transform: translateY(103%); } to { transform: translateY(0); } }
+@keyframes curtain-out { from { transform: translateY(0); } to { transform: translateY(-103%); } }
+.screen-curtain { position: fixed; inset: 0; z-index: 130; pointer-events: none; overflow: hidden; will-change: transform; }
+.screen-curtain-cover { animation: curtain-in 210ms var(--ease-in-out-soft) both; }
+.screen-curtain-reveal { animation: curtain-out 400ms var(--ease-in-out-soft) 90ms both; }
+.screen-curtain-face { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.screen-curtain-face::after { content: ""; position: absolute; inset: 0; opacity: .35; background: repeating-linear-gradient(-45deg, transparent 0 26px, rgba(255,255,255,.05) 26px 52px); }
+
+/* Hero w bibliotece: crossfade okładek, powolne Ken Burns, przewijanie numeru gry */
+@keyframes cover-in { from { opacity: 0; } to { opacity: 1; } }
+.cover-in { animation: cover-in 430ms ease-out both; }
+@keyframes ken-burns { from { transform: scale(1.03) translate3d(0.5%, 0, 0); } to { transform: scale(1.1) translate3d(-1.5%, -1.8%, 0); } }
+.ken-burns { animation: ken-burns 16s var(--ease-in-out-soft) infinite alternate; will-change: transform; }
+@keyframes number-roll { from { opacity: 0; transform: translateY(44px); } to { opacity: 1; transform: translateY(0); } }
+.number-roll { animation: number-roll 560ms var(--ease-out-expo) both; }
+
+/* Wymiana wartości (steppery, przełączniki) */
+@keyframes flip-in { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: translateY(0); } }
+.flip-in { animation: flip-in 220ms var(--ease-out-quart) both; }
+
+/* Odliczanie 3·2·1 i START */
+@keyframes count-pop { 0% { opacity: 0; transform: scale(1.65); filter: blur(9px); } 55% { opacity: 1; filter: blur(0); } 100% { opacity: 1; transform: scale(1); filter: blur(0); } }
+.count-pop { animation: count-pop 430ms var(--ease-out-expo) both; }
+@keyframes start-flash { 0% { opacity: 0; transform: scale(0.85); letter-spacing: 0.08em; } 22% { opacity: 1; transform: scale(1.04); } 60% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.18); } }
+.start-flash { animation: start-flash 900ms var(--ease-out-expo) both; }
+
+/* Ekran wyników: korona spada, wiersze wchodzą kaskadą (delay inline) */
+@keyframes crown-drop { 0% { opacity: 0; transform: translateY(-30px) rotate(-14deg) scale(0.8); } 62% { opacity: 1; transform: translateY(4px) rotate(3deg) scale(1.05); } 100% { opacity: 1; transform: translateY(0) rotate(0deg) scale(1); } }
+.crown-drop { animation: crown-drop 700ms 250ms var(--ease-out-quart) both; }
+
+/* Kill feed Stalowego Frontu */
+@keyframes feed-in { from { opacity: 0; transform: translateX(16px) scale(0.95); } to { opacity: 1; transform: translateX(0) scale(1); } }
+.feed-in { animation: feed-in 240ms var(--ease-out-quart) both; }
+
+/* Splash „NOWY GRACZ” — telewizor wita telefon w pokoju */
+@keyframes join-in { 0% { opacity: 0; transform: scale(0.78); } 16% { opacity: 1; transform: scale(1.035); } 26% { transform: scale(1); } 80% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.05); } }
+.join-splash { position: fixed; inset: 0; z-index: 118; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.join-splash-card { text-align: center; border-radius: 28px; padding: 34px 56px; border: 1px solid color-mix(in srgb, var(--pc, #f97316) 60%, transparent); background: color-mix(in srgb, #0a0d0f 86%, transparent); backdrop-filter: blur(14px); box-shadow: 0 0 110px color-mix(in srgb, var(--pc, #f97316) 32%, transparent), inset 0 1px 0 rgba(255,255,255,0.09); animation: join-in 2.3s var(--ease-out-expo) both; }
+.join-splash-num { font-family: var(--font-joy-heading); font-size: 92px; font-weight: 800; line-height: 1; color: var(--pc, #f97316); text-shadow: 0 0 44px color-mix(in srgb, var(--pc, #f97316) 65%, transparent); }
+
+/* QR w ramce skanera */
+@keyframes qr-scan { 0% { transform: translateY(-130%); opacity: 0; } 12% { opacity: 1; } 55% { opacity: 1; } 70%, 100% { transform: translateY(520%); opacity: 0; } }
+.qr-scanline { animation: qr-scan 2.6s var(--ease-in-out-soft) infinite; }
+.qr-frame { position: relative; overflow: hidden; border-radius: 18px; border: 1px solid rgba(255,255,255,.1); background: #0b0d0e; padding: 10px; }
+.qr-corner { position: absolute; width: 20px; height: 20px; border: 2.5px solid #f97316; pointer-events: none; z-index: 2; }
+.qr-corner-tl { left: 5px; top: 5px; border-right: 0; border-bottom: 0; border-top-left-radius: 7px; }
+.qr-corner-tr { right: 5px; top: 5px; border-left: 0; border-bottom: 0; border-top-right-radius: 7px; }
+.qr-corner-bl { left: 5px; bottom: 5px; border-right: 0; border-top: 0; border-bottom-left-radius: 7px; }
+.qr-corner-br { right: 5px; bottom: 5px; border-left: 0; border-top: 0; border-bottom-right-radius: 7px; }
+
+/* Logo wita po bocie */
+@keyframes logo-pop { 0% { opacity: 0; transform: scale(0.8); } 60% { opacity: 1; transform: scale(1.06); } 100% { opacity: 1; transform: scale(1); } }
+.logo-pop { animation: logo-pop 700ms var(--ease-out-expo) both; }
+
+/* Ambient w bibliotece: siatka powoli dryfuje */
+@keyframes grid-drift { to { background-position: 0 64px, 64px 0; } }
+.joy-ambient::before { animation: grid-drift 70s linear infinite; }
+
+/* Timer w trybie alarmowym (<30 s) */
+@keyframes timer-urgent { 0%, 100% { box-shadow: 0 0 0 rgba(239,68,68,0); } 50% { box-shadow: 0 0 18px rgba(239,68,68,0.55); } }
+.timer-urgent { animation: timer-urgent 1s ease-in-out infinite; }
+
+/* Karty „w budowie” — język blueprinta zamiast szarych kostek z 🚧 */
+.blueprint-card { border: 1px dashed rgba(255,255,255,0.22); background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015)); }
+@keyframes rebuild-shimmer { from { transform: translateX(-130%); } to { transform: translateX(340%); } }
+.rebuild-shimmer { animation: rebuild-shimmer 2.8s ease-in-out infinite; }
+
+/* Kursor-światło (desktop, pointer: fine) — addytywny, nie ukrywa natywnego wskaźnika */
+.cursor-glow-anchor { position: fixed; left: 0; top: 0; z-index: 210; pointer-events: none; opacity: 0; transition: opacity 0.3s; }
+.cursor-glow-anchor.is-on { opacity: 1; }
+.cursor-glow-ring { width: 34px; height: 34px; border: 1.5px solid rgba(249,115,22,0.75); border-radius: 9999px; transition: transform 0.28s var(--ease-out-quart), border-color 0.28s; }
+.cursor-glow-anchor.is-hover .cursor-glow-ring { transform: scale(1.55); border-color: rgba(255,255,255,0.9); }
+.cursor-glow-dot { width: 5px; height: 5px; border-radius: 9999px; background: #fb923c; box-shadow: 0 0 10px rgba(251,146,60,0.8); }
+
+@media (prefers-reduced-motion: reduce) {
+  .joy-intro, .joy-feature, .joy-feature::after, .joy-feature-image, .joy-game-card, .joy-arrow, .arcade-start, .joy-enter, .joy-enter-1, .joy-enter-2, .joy-enter-3,
+  .rise-in, .fade-in, .screen-curtain-cover, .screen-curtain-reveal, .cover-in, .ken-burns, .number-roll, .flip-in, .count-pop, .start-flash,
+  .crown-drop, .feed-in, .join-splash-card, .qr-scanline, .logo-pop, .joy-ambient::before, .timer-urgent, .rebuild-shimmer, .press, .cursor-glow-anchor {
+    transition-duration: 0s !important;
+    animation: none !important;
+  }
+  .screen-curtain { display: none; }
+}

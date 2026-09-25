@@ -1,71 +1,71 @@
-import * as THREE from 'three';
+import { BoxGeometry, Color, ConeGeometry, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, OctahedronGeometry, SphereGeometry, TorusGeometry, Vector3 } from 'three';
 import { Track } from './track';
 import { Kart, ItemType } from './kart';
 import { Particles } from './particles';
 import { itemBoxTexture } from './textures';
 
 interface Box {
-  group: THREE.Group;
-  pos: THREE.Vector3;
+  group: Group;
+  pos: Vector3;
   active: boolean;
   timer: number;
 }
 interface Rocket {
-  group: THREE.Group;
+  group: Group;
   s: number;
   lat: number;
   owner: Kart;
   target: Kart | null;
-  pos: THREE.Vector3;
+  pos: Vector3;
   life: number;
 }
 interface Mine {
-  group: THREE.Group;
-  light: THREE.MeshBasicMaterial;
-  pos: THREE.Vector3;
+  group: Group;
+  light: MeshBasicMaterial;
+  pos: Vector3;
   owner: Kart;
   age: number;
 }
 
 export interface ItemEvents {
   onPickup(k: Kart): void;
-  onExplosion(p: THREE.Vector3, victim: Kart | null): void;
+  onExplosion(p: Vector3, victim: Kart | null): void;
   onUse(k: Kart, item: ItemType): void;
 }
 
 export class ItemManager {
-  group = new THREE.Group();
+  group = new Group();
   boxes: Box[] = [];
   rockets: Rocket[] = [];
   mines: Mine[] = [];
-  private boxGeo = new THREE.BoxGeometry(1.7, 1.7, 1.7);
-  private boxMat: THREE.MeshStandardMaterial;
-  private coreMat: THREE.MeshBasicMaterial;
-  private tmp = new THREE.Vector3();
+  private boxGeo = new BoxGeometry(1.7, 1.7, 1.7);
+  private boxMat: MeshStandardMaterial;
+  private coreMat: MeshBasicMaterial;
+  private tmp = new Vector3();
 
   constructor(private track: Track, private fx: Particles, private smoke: Particles, private ev: ItemEvents) {
     const tex = itemBoxTexture();
-    this.boxMat = new THREE.MeshStandardMaterial({
+    this.boxMat = new MeshStandardMaterial({
       map: tex,
       emissiveMap: tex,
-      emissive: new THREE.Color(0.8, 0.8, 0.8),
+      emissive: new Color(0.8, 0.8, 0.8),
       transparent: true,
       opacity: 0.8,
       roughness: 0.1,
       metalness: 0.3,
-      side: THREE.DoubleSide,
+      side: DoubleSide,
       depthWrite: false,
     });
-    this.coreMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.0, 1.0, 1.0), toneMapped: false, wireframe: true });
+    this.coreMat = new MeshBasicMaterial({ color: new Color(1.0, 1.0, 1.0), toneMapped: false, wireframe: true });
     for (const s of track.itemRows) {
       for (const lat of [-7.5, -2.5, 2.5, 7.5]) {
-        const p = new THREE.Vector3();
+        const p = new Vector3();
         track.sample(s, lat, p);
         p.y += 1.4;
-        const g = new THREE.Group();
-        const m = new THREE.Mesh(this.boxGeo, this.boxMat);
+        const g = new Group();
+        const m = new Mesh(this.boxGeo, this.boxMat);
         g.add(m);
-        const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.5), this.coreMat);
+        const core = new Mesh(new OctahedronGeometry(0.5), this.coreMat);
         g.add(core);
         g.position.copy(p);
         this.group.add(g);
@@ -133,13 +133,13 @@ export class ItemManager {
     this.ev.onUse(k, item);
   }
 
-  private spawnMine(p: THREE.Vector3, owner: Kart) {
-    const g = new THREE.Group();
-    const metal = new THREE.MeshStandardMaterial({ color: 0x1a1a22, metalness: 0.9, roughness: 0.3 });
-    const core = new THREE.Mesh(new THREE.SphereGeometry(0.55, 20, 14), metal);
+  private spawnMine(p: Vector3, owner: Kart) {
+    const g = new Group();
+    const metal = new MeshStandardMaterial({ color: 0x1a1a22, metalness: 0.9, roughness: 0.3 });
+    const core = new Mesh(new SphereGeometry(0.55, 20, 14), metal);
     core.castShadow = true;
     g.add(core);
-    const spikeGeo = new THREE.ConeGeometry(0.12, 0.45, 8);
+    const spikeGeo = new ConeGeometry(0.12, 0.45, 8);
     const dirs = [
       [1, 0, 0],
       [-1, 0, 0],
@@ -152,55 +152,55 @@ export class ItemManager {
       [0, 0.7, -0.7],
     ];
     for (const d of dirs) {
-      const s = new THREE.Mesh(spikeGeo, metal);
-      const v = new THREE.Vector3(d[0], d[1], d[2]).normalize();
+      const s = new Mesh(spikeGeo, metal);
+      const v = new Vector3(d[0], d[1], d[2]).normalize();
       s.position.copy(v).multiplyScalar(0.6);
-      s.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), v);
+      s.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), v);
       g.add(s);
     }
-    const light = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.82, 0.04, 0.04), toneMapped: false });
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.58, 0.06, 8, 32), light);
+    const light = new MeshBasicMaterial({ color: new Color(0.82, 0.04, 0.04), toneMapped: false });
+    const ring = new Mesh(new TorusGeometry(0.58, 0.06, 8, 32), light);
     ring.rotation.x = Math.PI / 2;
     g.add(ring);
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), light);
+    const eye = new Mesh(new SphereGeometry(0.15, 10, 8), light);
     eye.position.y = 0.58;
     g.add(eye);
-    g.position.copy(p).add(new THREE.Vector3(0, 0.6, 0));
+    g.position.copy(p).add(new Vector3(0, 0.6, 0));
     this.group.add(g);
     this.mines.push({ group: g, light, pos: g.position, owner, age: 0 });
   }
 
   private spawnRocket(owner: Kart, target: Kart | null) {
-    const g = new THREE.Group();
-    const body = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.22, 0.22, 1.4, 16),
-      new THREE.MeshStandardMaterial({ color: 0xdd2233, metalness: 0.6, roughness: 0.3 }),
+    const g = new Group();
+    const body = new Mesh(
+      new CylinderGeometry(0.22, 0.22, 1.4, 16),
+      new MeshStandardMaterial({ color: 0xdd2233, metalness: 0.6, roughness: 0.3 }),
     );
     body.rotation.x = Math.PI / 2;
     body.castShadow = true;
     g.add(body);
-    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.5, 16), new THREE.MeshStandardMaterial({ color: 0xeeeeee, metalness: 0.8, roughness: 0.2 }));
+    const nose = new Mesh(new ConeGeometry(0.22, 0.5, 16), new MeshStandardMaterial({ color: 0xeeeeee, metalness: 0.8, roughness: 0.2 }));
     nose.rotation.x = Math.PI / 2;
     nose.position.z = 0.95;
     g.add(nose);
     for (let i = 0; i < 4; i++) {
-      const fin = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.5, 0.35), new THREE.MeshStandardMaterial({ color: 0x222222 }));
+      const fin = new Mesh(new BoxGeometry(0.04, 0.5, 0.35), new MeshStandardMaterial({ color: 0x222222 }));
       fin.position.z = -0.55;
       fin.rotation.z = (i / 4) * Math.PI * 2;
       fin.translateY(0.3);
       g.add(fin);
     }
-    const glow = new THREE.Mesh(new THREE.SphereGeometry(0.25, 10, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.7, 0.7, 0.18), toneMapped: false }));
+    const glow = new Mesh(new SphereGeometry(0.25, 10, 8), new MeshBasicMaterial({ color: new Color(1.7, 0.7, 0.18), toneMapped: false }));
     glow.position.z = -0.8;
     g.add(glow);
     this.group.add(g);
     const s = owner.s + 3;
-    const pos = new THREE.Vector3();
+    const pos = new Vector3();
     this.track.sample(s, owner.proj.lateral, pos);
     this.rockets.push({ group: g, s, lat: owner.proj.lateral, owner, target, pos, life: 8 });
   }
 
-  explode(p: THREE.Vector3, victim: Kart | null) {
+  explode(p: Vector3, victim: Kart | null) {
     this.fx.burst(p, 70, 18, [4, 1.6, 0.4], 0.9, 0.7, { gravity: 6, drag: 2.5 });
     this.fx.burst(p, 40, 10, [3, 0.4, 2.5], 0.6, 0.5, { gravity: 2, drag: 3 });
     this.smoke.burst(p, 25, 5, [0.18, 0.16, 0.2], 2.5, 1.6, { gravity: -1.5, drag: 2, grow: 2.5 });
@@ -248,8 +248,7 @@ export class ItemManager {
       r.life -= dt;
       r.s += 78 * dt;
       if (r.target) {
-        let ahead = r.target.progress - (r.owner.progress + (r.s - r.owner.s));
-        ahead = r.target.s - r.s;
+        let ahead = r.target.s - r.s;
         if (ahead < -this.track.length / 2) ahead += this.track.length;
         if (ahead > this.track.length / 2) ahead -= this.track.length;
         if (ahead < 70) r.lat += (r.target.proj.lateral - r.lat) * Math.min(1, dt * 5);

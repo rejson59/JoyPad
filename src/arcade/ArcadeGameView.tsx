@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, Gamepad2, Home, Keyboard, LoaderCircle, Pause, Play, RotateCcw, Settings2, Smartphone, Sparkles, Timer, Trophy, Users, Volume2, VolumeX, Zap } from 'lucide-react';
 import { gameAudio } from '../game/audio';
+import { menuMusic } from '../game/menuMusic';
 import { PLAYER_DEFS } from '../game/types';
 import { padHost } from '../net/padHost';
 import type { RemoteCommand, RemoteEvent } from '../net/protocol';
 import { usePadHost, PadHostPanel } from '../pad/PadHostPanel';
 import { gameInfo, type GameId } from './catalog';
+import { useMenuMusic } from '../lib/useMenuMusic';
 import { COLORS, type DisplayMode, type GameRound, type Racer, type RenderQuality, type RoundConfig, type RoundHud, type RoundResult } from './runtime';
 
 type ArcadeId = Exclude<GameId, 'tanks'>;
@@ -13,7 +15,7 @@ type Stage = 'menu' | 'game' | 'over';
 
 const RULES: Record<ArcadeId, { primaryLabel: string; primary: string[]; secondaryLabel: string; secondary: string[]; hint: string; action: string; win: string }> = {
   race: { primaryLabel: 'OKRĄŻENIA', primary: ['2 okrążenia', '3 okrążenia', '4 okrążenia'], secondaryLabel: 'RYWALE SI', secondary: ['Bez botów', '1 bot', '2 boty', '3 boty'], hint: 'Kieruj joystickiem w kierunku drogi. Zbieraj skrzynie z bonusami: gdy pojawi się karta, AKCJA używa przedmiotu; bez karty daje krótki turbo-zryw.', action: 'AKCJA / TURBO', win: 'Pierwszy na mecie wygrywa.' },
-  orbit: { primaryLabel: 'LICZBA FAL', primary: ['3 fale', '5 fal', '7 fal'], secondaryLabel: 'ZAGROŻENIE', secondary: ['Rekrut', 'Pilot', 'Weteran'], hint: 'Lewa gałka porusza statkiem, prawa celuje. Bez prawej gałki statek sam namierza wroga. Zbieraj naprawy i osłony.', action: 'OGIEŃ', win: 'Odeprzyjcie wszystkie fale razem.' },
+  orbit: { primaryLabel: 'STATEK', primary: ['Interceptor', 'Valkyrie', 'Titan'], secondaryLabel: 'SIŁA WROGA', secondary: ['Rekrut', 'Pilot', 'Weteran'], hint: 'Joystick prowadzi statek, OGIEŃ strzela z dział. Pełne wychylenie gałki albo przytrzymanie AKCJI = dopalacz. Rakieta odpala się sama przy pełnym namierzeniu celu.', action: 'OGIEŃ', win: 'Rozbijcie całą wrogą eskadrę.' },
   snake: { primaryLabel: 'CEL PUNKTOWY', primary: ['8 punktów', '12 punktów', '16 punktów'], secondaryLabel: 'RYWALE SI', secondary: ['Bez botów', '1 bot', '2 boty', '3 boty'], hint: 'Wąż sam porusza się do przodu. Wychyl gałkę, aby skręcić. Złote impulsy są warte więcej i dają krótką ochronę.', action: 'SPRINT', win: 'Pierwszy do celu wygrywa.' },
   temple: { primaryLabel: 'CEL WYPRAWY', primary: ['8 reliktów', '12 reliktów', '16 reliktów'], secondaryLabel: 'STRAŻNICY', secondary: ['Odkrywca', 'Śmiałek', 'Legenda'], hint: 'Zbieraj zielone relikty. Trzymaj AKCJA obok skrzyni, by ją otworzyć, lub podczas biegu, by sprintować. Po zebraniu celu dotrzyjcie do portalu.', action: 'AKCJA', win: 'Zbierzcie relikty i dotrzyjcie do wyjścia.' },
   voxel: { primaryLabel: 'CEL ZBIERANIA', primary: ['8 surowców', '12 surowców', '16 surowców'], secondaryLabel: 'NOCNE CRAWLERY', secondary: ['Spokojna noc', '2 strażników', '3 strażników', '4 strażników'], hint: 'Klockowy biom jest proceduralny. Zbieraj kryształy i drewno, wracaj do bazy, aby podnosić jej poziom. W nocy pojawiają się crawlery.', action: 'AKCJA', win: 'Zbierzcie zasoby i wróćcie do bazy.' },
@@ -47,7 +49,11 @@ async function createRound(id: ArcadeId, canvas: HTMLCanvasElement, config: Roun
       return new (await import('./games/Race')).RaceRound(canvas, config);
     }
     case 'orbit': {
-      if (hasWebGL2(canvas)) return new (await import('./webgl/Arcade3D')).Arcade3DRound(canvas, config, 'orbit');
+      // Orbitalna Fala = STAR CLASH 3D z orbitalna-fala.zip. Bez WebGL2 zostaje klasyczny Orbit 2D.
+      if (hasWebGL2(canvas)) {
+        try { return new (await import('./starclash/StarClashRound')).StarClashRound(canvas, config); }
+        catch (error) { console.warn('STAR CLASH WebGL niedostępny — używam fallbacku Canvas', error); }
+      }
       return new (await import('./games/Orbit')).OrbitRound(canvas, config);
     }
     case 'snake': {
@@ -91,10 +97,25 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   const [roundKey, setRoundKey] = useState(0);
   const [showPads, setShowPads] = useState(false);
   const [muted, setMuted] = useState(gameAudio.muted);
+  const [menuMusicOn, toggleMenuMusic] = useMenuMusic();
+  // Muzyka menu: gra w lobby/ustawieniach rundy, cichnie na czas gry.
+  useEffect(() => { menuMusic.setContext(stage === 'game' ? 'game' : 'menu'); }, [stage]);
   const host = usePadHost();
   const canvas = useRef<HTMLCanvasElement>(null);
   const round = useRef<GameRound | null>(null);
-  const stageRef = useRef(stage); stageRef.current = stage;
+  const stageRef = useRef(stage);
+  /**
+   * Migawka ustawień rundy robiona dokładnie w chwili jej uruchomienia —
+   * dzięki refowi efekt zależy wyłącznie od etapu/klucza rundy, więc zmiana
+   * opcji w trakcie gry nie restartuje silnika, a start bierze bieżące opcje.
+   * Refy aktualizują się w efekcie (nie w trakcie renderu), a kolejność
+   * deklaracji PRZED efektem silnika gwarantuje świeżą migawkę na starcie.
+   */
+  const roundSetupRef = useRef({ participants, primary, secondary, displayMode, quality });
+  useEffect(() => {
+    stageRef.current = stage;
+    roundSetupRef.current = { participants, primary, secondary, displayMode, quality };
+  });
 
   const stepPrimary = useCallback((step: number) => setPrimary(i => (i + step + rules.primary.length) % rules.primary.length), [rules.primary.length]);
   const stepSecondary = useCallback((step: number) => setSecondary(i => (i + step + rules.secondary.length) % rules.secondary.length), [rules.secondary.length]);
@@ -147,6 +168,7 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   useEffect(() => {
     if (stage !== 'game' || !roundKey || !canvas.current) return;
     let cancelled = false;
+    const { participants, primary, secondary, displayMode, quality } = roundSetupRef.current;
     const config = {
       players: participants, padInputs: padHost.inputs, primary, secondary, displayMode, quality,
       onHud: (next: RoundHud) => {
@@ -170,9 +192,7 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
       engine.start();
     }).catch(error => { console.error('Nie udało się włączyć gry', error); if (!cancelled) setStage('menu'); });
     return () => { cancelled = true; round.current?.destroy(); round.current = null; };
-    // Ustawienia są migawką robioną dokładnie w chwili uruchomienia rundy.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roundKey, stage]);
+  }, [roundKey, stage, id]);
 
   const handleCommand = useCallback((command: RemoteCommand) => {
     const current = stageRef.current;
@@ -216,7 +236,10 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 py-5">
           <button onClick={onExit} className="flex items-center gap-2 rounded-full border border-white/20 bg-black/30 px-4 py-2 text-xs font-bold text-white transition hover:border-white/50"><ArrowLeft size={15} /> JOYPAD / GRY</button>
           <div className="joy-kicker flex items-center gap-2 text-white/60"><span className="h-2 w-2 rounded-full" style={{ background: info.accent }} /> {info.eyebrow} <span className="text-white/30">/</span> {info.number}</div>
-          <button onClick={() => setShowPads(true)} className="flex items-center gap-2 rounded-full border border-white/20 bg-black/30 px-4 py-2 text-xs font-semibold hover:bg-white/10"><Smartphone size={15} /> Pady {host.pads.length}/4 <span className="font-mono2" style={{ color: info.accent }}>{host.code}</span></button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => toggleMenuMusic(!menuMusicOn)} title={menuMusicOn ? 'Wyłącz muzykę menu' : 'Włącz muzykę menu'} aria-label="Muzyka menu" className="flex items-center gap-2 rounded-full border border-white/20 bg-black/30 px-3 py-2 text-xs font-semibold hover:bg-white/10">{menuMusicOn ? <Volume2 size={15} /> : <VolumeX size={15} />}</button>
+            <button onClick={() => setShowPads(true)} className="flex items-center gap-2 rounded-full border border-white/20 bg-black/30 px-4 py-2 text-xs font-semibold hover:bg-white/10"><Smartphone size={15} /> Pady {host.pads.length}/4 <span className="font-mono2" style={{ color: info.accent }}>{host.code}</span></button>
+          </div>
         </header>
 
         <section className="arcade-hero relative mt-7 flex min-h-[390px] items-end overflow-hidden rounded-[30px] border border-white/15 p-6 sm:min-h-[440px] sm:p-10">

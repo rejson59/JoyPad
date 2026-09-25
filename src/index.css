@@ -188,6 +188,14 @@ canvas {
 .pad-icon { height: 34px; width: 34px; border-radius: 9px; }
 button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid #fb923c; outline-offset: 3px; }
 @keyframes joy-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+/* Boot splash + powitanie */
+@keyframes boot-glow { 0% { opacity: 0; transform: scale(.9); } 60% { opacity: 1; transform: scale(1.02); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes boot-scan { from { transform: translateY(-140%); } to { transform: translateY(560%); } }
+@keyframes boot-hello { from { opacity: 0; letter-spacing: .9em; } to { opacity: 1; letter-spacing: .5em; } }
+.joy-enter { animation: joy-rise .6s cubic-bezier(.2,.7,.2,1) both; }
+.joy-enter-1 { animation-delay: 60ms; }
+.joy-enter-2 { animation-delay: 130ms; }
+.joy-enter-3 { animation-delay: 210ms; }
 @keyframes joy-card-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes joy-sweep { from { transform: translateX(-120%); } to { transform: translateX(120%); } }
-@media (prefers-reduced-motion: reduce) { .joy-intro, .joy-feature, .joy-feature::after, .joy-feature-image, .joy-game-card, .joy-arrow, .arcade-start { transition-duration: 0s !important; animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .joy-intro, .joy-feature, .joy-feature::after, .joy-feature-image, .joy-game-card, .joy-arrow, .arcade-start, .joy-enter, .joy-enter-1, .joy-enter-2, .joy-enter-3 { transition-duration: 0s !important; animation: none !important; } }

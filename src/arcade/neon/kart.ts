@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import { AdditiveBlending, BoxGeometry, CanvasTexture, CapsuleGeometry, CircleGeometry, Color, ConeGeometry, CylinderGeometry, ExtrudeGeometry, Group, IcosahedronGeometry, MathUtils, Mesh, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, PlaneGeometry, Shape, SphereGeometry, Texture, TorusGeometry, Vector3 } from 'three';
 import { Track, BARRIER, Projection } from './track';
 import { glowSprite } from './textures';
 
@@ -19,8 +19,8 @@ export interface Controls {
   drift: boolean;
 }
 
-let sharedGlow: THREE.Texture | null = null;
-let sharedShadow: THREE.Texture | null = null;
+let sharedGlow: Texture | null = null;
+let sharedShadow: Texture | null = null;
 
 function shadowTexture() {
   if (sharedShadow) return sharedShadow;
@@ -33,25 +33,25 @@ function shadowTexture() {
   g.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 128, 128);
-  sharedShadow = new THREE.CanvasTexture(c);
+  sharedShadow = new CanvasTexture(c);
   return sharedShadow;
 }
 
 export class Kart {
   cfg: KartConfig;
-  group = new THREE.Group();
-  body = new THREE.Group();
-  private wheelPivots: THREE.Group[] = [];
-  private wheelSpins: THREE.Group[] = [];
-  private flames: THREE.Mesh[] = [];
-  private flameMats: THREE.MeshBasicMaterial[] = [];
-  private tailMat: THREE.MeshBasicMaterial;
-  private glowMat: THREE.MeshBasicMaterial;
-  private shieldMesh: THREE.Mesh;
-  private shieldMat: THREE.MeshBasicMaterial;
+  group = new Group();
+  body = new Group();
+  private wheelPivots: Group[] = [];
+  private wheelSpins: Group[] = [];
+  private flames: Mesh[] = [];
+  private flameMats: MeshBasicMaterial[] = [];
+  private tailMat: MeshBasicMaterial;
+  private glowMat: MeshBasicMaterial;
+  private shieldMesh: Mesh;
+  private shieldMat: MeshBasicMaterial;
 
-  pos = new THREE.Vector3();
-  vel = new THREE.Vector3();
+  pos = new Vector3();
+  vel = new Vector3();
   yaw = 0;
   yawRate = 0;
   vf = 0;
@@ -123,7 +123,7 @@ export class Kart {
     this.group.add(this.body);
     if (!sharedGlow) sharedGlow = glowSprite();
 
-    const paint = new THREE.MeshPhysicalMaterial({
+    const paint = new MeshPhysicalMaterial({
       color: cfg.color,
       metalness: 0.55,
       roughness: 0.22,
@@ -131,40 +131,40 @@ export class Kart {
       clearcoatRoughness: 0.04,
       envMapIntensity: 1.6,
     });
-    const accent = new THREE.MeshPhysicalMaterial({
+    const accent = new MeshPhysicalMaterial({
       color: cfg.accent,
       metalness: 0.7,
       roughness: 0.3,
       clearcoat: 0.8,
       envMapIntensity: 1.4,
     });
-    const carbon = new THREE.MeshStandardMaterial({ color: 0x111216, metalness: 0.6, roughness: 0.45 });
-    const chrome = new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 1, roughness: 0.12, envMapIntensity: 2 });
-    const rubber = new THREE.MeshStandardMaterial({ color: 0x0b0b0d, roughness: 0.92, metalness: 0 });
-    const glass = new THREE.MeshPhysicalMaterial({
+    const carbon = new MeshStandardMaterial({ color: 0x111216, metalness: 0.6, roughness: 0.45 });
+    const chrome = new MeshStandardMaterial({ color: 0xdddddd, metalness: 1, roughness: 0.12, envMapIntensity: 2 });
+    const rubber = new MeshStandardMaterial({ color: 0x0b0b0d, roughness: 0.92, metalness: 0 });
+    const glass = new MeshPhysicalMaterial({
       color: 0x0a1020,
       metalness: 0.2,
       roughness: 0.02,
       clearcoat: 1,
       envMapIntensity: 2.5,
-      emissive: new THREE.Color(cfg.accent).multiplyScalar(0.15),
+      emissive: new Color(cfg.accent).multiplyScalar(0.15),
     });
-    const accentColor = new THREE.Color(cfg.accent);
-    const neonMat = new THREE.MeshBasicMaterial({ color: accentColor.clone().multiplyScalar(1.35), toneMapped: false });
+    const accentColor = new Color(cfg.accent);
+    const neonMat = new MeshBasicMaterial({ color: accentColor.clone().multiplyScalar(1.35), toneMapped: false });
 
-    const cast = (m: THREE.Mesh) => {
+    const cast = (m: Mesh) => {
       m.castShadow = true;
       m.receiveShadow = true;
       return m;
     };
 
     // podłoga
-    const floor = cast(new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.12, 2.6), carbon));
+    const floor = cast(new Mesh(new BoxGeometry(1.5, 0.12, 2.6), carbon));
     floor.position.set(0, 0.3, 0);
     this.body.add(floor);
 
     // karoseria — profil boczny wyciągnięty
-    const shape = new THREE.Shape();
+    const shape = new Shape();
     shape.moveTo(-1.25, 0.32);
     shape.lineTo(1.2, 0.3);
     shape.quadraticCurveTo(1.5, 0.33, 1.38, 0.48);
@@ -174,7 +174,7 @@ export class Kart {
     shape.quadraticCurveTo(-1.0, 0.8, -1.15, 1.0);
     shape.lineTo(-1.32, 0.95);
     shape.quadraticCurveTo(-1.38, 0.6, -1.25, 0.32);
-    const ext = new THREE.ExtrudeGeometry(shape, {
+    const ext = new ExtrudeGeometry(shape, {
       depth: 0.8,
       bevelEnabled: true,
       bevelThickness: 0.14,
@@ -184,68 +184,68 @@ export class Kart {
     });
     ext.rotateY(-Math.PI / 2);
     ext.translate(0.4, 0, 0);
-    const shell = cast(new THREE.Mesh(ext, paint));
+    const shell = cast(new Mesh(ext, paint));
     this.body.add(shell);
 
     // boczne sponsony
     for (const s of [-1, 1]) {
-      const pod = cast(new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 1.3, 6, 16), accent));
+      const pod = cast(new Mesh(new CapsuleGeometry(0.2, 1.3, 6, 16), accent));
       pod.rotation.x = Math.PI / 2;
       pod.position.set(s * 0.68, 0.45, -0.05);
       this.body.add(pod);
-      const strip = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.05, 1.3), neonMat);
+      const strip = new Mesh(new BoxGeometry(0.03, 0.05, 1.3), neonMat);
       strip.position.set(s * 0.89, 0.45, -0.05);
       this.body.add(strip);
     }
     // przednie skrzydło
-    const fw = cast(new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.06, 0.38), accent));
+    const fw = cast(new Mesh(new BoxGeometry(2.0, 0.06, 0.38), accent));
     fw.position.set(0, 0.28, 1.42);
     this.body.add(fw);
     for (const s of [-1, 1]) {
-      const ep = cast(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.22, 0.45), carbon));
+      const ep = cast(new Mesh(new BoxGeometry(0.05, 0.22, 0.45), carbon));
       ep.position.set(s * 1.0, 0.34, 1.42);
       this.body.add(ep);
     }
     // tylny spoiler
-    const sp = cast(new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.07, 0.45), accent));
+    const sp = cast(new Mesh(new BoxGeometry(1.8, 0.07, 0.45), accent));
     sp.position.set(0, 1.28, -1.25);
     sp.rotation.x = -0.12;
     this.body.add(sp);
-    const spNeon = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.03, 0.03), neonMat);
+    const spNeon = new Mesh(new BoxGeometry(1.8, 0.03, 0.03), neonMat);
     spNeon.position.set(0, 1.25, -1.47);
     this.body.add(spNeon);
     for (const s of [-1, 1]) {
-      const st = cast(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.4, 0.18), carbon));
+      const st = cast(new Mesh(new BoxGeometry(0.06, 0.4, 0.18), carbon));
       st.position.set(s * 0.5, 1.08, -1.2);
       this.body.add(st);
-      const ep = cast(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.3, 0.55), paint));
+      const ep = cast(new Mesh(new BoxGeometry(0.05, 0.3, 0.55), paint));
       ep.position.set(s * 0.9, 1.25, -1.25);
       this.body.add(ep);
     }
     // silnik i wydechy
-    const engine = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.32, 0.7, 20), chrome));
+    const engine = cast(new Mesh(new CylinderGeometry(0.28, 0.32, 0.7, 20), chrome));
     engine.rotation.x = Math.PI / 2;
     engine.position.set(0, 0.62, -1.15);
     this.body.add(engine);
-    const exhaustMat = new THREE.MeshBasicMaterial({ color: accentColor.clone().multiplyScalar(1.05), toneMapped: false });
+    const exhaustMat = new MeshBasicMaterial({ color: accentColor.clone().multiplyScalar(1.05), toneMapped: false });
     for (const s of [-1, 1]) {
-      const ex = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.13, 0.4, 16, 1, true), chrome));
+      const ex = cast(new Mesh(new CylinderGeometry(0.1, 0.13, 0.4, 16, 1, true), chrome));
       ex.rotation.x = Math.PI / 2;
       ex.position.set(s * 0.32, 0.62, -1.45);
       this.body.add(ex);
-      const inner = new THREE.Mesh(new THREE.CircleGeometry(0.09, 16), exhaustMat);
+      const inner = new Mesh(new CircleGeometry(0.09, 16), exhaustMat);
       inner.position.set(s * 0.32, 0.62, -1.62);
       inner.rotation.y = Math.PI;
       this.body.add(inner);
       // płomienie
-      const fm = new THREE.MeshBasicMaterial({
-        color: new THREE.Color(1.45, 0.55, 0.12),
+      const fm = new MeshBasicMaterial({
+        color: new Color(1.45, 0.55, 0.12),
         transparent: true,
-        blending: THREE.AdditiveBlending,
+        blending: AdditiveBlending,
         depthWrite: false,
         toneMapped: false,
       });
-      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.12, 1, 12, 1, true), fm);
+      const flame = new Mesh(new ConeGeometry(0.12, 1, 12, 1, true), fm);
       flame.geometry.translate(0, -0.5, 0);
       flame.rotation.x = -Math.PI / 2;
       flame.position.set(s * 0.32, 0.62, -1.62);
@@ -253,54 +253,54 @@ export class Kart {
       this.flames.push(flame);
       this.flameMats.push(fm);
       // rdzeń płomienia
-      const core = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.6, 8, 1, true), fm);
+      const core = new Mesh(new ConeGeometry(0.06, 0.6, 8, 1, true), fm);
       core.geometry.translate(0, -0.3, 0);
       flame.add(core);
     }
 
     // kierowca
-    const suit = new THREE.MeshStandardMaterial({ color: 0x1c1e26, roughness: 0.7 });
-    const torso = cast(new THREE.Mesh(new THREE.CapsuleGeometry(0.24, 0.35, 6, 12), suit));
+    const suit = new MeshStandardMaterial({ color: 0x1c1e26, roughness: 0.7 });
+    const torso = cast(new Mesh(new CapsuleGeometry(0.24, 0.35, 6, 12), suit));
     torso.position.set(0, 0.95, -0.35);
     torso.rotation.x = -0.25;
     this.body.add(torso);
-    const helmet = cast(new THREE.Mesh(new THREE.SphereGeometry(0.27, 24, 18), paint));
+    const helmet = cast(new Mesh(new SphereGeometry(0.27, 24, 18), paint));
     helmet.position.set(0, 1.38, -0.28);
     this.body.add(helmet);
-    const visor = new THREE.Mesh(new THREE.SphereGeometry(0.275, 24, 12, Math.PI / 2 - 0.9, 1.8, 1.1, 0.75), glass);
+    const visor = new Mesh(new SphereGeometry(0.275, 24, 12, Math.PI / 2 - 0.9, 1.8, 1.1, 0.75), glass);
     visor.position.copy(helmet.position);
     this.body.add(visor);
-    const hstripe = new THREE.Mesh(new THREE.TorusGeometry(0.272, 0.018, 6, 32), neonMat);
+    const hstripe = new Mesh(new TorusGeometry(0.272, 0.018, 6, 32), neonMat);
     hstripe.position.copy(helmet.position);
     hstripe.rotation.y = Math.PI / 2;
     this.body.add(hstripe);
     for (const s of [-1, 1]) {
-      const arm = cast(new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.45, 4, 8), suit));
+      const arm = cast(new Mesh(new CapsuleGeometry(0.08, 0.45, 4, 8), suit));
       arm.position.set(s * 0.26, 0.98, 0.0);
       arm.rotation.x = -1.1;
       arm.rotation.z = s * 0.25;
       this.body.add(arm);
     }
-    const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.03, 8, 20), carbon);
+    const wheel = new Mesh(new TorusGeometry(0.17, 0.03, 8, 20), carbon);
     wheel.position.set(0, 0.98, 0.3);
     wheel.rotation.x = -0.6;
     this.body.add(wheel);
     // szyba
-    const ws = new THREE.Mesh(new THREE.SphereGeometry(0.5, 20, 10, 0, Math.PI * 2, 0, 0.9), glass);
+    const ws = new Mesh(new SphereGeometry(0.5, 20, 10, 0, Math.PI * 2, 0, 0.9), glass);
     ws.scale.set(1.1, 0.5, 1.2);
     ws.position.set(0, 0.7, 0.5);
     this.body.add(ws);
 
     // światła
-    const headMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.95, 0.95, 1.05), toneMapped: false });
+    const headMat = new MeshBasicMaterial({ color: new Color(0.95, 0.95, 1.05), toneMapped: false });
     for (const s of [-1, 1]) {
-      const hl = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.06, 0.05), headMat);
+      const hl = new Mesh(new BoxGeometry(0.3, 0.06, 0.05), headMat);
       hl.position.set(s * 0.42, 0.5, 1.39);
       hl.rotation.x = -0.2;
       this.body.add(hl);
     }
-    this.tailMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.95, 0.025, 0.05), toneMapped: false });
-    const tl = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.06, 0.04), this.tailMat);
+    this.tailMat = new MeshBasicMaterial({ color: new Color(0.95, 0.025, 0.05), toneMapped: false });
+    const tl = new Mesh(new BoxGeometry(1.1, 0.06, 0.04), this.tailMat);
     tl.position.set(0, 0.85, -1.4);
     this.body.add(tl);
 
@@ -314,28 +314,28 @@ export class Kart {
     wheelPos.forEach((p, i) => {
       const r = this.radius[i];
       const w = i < 2 ? 0.34 : 0.46;
-      const pivot = new THREE.Group();
+      const pivot = new Group();
       pivot.position.set(p[0], r, p[2]);
-      const spin = new THREE.Group();
+      const spin = new Group();
       spin.name = 'wheelspin';
       pivot.add(spin);
-      const tire = cast(new THREE.Mesh(new THREE.CylinderGeometry(r, r, w, 28), rubber));
+      const tire = cast(new Mesh(new CylinderGeometry(r, r, w, 28), rubber));
       tire.rotation.z = Math.PI / 2;
       spin.add(tire);
-      const tread = new THREE.Mesh(new THREE.TorusGeometry(r - 0.01, 0.025, 6, 28), rubber);
+      const tread = new Mesh(new TorusGeometry(r - 0.01, 0.025, 6, 28), rubber);
       tread.rotation.y = Math.PI / 2;
       spin.add(tread);
-      const rim = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.66, r * 0.66, w + 0.02, 20), chrome);
+      const rim = new Mesh(new CylinderGeometry(r * 0.66, r * 0.66, w + 0.02, 20), chrome);
       rim.rotation.z = Math.PI / 2;
       spin.add(rim);
       const side = Math.sign(p[0]);
       for (let k = 0; k < 5; k++) {
-        const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.03, r * 1.2, 0.07), carbon);
+        const spoke = new Mesh(new BoxGeometry(0.03, r * 1.2, 0.07), carbon);
         spoke.position.x = side * (w / 2 + 0.015);
         spoke.rotation.x = (k / 5) * Math.PI;
         spin.add(spoke);
       }
-      const hub = new THREE.Mesh(new THREE.TorusGeometry(r * 0.5, 0.02, 6, 20), neonMat);
+      const hub = new Mesh(new TorusGeometry(r * 0.5, 0.02, 6, 20), neonMat);
       hub.rotation.y = Math.PI / 2;
       hub.position.x = side * (w / 2 + 0.03);
       spin.add(hub);
@@ -345,21 +345,21 @@ export class Kart {
     });
 
     // neonowa poświata pod podwoziem
-    this.glowMat = new THREE.MeshBasicMaterial({
+    this.glowMat = new MeshBasicMaterial({
       map: sharedGlow,
       color: accentColor.clone().multiplyScalar(0.82),
       transparent: true,
-      blending: THREE.AdditiveBlending,
+      blending: AdditiveBlending,
       depthWrite: false,
       toneMapped: false,
     });
-    const glow = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 5.2), this.glowMat);
+    const glow = new Mesh(new PlaneGeometry(4.2, 5.2), this.glowMat);
     glow.rotation.x = -Math.PI / 2;
     glow.position.y = 0.12;
     this.group.add(glow);
-    const shadow = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.6, 3.6),
-      new THREE.MeshBasicMaterial({ map: shadowTexture(), transparent: true, depthWrite: false }),
+    const shadow = new Mesh(
+      new PlaneGeometry(2.6, 3.6),
+      new MeshBasicMaterial({ map: shadowTexture(), transparent: true, depthWrite: false }),
     );
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.y = 0.1;
@@ -367,16 +367,16 @@ export class Kart {
     this.group.add(shadow);
 
     // tarcza
-    this.shieldMat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color(0.18, 0.9, 1.6),
+    this.shieldMat = new MeshBasicMaterial({
+      color: new Color(0.18, 0.9, 1.6),
       transparent: true,
       opacity: 0.25,
-      blending: THREE.AdditiveBlending,
+      blending: AdditiveBlending,
       depthWrite: false,
       toneMapped: false,
       wireframe: true,
     });
-    this.shieldMesh = new THREE.Mesh(new THREE.IcosahedronGeometry(2.1, 2), this.shieldMat);
+    this.shieldMesh = new Mesh(new IcosahedronGeometry(2.1, 2), this.shieldMat);
     this.shieldMesh.position.y = 0.8;
     this.shieldMesh.visible = false;
     this.group.add(this.shieldMesh);
@@ -393,7 +393,7 @@ export class Kart {
     this.group.rotation.y = yaw;
   }
 
-  forward(out: THREE.Vector3) {
+  forward(out: Vector3) {
     return out.set(Math.sin(this.yaw), 0, Math.cos(this.yaw));
   }
 
@@ -616,9 +616,9 @@ export class Kart {
 
   private animate(dt: number, slopeF: number) {
     // zawieszenie — sprężyna z tłumieniem
-    const targetPitch = THREE.MathUtils.clamp(-this.accLong * 0.004, -0.09, 0.09);
+    const targetPitch = MathUtils.clamp(-this.accLong * 0.004, -0.09, 0.09);
     const latAcc = this.vf * this.yawRate;
-    const targetRoll = THREE.MathUtils.clamp(latAcc * 0.0045, -0.12, 0.12);
+    const targetRoll = MathUtils.clamp(latAcc * 0.0045, -0.12, 0.12);
     const k = 160;
     const cd = 14;
     this.pitchV += ((targetPitch - this.pitch) * k - this.pitchV * cd) * dt;
@@ -678,7 +678,7 @@ export class Kart {
     });
 
     const g = 1.0 + Math.sin(performance.now() * 0.004) * 0.2 + (boosting ? 0.6 : 0);
-    const ac = new THREE.Color(this.cfg.accent);
+    const ac = new Color(this.cfg.accent);
     this.glowMat.color.setRGB(ac.r * g * 1.3, ac.g * g * 1.3, ac.b * g * 1.3);
 
     this.shieldMesh.visible = this.shieldTime > 0;
@@ -689,13 +689,13 @@ export class Kart {
     }
   }
 
-  wheelWorld(i: number, out: THREE.Vector3) {
+  wheelWorld(i: number, out: Vector3) {
     this.wheelPivots[i].getWorldPosition(out);
     out.y -= this.radius[i] * 0.9;
     return out;
   }
 
-  exhaustWorld(i: number, out: THREE.Vector3) {
+  exhaustWorld(i: number, out: Vector3) {
     return this.flames[i].getWorldPosition(out);
   }
 }

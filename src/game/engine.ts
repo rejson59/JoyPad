@@ -326,7 +326,7 @@ export class TankGame {
     let lastCount = 4;
     const loop = (now: number) => {
       if (!this.running) return;
-      let dt = Math.min((now - this.lastT) / 1000, 0.05);
+      const dt = Math.min((now - this.lastT) / 1000, 0.05);
       this.lastT = now;
       // countdown beeps
       const c = Math.ceil(this.countdown);
@@ -690,7 +690,7 @@ export class TankGame {
     const desired = Math.atan2(ai.waypoint.y - t.y, ai.waypoint.x - t.x);
     let diff = angDiff(t.hullAngle, desired);
     if (ai.stuckTimer < 0) diff = angDiff(t.hullAngle, desired + Math.PI); // reversing handled below
-    let turn = 0, fwd = 0;
+    let turn = 0, fwd: number;
     if (avoid) { turn = ai.strafeDir; fwd = 0.4; }
     else if (Math.abs(diff) > 0.25) { turn = diff > 0 ? 1 : -1; fwd = Math.abs(diff) < 1.1 ? 0.65 : 0.15; }
     else { fwd = 1; }
@@ -938,7 +938,7 @@ export class TankGame {
       const d = dist(x, y, t.x, t.y);
       if (d < radius) {
         const isDirect = directHit?.id === t.id;
-        let dmg = isDirect ? (big ? 60 : 40) : lerp(big ? 45 : 30, 5, d / radius);
+        const dmg = isDirect ? (big ? 60 : 40) : lerp(big ? 45 : 30, 5, d / radius);
         // knockback
         const nx = (t.x - x) / (d || 1), ny = (t.y - y) / (d || 1);
         t.vx += nx * (big ? 420 : 280) * (1 - d / radius + 0.3);

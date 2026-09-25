@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Crosshair, Gamepad2, Settings, X, Heart, Loader2, LogOut, Maximize2, Pause, Shield, Signal, Skull, Smartphone, Wifi, WifiOff, Zap, Wind, RotateCcw } from 'lucide-react';
+import { Gamepad2, Settings, X, Loader2, LogOut, Maximize2, Pause, Smartphone, Wifi, WifiOff, RotateCcw } from 'lucide-react';
 import { padClient, type PadClientState } from '../net/padClient';
 import { CODE_LENGTH, normalizeCode, normalizeNick, padCodeFromHash, type PadFx, type PadSteer } from '../net/protocol';
 import { Joystick } from './Joystick';
@@ -8,6 +8,8 @@ import { JoypadController, NickEditor } from './JoypadController';
 import { DeviceFeatures, type FullscreenStatus, type TiltStatus, type WakeLockStatus } from './DeviceFeatures';
 import { HapticsStatus } from './HapticsStatus';
 import { haptic, unlockHaptics } from './haptics';
+import { BootSplash } from '../components/BootSplash';
+import { JoyLabPad } from './JoyLabPad';
 
 const LS_NICK = 'sf_pad_nick';
 const LS_CODE = 'sf_pad_code';
@@ -63,6 +65,8 @@ const FX_VIBE: Record<PadFx, number | number[]> = {
 
 export default function PadApp() {
   const [st, setSt] = useState<PadClientState>(padClient.state);
+  const [booted, setBooted] = useState(false);
+  const [labDone, setLabDone] = useState(false);
   const [code, setCode] = useState(() => padCodeFromHash() || localStorage.getItem(LS_CODE) || '');
   const [nick, setNick] = useState(() => localStorage.getItem(LS_NICK) || '');
   const [flash, setFlash] = useState<string | null>(null);
@@ -342,20 +346,26 @@ export default function PadApp() {
     padClient.setInput({ fwd: 0, turn: 0, dirX: 0, dirY: 0, aimX: 0, aimY: 0, fire: false });
   }, [st.screen, st.game]);
 
+  // Lab kontrolera pokazuje się tylko raz — po opuszczeniu lobby nie wraca w tej sesji.
+  useEffect(() => {
+    if (st.screen !== 'lobby') setLabDone(true);
+  }, [st.screen]);
+
   /* ---------- Connection screen ---------- */
+  if (!booted) return <BootSplash onDone={() => setBooted(true)} />;
   if (st.status !== 'connected') {
     // „lost” też jest zajęte — klient sam próbuje wrócić do gry.
     const busy = st.status === 'connecting' || st.status === 'lost';
     return (
       <div className="pad-joy flex min-h-[100dvh] flex-col items-center justify-center px-5 py-8 text-white" style={{ background: 'radial-gradient(ellipse at 50% 4%,rgba(249,115,22,.16),transparent 52%),#0b0e0f' }}>
         <div className="fixed left-0 right-0 top-0 h-1 bg-gradient-to-r from-orange-600 via-amber-300 to-orange-700" />
-        <div className="mb-3 flex items-center gap-2 rounded-full border border-orange-400/30 bg-orange-500/10 px-4 py-1.5 text-[11px] font-bold tracking-[0.2em] text-orange-300">
+        <div className="joy-enter mb-3 flex items-center gap-2 rounded-full border border-orange-400/30 bg-orange-500/10 px-4 py-1.5 text-[11px] font-bold tracking-[0.2em] text-orange-300">
           <Smartphone className="h-3.5 w-3.5" /> TELEFON JAKO PAD
         </div>
-        <h1 className="joy-brand text-center text-5xl font-extrabold tracking-[-.06em]">Joy<span className="text-orange-400">Pad.</span></h1>
-        <p className="mt-2 max-w-sm text-center text-sm text-slate-400">Jeden ekran, siedem gier i telefon w roli kontrolera.</p>
+        <h1 className="joy-brand joy-enter joy-enter-1 text-center text-5xl font-extrabold tracking-[-.06em]">Joy<span className="text-orange-400">Pad.</span></h1>
+        <p className="joy-enter joy-enter-2 mt-2 max-w-sm text-center text-sm text-slate-400">Jeden ekran, siedem gier i telefon w roli kontrolera.</p>
 
-        <div className="joy-room mt-6 w-full max-w-sm rounded-2xl p-5">
+        <div className="joy-room joy-enter joy-enter-3 mt-6 w-full max-w-sm rounded-2xl p-5">
           <label className="block text-[11px] font-bold tracking-widest text-zinc-400">KOD Z EKRANU KOMPUTERA</label>
           <input
             value={code}
@@ -437,11 +447,14 @@ export default function PadApp() {
 
   // Pilot biblioteki, menu poszczególnych gier i cztery dedykowane pady arcade.
   // Oryginalny pad twin-stick Stalowego Frontu poniżej pozostaje nietknięty.
+  // Tuż po sparowaniu, przed menu głównym: Lab kontrolera (wibracje, akcelerometr, żyroskop).
+  if (st.status === 'connected' && st.screen === 'lobby' && !labDone) {
+    return <JoyLabPad nick={st.nick || st.name} color={st.color} onDone={() => setLabDone(true)} />;
+  }
   if (st.screen !== 'game' || st.game !== 'tanks') return <><JoypadController st={st} fullscreen={goFullscreen} fullscreenStatus={fullscreenStatus} wakeLockEnabled={wakeLockEnabled} onWakeLockChange={changeWakeLock} wakeLockStatus={wakeLockStatus} tiltEnabled={tiltEnabled} onTiltChange={changeTilt} tiltStatus={tiltStatus} />{flash && <div className="pointer-events-none fixed inset-0 z-[60]" style={{ background: flash }} />}</>;
 
   /* ---------- Controller screen ---------- */
   const hud = st.hud;
-  const hpPct = hud ? (hud.hp / hud.maxHp) * 100 : 100;
   const color = st.color;
 
   return (
@@ -452,22 +465,13 @@ export default function PadApp() {
       {/* flash overlay */}
       {flash && <div className="pointer-events-none absolute inset-0 z-40" style={{ background: flash }} />}
 
-      {/* top bar */}
+      {/* top bar — tylko kolor, nick i ikony; wyniki są na ekranie głównym */}
       <div className="absolute left-0 right-0 top-0 z-30 flex items-center justify-between gap-2 px-3 py-2" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>
-        <div className="flex items-center gap-2">
-          <span className="h-3 w-3 rounded-full" style={{ background: color, boxShadow: `0 0 10px ${color}` }} />
-          <span className="max-w-[38vw] truncate text-sm font-black tracking-wide" style={{ color }}>{st.nick || st.name}</span>
-          <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-bold text-zinc-300">SLOT {st.slot + 1}</span>
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: color, boxShadow: `0 0 10px ${color}` }} />
+          <span className="max-w-[38vw] truncate text-sm font-bold tracking-wide" style={{ color }}>{st.nick || st.name}</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-bold ${st.latency < 80 ? 'text-green-400' : st.latency < 160 ? 'text-amber-300' : 'text-red-400'}`}>
-            <Signal className="h-3 w-3" />{st.latency} ms
-          </span>
-          {st.viaRelay && (
-            <span className="rounded bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-200" title="Łączenie przez awaryjny przekaźnik (bezpośrednie WebRTC nie przeszło)">
-              przekaźnik
-            </span>
-          )}
           <button onClick={() => setShowSettings(v => !v)} className={`rounded-lg border p-1.5 ${showSettings ? 'border-amber-400/60 bg-amber-400/20 text-amber-200' : 'border-white/15 bg-white/5 text-zinc-300'}`} title="Ustawienia sterowania"><Settings className="h-4 w-4" /></button>
           <button onClick={goFullscreen} className="rounded-lg border border-white/15 bg-white/5 p-1.5 text-zinc-300"><Maximize2 className="h-4 w-4" /></button>
           {st.slot === st.adminSlot && <>
@@ -478,38 +482,8 @@ export default function PadApp() {
         </div>
       </div>
 
-      {/* HUD strip */}
-      <div className="pointer-events-none absolute left-0 right-0 top-11 z-10 flex justify-center px-4">
-        {hud ? (
-          <div className="flex w-full max-w-md flex-col gap-1 rounded-xl border border-white/10 bg-black/60 px-3 py-1.5 backdrop-blur-sm">
-            <div className="flex items-center justify-between text-[11px] font-bold">
-              <span className="font-mono2 text-zinc-300">{hud.alive ? `${hud.hp} HP` : hud.respawn > 0 ? `RESPAWN ${hud.respawn.toFixed(1)}s` : 'ELIMINACJA'}</span>
-              <span className="flex items-center gap-2 text-zinc-300">
-                <span className="flex items-center gap-0.5"><Skull className="h-3 w-3" />{hud.kills}</span>
-                {hud.mode === 'survival' && <span className="flex items-center gap-0.5"><Heart className="h-3 w-3 text-red-400" />{hud.lives}</span>}
-                <span className="font-mono2 text-amber-300">{Math.floor(hud.timeLeft / 60)}:{String(Math.floor(hud.timeLeft % 60)).padStart(2, '0')}</span>
-              </span>
-            </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
-              <div className="h-full rounded-full transition-all" style={{ width: `${hpPct}%`, background: hpPct > 50 ? '#4ade80' : hpPct > 25 ? '#fbbf24' : '#ef4444' }} />
-            </div>
-            {(hud.rapid || hud.big || hud.speed || hud.shield) && (
-              <div className="flex gap-2 text-[10px] font-bold">
-                {hud.rapid && <span className="flex items-center gap-0.5 text-amber-400"><Zap className="h-3 w-3" />SZYBKI</span>}
-                {hud.big && <span className="flex items-center gap-0.5 text-red-400"><Crosshair className="h-3 w-3" />CIĘŻKI</span>}
-                {hud.speed && <span className="flex items-center gap-0.5 text-amber-300"><Wind className="h-3 w-3" />TURBO</span>}
-                {hud.shield && <span className="flex items-center gap-0.5 text-cyan-300"><Shield className="h-3 w-3" />TARCZA</span>}
-              </div>
-            )}
-          </div>
-        ) : null}
-      </div>
-
-      {/* centre message */}
-      <div className="pointer-events-none absolute inset-x-0 top-1/2 z-10 flex -translate-y-1/2 flex-col items-center px-6 text-center">
-        {hud && hud.countdown > 0 && (
-          <div className="font-display text-7xl text-amber-300 drop-shadow-[0_0_30px_rgba(251,191,36,0.6)]">{Math.ceil(hud.countdown)}</div>
-        )}
+      {/* tylko niezbędne komunikaty sterowania */}
+      <div className="pointer-events-none absolute inset-x-0 top-1/2 z-10 flex -translate-y-1/2 justify-center px-6 text-center">
         {hud?.paused && (
           <div className="rounded-xl bg-black/70 px-5 py-2 font-display text-3xl text-amber-300">PAUZA</div>
         )}

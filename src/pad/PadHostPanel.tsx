@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import QRCode from 'qrcode';
 import { Antenna, Copy, Check, Loader2, RefreshCw, Smartphone, Wifi, WifiOff, X, Power } from 'lucide-react';
 import { padHost, type PadHostState } from '../net/padHost';
 import { padUrlFor } from '../net/protocol';
@@ -30,8 +29,11 @@ export function PadHostPanel({ players, compact, onClose, context = 'tanks' }: P
 
   useEffect(() => {
     if (!s.code || !codeUsable) { setQr(''); return; }
-    QRCode.toDataURL(url, { margin: 1, width: 320, color: { dark: '#0a0a0b', light: '#fbbf24' }, errorCorrectionLevel: 'M' })
-      .then(setQr).catch(() => setQr(''));
+    // qrcode ładuje się leniwie — potrzebne tylko do rysowania QR w panelu.
+    void import('qrcode')
+      .then(({ default: QRCode }) => QRCode.toDataURL(url, { margin: 1, width: 320, color: { dark: '#0a0a0b', light: '#fbbf24' }, errorCorrectionLevel: 'M' }))
+      .then(setQr)
+      .catch(() => setQr(''));
   }, [s.code, codeUsable, url]);
 
   const copy = async () => {

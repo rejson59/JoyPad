@@ -16,7 +16,7 @@ Każda gra ma własny ekran wejściowy, zasady, ustawienia rundy, HUD i ekran wy
 
 ### Grafika i wydajność
 
-Nowe światy korzystają z proceduralnych tekstur, świateł, cieni i geometrii perspektywicznej. `Neonowy Pęd` ładuje właściwy silnik Three.js z rozpakowanego `futuristic-3d-racing-game.zip` (miasto, tor, karty, AI, itemy, cząsteczki i audio), a pozostałe światy 3D próbują najpierw surowego WebGL2 z małymi low-poly siatkami; jeśli urządzenie nie ma WebGL2, automatycznie przechodzą na sprawdzony renderer Canvas2D. Canvas i WebGL mają stałą scenę, adaptacyjny limit DPR, zatrzymują się po ukryciu karty i ładują silniki dopiero po wybraniu gry. Dzięki temu oprawa wygląda bogaciej, ale nie tworzy niepotrzebnego obciążenia urządzenia.
+Nowe światy korzystają z proceduralnych tekstur, świateł, cieni i geometrii perspektywicznej. `Neonowy Pęd` ma silnik Three.js w `src/arcade/neon/` (miasto, tor, karty, AI, itemy, cząsteczki i audio) — ładowany leniwie dopiero po wybraniu gry, podobnie jak pozostałe silniki. Pozostałe światy 3D próbują najpierw surowego WebGL2 z małymi low-poly siatkami; jeśli urządzenie nie ma WebGL2, automatycznie przechodzą na sprawdzony renderer Canvas2D. Canvas i WebGL mają stałą scenę, adaptacyjny limit DPR, zatrzymują się po ukryciu karty i ładują silniki dopiero po wybraniu gry. Dzięki temu oprawa wygląda bogaciej, ale nie tworzy niepotrzebnego obciążenia urządzenia.
 
 ## Jak zagrać
 
@@ -69,8 +69,11 @@ Po scaleniu zmian do `main` możesz zmienić nazwę repozytorium na **JoyPad** w
 npm ci
 npm run dev                 # lokalnie http://localhost:5173/  |  pad: /#pad
 npm run build               # TypeScript + produkcyjny build
+npm run lint                # ESLint (flat config) + reguły react-hooks
 npm run selftest:arcade     # role admina, protokół, 6 silników + macierze WebGL2
 npm run selftest:relay      # warstwa MQTT / awaryjnego przekaźnika
 ```
+
+Każdy push/PR przechodzi workflow `ci.yml` (lint, typecheck, selftesty, build), a `deploy.yml` powtarza selftesty przed publikacją na GitHub Pages. Fonty (Black Ops One, Chakra Petch, JetBrains Mono) są self-hostowane przez Fontsource — bez żądań do Google Fonts. Okładki gier to WebP, a `public/manifest.webmanifest` z ikonami pozwala „dodać JoyPad do ekranu głównego" na telefonie.
 
 Stack: Vite, React, TypeScript, Canvas 2D, Three.js, raw WebGL2, PeerJS, QRCode. `src/arcade/catalog.ts` to biblioteka; `src/arcade/neon/` zawiera silnik Neonowy Pęd i adapter JoyPad, a `src/arcade/games/` sześć niezależnych silników z jedną warstwą obsługi klawiatury/pada (`src/arcade/runtime.ts`). `src/arcade/webgl/runtime3d.ts` dostarcza mały renderer WebGL2, macierze kamery, low-poly geometrię i profile DPR, a `Arcade3D.ts`, `League3D.ts` oraz `Voxel3D.ts` są używane przed fallbackiem Canvas2D. Wersje Canvas (`Voxel.ts`, `League.ts`) nadal służą jako bezpieczny fallback. `src/App.tsx` i `src/game/` zawierają Stalowy Front. `src/net/` zachowuje istniejący transport, poszerzony o stan sesji i komendy admina. Używany jest hash `#pad`, więc GitHub Pages nie potrzebuje routingu serwerowego.

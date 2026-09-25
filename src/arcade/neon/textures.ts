@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import { CanvasTexture, LinearMipmapLinearFilter, RepeatWrapping, SRGBColorSpace, Texture } from 'three';
 
 function canvas(w: number, h: number) {
   const c = document.createElement('canvas');
@@ -14,22 +14,22 @@ function rnd(seed: { v: number }) {
 }
 
 function tex(c: HTMLCanvasElement, srgb = true, repeat = true) {
-  const t = new THREE.CanvasTexture(c);
-  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+  const t = new CanvasTexture(c);
+  if (srgb) t.colorSpace = SRGBColorSpace;
   if (repeat) {
-    t.wrapS = THREE.RepeatWrapping;
-    t.wrapT = THREE.RepeatWrapping;
+    t.wrapS = RepeatWrapping;
+    t.wrapT = RepeatWrapping;
   }
   t.anisotropy = 8;
   t.generateMipmaps = true;
-  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.minFilter = LinearMipmapLinearFilter;
   return t;
 }
 
 export interface FacadeTex {
-  map: THREE.Texture;
-  emissive: THREE.Texture;
-  rough: THREE.Texture;
+  map: Texture;
+  emissive: Texture;
+  rough: Texture;
 }
 
 /** Fasada wieżowca — jeden kafelek = 16m x 32m */

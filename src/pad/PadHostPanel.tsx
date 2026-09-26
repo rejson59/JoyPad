@@ -32,7 +32,7 @@ export function PadHostPanel({ players, compact, onClose, context = 'tanks' }: P
     if (!s.code || !codeUsable) { setQr(''); return; }
     // qrcode ładuje się leniwie — potrzebne tylko do rysowania QR w panelu.
     void import('qrcode')
-      .then(({ default: QRCode }) => QRCode.toDataURL(url, { margin: 1, width: 320, color: { dark: '#0a0a0b', light: '#fbbf24' }, errorCorrectionLevel: 'M' }))
+      .then(({ default: QRCode }) => QRCode.toDataURL(url, { margin: 1, width: 320, color: { dark: '#0a0a0b', light: '#ffffff' }, errorCorrectionLevel: 'M' }))
       .then(setQr)
       .catch(() => setQr(''));
   }, [s.code, codeUsable, url]);
@@ -45,7 +45,7 @@ export function PadHostPanel({ players, compact, onClose, context = 'tanks' }: P
     return (
       <div className={`metal-panel rivet rounded-2xl ${compact ? 'p-4' : 'p-5'}`}>
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm font-bold tracking-widest text-zinc-300"><Smartphone className="h-4 w-4 text-amber-400" /> TELEFON JAKO PAD</div>
+          <div className="flex items-center gap-2 text-sm font-bold tracking-widest text-zinc-300"><Smartphone className="h-4 w-4 text-orange-300" /> TELEFON JAKO PAD</div>
           {onClose && <button onClick={onClose} className="rounded-lg p-1 text-zinc-500 hover:bg-white/10"><X className="h-4 w-4" /></button>}
         </div>
         <p className="mt-2 text-xs leading-relaxed text-zinc-400">
@@ -55,7 +55,7 @@ export function PadHostPanel({ players, compact, onClose, context = 'tanks' }: P
         </p>
         <button
           onClick={() => padHost.start()}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-amber-400 to-orange-600 px-4 py-2.5 text-sm font-black tracking-widest text-black hover:brightness-110"
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-orange-200 to-orange-400 px-4 py-2.5 text-sm font-black tracking-widest text-black hover:brightness-110"
         >
           <Power className="h-4 w-4" /> OTWÓRZ POKÓJ DLA TELEFONÓW
         </button>
@@ -66,7 +66,7 @@ export function PadHostPanel({ players, compact, onClose, context = 'tanks' }: P
   return (
     <div className={`metal-panel rivet rounded-2xl ${compact ? 'p-4' : 'p-5'}`}>
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm font-bold tracking-widest text-zinc-300"><Smartphone className="h-4 w-4 text-amber-400" /> TELEFON JAKO PAD</div>
+        <div className="flex items-center gap-2 text-sm font-bold tracking-widest text-zinc-300"><Smartphone className="h-4 w-4 text-orange-300" /> TELEFON JAKO PAD</div>
         <div className="flex items-center gap-1">
           <button onClick={() => padHost.restart()} title="Nowy kod" className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10"><RefreshCw className="h-4 w-4" /></button>
           <button onClick={() => padHost.stop()} title="Zamknij pokój" className="rounded-lg p-1.5 text-red-300 hover:bg-red-500/20"><Power className="h-4 w-4" /></button>
@@ -91,7 +91,7 @@ export function PadHostPanel({ players, compact, onClose, context = 'tanks' }: P
         </div>
       )}
       {s.note && (
-        <div className="mt-2 rounded-lg border border-sky-500/40 bg-sky-500/10 px-2.5 py-1.5 text-[11px] text-sky-200">{s.note}</div>
+        <div className="mt-2 rounded-lg border border-orange-500/40 bg-orange-500/10 px-2.5 py-1.5 text-[11px] text-orange-200">{s.note}</div>
       )}
 
       <div className={`mt-3 grid gap-4 ${compact ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-[auto_1fr]'}`}>
@@ -101,7 +101,7 @@ export function PadHostPanel({ players, compact, onClose, context = 'tanks' }: P
             ? <QrFrameError size={168} />
             : <QrFrame src={codeUsable ? qr : ''} size={168} loadingLabel="Czekam na serwer sygnalizacji…" />}
           <div className="text-[10px] font-bold tracking-widest text-zinc-500">KOD POKOJU</div>
-          <div className="font-mono2 rounded-lg border border-amber-400/40 bg-black/60 px-4 py-1.5 text-3xl font-extrabold tracking-[0.35em] text-amber-300">{s.code}</div>
+          <div className="font-mono2 rounded-lg border border-orange-300/40 bg-black/60 px-4 py-1.5 text-3xl font-extrabold tracking-[0.35em] text-orange-200">{s.code}</div>
         </div>
 
         <div className="min-w-0">
@@ -141,7 +141,7 @@ export function PadHostPanel({ players, compact, onClose, context = 'tanks' }: P
                     <span className="font-bold" style={{ color: pad ? p.color : '#71717a' }}>{p.name}</span>
                     {pad ? (
                       <span className="flex items-center gap-1 text-zinc-300" title={pad.via === 'relay' ? 'Łączy przez awaryjny przekaźnik (Internet)' : 'Łączy bezpośrednio (WebRTC)'}>
-                        {pad.via === 'relay' ? <Antenna className="h-3 w-3 text-sky-400" /> : <Wifi className="h-3 w-3 text-green-400" />} {pad.nick}
+                        {pad.via === 'relay' ? <Antenna className="h-3 w-3 text-orange-400" /> : <Wifi className="h-3 w-3 text-green-400" />} {pad.nick}
                         {context === 'tanks' && <span className="rounded bg-white/10 px-1 text-[9px] font-bold text-zinc-400" title={pad.steer === 'direct' ? 'Joystick: czołg jedzie tam, gdzie pchasz gałkę' : 'Joystick: góra/dół = przód/tył czołgu, lewo/prawo = obrót'}>
                           {pad.steer === 'direct' ? 'kierunek' : 'czołg'}
                         </span>}

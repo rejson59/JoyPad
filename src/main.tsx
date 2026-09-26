@@ -1,6 +1,9 @@
 import { StrictMode, lazy, Suspense, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
+import "./console/palette.css";
+import "./console/console.css";
+import "./console/cinema.css";
 import "./fonts";
 import JoypadApp from "./arcade/JoypadApp";
 import { isPadRoute } from "./net/protocol";

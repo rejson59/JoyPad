@@ -1,3 +1,4 @@
+import { systemSound } from '../console/sound';
 // Procedural WebAudio engine — realistic synthesized tank sounds, no assets needed.
 
 export class GameAudio {
@@ -153,17 +154,7 @@ export class GameAudio {
     });
   }
 
-  uiClick() {
-    if (!this.ctx || !this.master) return;
-    const ctx = this.ctx; const t = ctx.currentTime;
-    const o = ctx.createOscillator();
-    o.type = 'square'; o.frequency.value = 880;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.08, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
-    o.connect(g); g.connect(this.master);
-    o.start(t); o.stop(t + 0.07);
-  }
+  uiClick() { systemSound('confirm'); }
 
   countdownBeep(final = false) {
     if (!this.ctx || !this.master) return;

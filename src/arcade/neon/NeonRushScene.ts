@@ -904,30 +904,32 @@ export class NeonRushScene {
               { gravity: 22, drag: 1.5 },
             );
           }
-          if (Math.random() < 0.6)
-            sm.emit(w.x, w.y + 0.2, w.z, (Math.random() - 0.5) * 1.5, 0.8 + Math.random(), (Math.random() - 0.5) * 1.5, 0.55, 0.55, 0.6, 1.1, 1.2, {
-              drag: 1.5,
-              grow: 3,
+          // Time-based, short-lived wisps instead of an opaque plume at camera height.
+          if (Math.random() < 1 - Math.exp(-10 * dt))
+            sm.emit(w.x, w.y + 0.2, w.z, (Math.random() - 0.5) * 1.5, 0.8 + Math.random(), (Math.random() - 0.5) * 1.5, 0.55, 0.55, 0.6, 0.48, 0.45, {
+              drag: 2.5,
+              grow: 0.65,
+              opacity: 0.24,
             });
         }
       }
       // mokra nawierzchnia — rozbryzg wody
-      if (this.settings.rain && speed > 14 && !k.airborne && Math.random() < 0.8) {
+      if (this.settings.rain && speed > 14 && !k.airborne && Math.random() < 1 - Math.exp(-12 * dt)) {
         for (const wi of [2, 3]) {
           k.wheelWorld(wi, w);
           sm.emit(
             w.x,
-            w.y + 0.25,
+            w.y + 0.12,
             w.z,
             -k.vel.x * 0.25 + (Math.random() - 0.5) * 2,
-            1 + Math.random() * 2,
+            0.25 + Math.random() * 0.5,
             -k.vel.z * 0.25 + (Math.random() - 0.5) * 2,
             0.45,
             0.5,
             0.6,
-            0.6 + speed * 0.015,
-            0.45,
-            { drag: 2.5, gravity: 4, grow: 2.5 },
+            0.18 + Math.min(speed, 70) * 0.003,
+            0.22,
+            { drag: 4, gravity: 6, grow: 0.45, opacity: 0.16 },
           );
         }
       }

@@ -1,30 +1,9 @@
 import type { CSSProperties } from 'react';
-import { Smartphone } from 'lucide-react';
-
-export interface JoinSplashData {
-  nick: string;
-  slot: number;
-  color: string;
-  key: number;
-}
-
-/**
- * Telewizor wita nowy telefon w pokoju: wielka karta z numerem slotu,
- * kolorem gracza i nickiem. Pojawia się i znika sama (animacja join-in,
- * rodzic odmontowuje po ~2.4 s).
- */
+import { Gamepad2 } from 'lucide-react';
+export interface JoinSplashData { disconnected?: boolean; nick: string; slot: number; color: string; key: number }
+/** Non-blocking join acknowledgement; never covers the centre of the game. */
 export function JoinSplash({ data }: { data: JoinSplashData | null }) {
-  if (!data) return null;
-  return (
-    <div className="join-splash" aria-live="polite">
-      <div key={data.key} className="join-splash-card" style={{ '--pc': data.color } as CSSProperties}>
-        <div className="joy-kicker flex items-center justify-center gap-2 text-white/60">
-          <Smartphone size={13} /> NOWY GRACZ W POKOJU
-        </div>
-        <div className="join-splash-num mt-3">{String(data.slot + 1).padStart(2, '0')}</div>
-        <div className="joy-heading mt-2 text-2xl font-extrabold text-white sm:text-3xl">{data.nick}</div>
-        <div className="joy-kicker mt-3 text-white/40">PRZYGOTUJ KCIUKI</div>
-      </div>
-    </div>
-  );
+  return <div className="os-join-announcement" role="status" aria-live="polite" aria-atomic="true">
+    {data && <div key={data.key} style={{ '--player-color': data.color } as CSSProperties}><Gamepad2 size={25} /><span><b>{data.nick}</b><small>{data.disconnected ? `Pad ${data.slot + 1} rozłączony · Czekamy na powrót` : `Pad ${data.slot + 1} połączony · Miło Cię widzieć`}</small></span></div>}
+  </div>;
 }

@@ -1,3 +1,4 @@
+import { QuickPadTest } from '../console/QuickPadTest';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Gamepad2, Sparkles, Zap } from 'lucide-react';
 import { padClient } from '../net/padClient';
@@ -30,7 +31,7 @@ interface Ball { x: number; y: number; vx: number; vy: number; r: number; color:
 
 const clamp1 = (v: number) => Math.max(-1, Math.min(1, v));
 
-export function JoyLabPad({ nick, color, onDone }: { nick: string; color: string; onDone: () => void }) {
+function SensorLabPad({ nick, color, onDone }: { nick: string; color: string; onDone: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [pressed, setPressed] = useState<number[]>([]);
   const maskRef = useRef(0);
@@ -237,11 +238,11 @@ export function JoyLabPad({ nick, color, onDone }: { nick: string; color: string
               <div className="joy-kicker mt-1 text-[8px] text-slate-500">{nick} · POKÓJ ZABAW</div>
             </div>
           </div>
-          <button onClick={onDone} className="rounded-xl bg-orange-500 px-4 py-2.5 text-xs font-black text-[#16110c] active:scale-95">GOTOWE →</button>
+          <button onClick={onDone} className="rounded-xl bg-orange-500 px-4 py-2.5 text-xs font-black text-[#16110c] active:scale-95">WRÓĆ / POMIŃ →</button>
         </header>
 
         <p className="joy-enter mt-4 text-xs leading-relaxed text-slate-400">
-          Twój telefon właśnie ożywa. Wykonaj <b className="text-orange-300">3 zadania</b> — ekran główny reaguje na żywo!
+          Poznaj reakcje kontrolera. Dotyk działa zawsze; czujniki i wibracje zależą od urządzenia. Możesz pominąć test w każdej chwili.
         </p>
 
         {(needsPermission || !sensorsReady) && (
@@ -289,4 +290,9 @@ export function JoyLabPad({ nick, color, onDone }: { nick: string; color: string
       </div>
     </div>
   );
+}
+
+export function JoyLabPad(props: { nick: string; color: string; onDone: () => void }) {
+  const [explore, setExplore] = useState(false);
+  return explore ? <SensorLabPad {...props} /> : <QuickPadTest color={props.color} onDone={props.onDone} onExplore={() => setExplore(true)} />;
 }

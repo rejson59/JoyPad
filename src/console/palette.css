@@ -1,0 +1,28 @@
+/* Obsidian / Ember. System colors are independent of game artwork and player identity. */
+:root {
+  color-scheme: dark;
+  --os-bg: #09090b;
+  --os-surface: #111114;
+  --os-panel: #19191d;
+  --os-raised: #242429;
+  --os-edge: #37373f;
+  --os-text: #f5f5f7;
+  --os-secondary: #c5c5cd;
+  --os-muted: #a0a0ad;
+  --os-accent: #ff9a52;
+  --os-accent-bright: #ffb77f;
+  --os-accent-deep: #8a421c;
+  --os-on-accent: #201007;
+  --os-line: #dddded1c;
+  --os-success: #9ccfae;
+  --os-warning: #edbd78;
+  --os-danger: #ed8175;
+}
+
+html, body, #root { background: var(--os-bg); }
+button:focus-visible, a:focus-visible, input:focus-visible,
+select:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--os-accent);
+  outline-offset: 4px;
+}
+::selection { background: var(--os-accent); color: var(--os-on-accent); }

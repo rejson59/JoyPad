@@ -41,10 +41,10 @@ class MenuMusic {
   private bar = 0;
   private listeners = new Set<Listener>();
   private context: 'menu' | 'game' = 'game';
-  enabled = true;
+  enabled = false;
 
   constructor() {
-    try { this.enabled = localStorage.getItem(LS_MENU_MUSIC) !== 'off'; } catch { this.enabled = true; }
+    try { this.enabled = localStorage.getItem(LS_MENU_MUSIC) === 'on'; } catch { this.enabled = false; }
     const gesture = () => { if (this.enabled && this.context === 'menu') this.start(); };
     window.addEventListener('pointerdown', gesture, { once: true });
     window.addEventListener('keydown', gesture, { once: true });

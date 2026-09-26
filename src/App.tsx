@@ -1,11 +1,19 @@
+import { ReadyStatus } from './console/ReadyStatus';
+import { readChoice, remember } from './console/history';
+import { GameSetup } from './console/GameSetup';
+import { ConnectionsScreen } from './components/ConnectionsScreen';
+import { useMenuMusic } from './lib/useMenuMusic';
+import { GameResults } from './console/GameResults';
+import { gameInfo } from './arcade/catalog';
+import { PauseSheet } from './console/PauseSheet';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Trophy, Play, Users, Bot, Volume2, VolumeX, Pause, RotateCcw, Home,
-  Crosshair, Shield, Zap, Wind, Skull, Timer, Gamepad2, ChevronRight,
-  Flame, Target, Heart, Sparkles, Keyboard, Info, Crown, Swords,
+  Trophy, Play, Users, Bot, Volume2, VolumeX, Pause, Home,
+  Crosshair, Shield, Zap, Wind, Skull, Timer, Gamepad2,
+  Flame, Target, Heart, Keyboard, Info,
   Settings2, Lightbulb, Package, Moon, CloudRain,
 } from 'lucide-react';
-import { CountUp, ScreenCurtain, SegmentedControl, useCurtain } from './components/motion';
+import { ScreenCurtain, SegmentedControl, useCurtain } from './components/motion';
 import { MapThumb } from './components/MapThumb';
 import { TankGame, type HudState, type HudTank } from './game/engine';
 import { PLAYER_DEFS, type GameMode, type MapId, type PlayerConfig } from './game/types';
@@ -87,13 +95,18 @@ function PlayerCard({ t, mode, killLimit, phone }: { t: HudTank; mode: GameMode;
 }
 
 export default function TankApp({ onExit, remote }: { onExit: () => void; remote: RemoteEvent | null }) {
+  const [menuMusicOn, toggleMenuMusic] = useMenuMusic();
   const [screen, setScreen] = useState<Screen>('menu');
-  const [menuChoice, setMenuChoice] = useState(0);
-  const [players, setPlayers] = useState<PlayerConfig[]>(() => PLAYER_DEFS.map((p, i) => padHost.padForSlot(i) ? { ...p, enabled: true, isBot: false } : p));
-  const [mapId, setMapId] = useState<MapId>('desert');
-  const [mode, setMode] = useState<GameMode>('deathmatch');
-  const [killLimit, setKillLimit] = useState(5);
-  const [lives, setLives] = useState(3);
+  const [menuChoice, setMenuChoice] = useState(() => readChoice('tanks.choice', [0, 1, 2], 0));
+  const [players, setPlayers] = useState<PlayerConfig[]>(() => PLAYER_DEFS.map((p, i) => {
+    const role = readChoice(`tanks.player.${i}`, ['off', 'human', 'bot'] as const, !p.enabled ? 'off' : p.isBot ? 'bot' : 'human');
+    const pad = padHost.padForSlot(i);
+    return { ...p, name: pad?.nick || p.name, enabled: !!pad || role !== 'off', isBot: !pad && role === 'bot' };
+  }));
+  const [mapId, setMapId] = useState<MapId>(() => readChoice('tanks.map', Object.keys(MAPS) as MapId[], 'desert'));
+  const [mode, setMode] = useState<GameMode>(() => readChoice('tanks.mode', ['deathmatch', 'survival'] as const, 'deathmatch'));
+  const [killLimit, setKillLimit] = useState(() => readChoice('tanks.kills', [3, 5, 8, 10, 15], 5));
+  const [lives, setLives] = useState(() => readChoice('tanks.lives', [1, 2, 3, 5, 7], 3));
   const [hud, setHud] = useState<HudState | null>(null);
   const [muted, setMuted] = useState(false);
   const [results, setResults] = useState<{ winner: number | null; tanks: HudTank[] } | null>(null);
@@ -156,15 +169,22 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
 
   useEffect(() => {
     padHost.setMenuOptions(screen === 'setup' ? {
+      revision: JSON.stringify([killLimit, lives, players.map(p => [p.enabled, p.isBot])]),
       primaryLabel: 'MAPA', primaryValue: MAPS[mapId].name,
       secondaryLabel: 'TRYB', secondaryValue: mode === 'deathmatch' ? 'Deathmatch' : 'Przetrwanie',
     } : screen === 'menu' ? {
       primaryLabel: 'WYBÓR', primaryValue: ['Pojedynek 1v1', 'Bitwa 4 graczy', 'Trening z botami'][menuChoice],
       secondaryLabel: 'STEROWANIE', secondaryValue: '← / → wybierz · OK otwórz',
     } : undefined);
-  }, [screen, mapId, mode, menuChoice]);
+  }, [screen, mapId, mode, menuChoice, killLimit, lives, players]);
+
+  useEffect(() => {
+    remember('tanks.choice', menuChoice); remember('tanks.map', mapId); remember('tanks.mode', mode); remember('tanks.kills', killLimit); remember('tanks.lives', lives);
+    players.forEach((p, i) => remember(`tanks.player.${i}`, !p.enabled ? 'off' : p.isBot ? 'bot' : 'human'));
+  }, [menuChoice, mapId, mode, killLimit, lives, players]);
 
   const startGame = useCallback((quick?: { count: number; bots: number }) => {
+    remember('game', 'tanks');
     // Bitwa startuje pod kurtyną — menu chowa się, arena wstaje.
     curtain.begin('#f59e0b', () => {
       let cfg = players;
@@ -191,6 +211,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
 
   const handleRemote = useCallback((command: RemoteCommand) => {
     const stage = screenRef.current;
+    if (showPad && stage === 'menu') { window.dispatchEvent(new CustomEvent('joypad-dialog-command', { detail: command })); return; }
     if (command === 'home' || (command === 'back' && stage === 'menu')) { onExit(); return; }
     if (command === 'pause' || (command === 'back' && stage === 'game')) { gameRef.current?.togglePause(); return; }
     if (stage === 'menu') {
@@ -213,7 +234,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
       if (command === 'select' || command === 'restart') startGame();
       if (command === 'back') goScreen('setup');
     }
-  }, [goScreen, menuChoice, onExit, startGame]);
+  }, [goScreen, menuChoice, onExit, startGame, showPad]);
 
   const lastRemote = useRef(0);
   useEffect(() => {
@@ -225,6 +246,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (screenRef.current === 'game' || e.target instanceof HTMLInputElement) return;
+      if (e.code === 'Enter' && e.target instanceof Element && e.target.closest('button,summary,a')) return;
       const keys: Record<string, RemoteCommand> = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', Enter: 'select', Escape: 'back' };
       if (keys[e.code]) { e.preventDefault(); handleRemote(keys[e.code]); }
     };
@@ -284,153 +306,41 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
   const canStart = enabledCount >= 2;
 
   /* ============ MENU ============ */
-  if (screen === 'menu') {
-    return (
-      <>
-      <div className="relative flex min-h-screen flex-col overflow-hidden bg-[#0a0a0b] text-white">
-        {/* animated bg */}
-        <div className="pointer-events-none absolute inset-0">
-          <img src={`${import.meta.env.BASE_URL}images/menu-tanks.webp`} alt="" width={1280} height={720} className="absolute inset-0 h-full w-full object-cover opacity-25" />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#0a0a0b]/70 via-[#0a0a0b]/55 to-[#0a0a0b]" />
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_20%,rgba(251,146,60,0.12),transparent_50%),radial-gradient(ellipse_at_70%_80%,rgba(56,189,248,0.10),transparent_50%)]" />
-          <div className="hazard-stripes absolute left-0 right-0 top-0 h-2 opacity-80" />
-          <div className="hazard-stripes absolute bottom-0 left-0 right-0 h-2 opacity-80" />
-          {/* animated grid */}
-          <div className="absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)', backgroundSize: '48px 48px' }} />
-          {/* floating embers */}
-          {Array.from({ length: 24 }).map((_, i) => (
-            <div
-              key={i}
-              className="absolute rounded-full bg-orange-500/60"
-              style={{
-                width: 3 + (i % 3), height: 3 + (i % 3),
-                left: `${(i * 41) % 100}%`, bottom: '-10px',
-                animation: `floatUp ${5 + (i % 5)}s linear ${i * 0.4}s infinite`,
-                filter: 'blur(0.5px)',
-              }}
-            />
-          ))}
-          <style>{`@keyframes floatUp { to { transform: translateY(-110vh); opacity: 0; } }`}</style>
-        </div>
-
-        <button onClick={onExit} className="absolute left-4 top-5 z-30 flex items-center gap-2 rounded-lg border border-white/20 bg-black/60 px-3 py-2 text-xs font-bold text-zinc-200 transition hover:border-amber-400/50 hover:text-amber-300 sm:left-8"><Home size={15} /> WRÓĆ DO JOYPAD</button>
-        <div className="rise-in relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-center px-4 py-16 sm:py-10">
-          <div className="mb-4 flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-4 py-1.5 text-xs font-bold tracking-[0.25em] text-amber-400">
-            <Swords className="h-3.5 w-3.5" /> LOKALNY MULTIPLAYER • KLAWIATURA LUB TELEFONY • 2–4 GRACZY
-          </div>
-          <h1 className="font-display text-center text-6xl leading-none tracking-wide sm:text-8xl">
-            <span className="bg-gradient-to-b from-amber-200 via-amber-400 to-orange-700 bg-clip-text text-transparent drop-shadow-[0_4px_20px_rgba(251,146,60,0.35)]">STALOWY</span>
-            <br />
-            <span className="bg-gradient-to-b from-zinc-100 via-zinc-400 to-zinc-600 bg-clip-text text-transparent">FRONT</span>
-          </h1>
-          <p className="mt-4 max-w-2xl text-center text-sm leading-relaxed text-zinc-400 sm:text-base">
-            Ultra-realistyczna bitwa pancerna na jednym ekranie. Niszczalne otoczenie, rykoszetujące pociski,
-            dynamiczne oświetlenie, dym, ogień i fizyka gąsienic. Graj na klawiaturze albo podłącz telefony jako
-            bezprzewodowe joysticki i walczcie!
-          </p>
-
-          {/* quick play */}
-          <div className="rise-in mt-8 grid w-full max-w-3xl grid-cols-1 gap-3 sm:grid-cols-3" style={{ animationDelay: '130ms' }}>
-            <button
-              onClick={() => { setMenuChoice(0); gameAudio.init(); gameAudio.uiClick(); startGame({ count: 2, bots: 0 }); }}
-              className={`group metal-panel rivet rounded-2xl p-5 text-left transition-all hover:scale-[1.02] hover:border-amber-500/50 ${menuChoice === 0 ? 'ring-2 ring-amber-400/70' : ''}`}
-            >
-              <Users className="h-7 w-7 text-amber-400" />
-              <div className="mt-2 text-lg font-bold">Pojedynek 1v1</div>
-              <div className="text-xs text-zinc-400">2 graczy • klasyk na WSAD vs strzałki</div>
-              <div className="mt-3 flex items-center gap-1 text-xs font-bold text-amber-400">GRAJ TERAZ <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></div>
-            </button>
-            <button
-              onClick={() => { setMenuChoice(1); gameAudio.init(); gameAudio.uiClick(); setPlayers(PLAYER_DEFS.map((p, i) => ({ ...p, enabled: i < 4, isBot: false }))); goScreen('setup'); }}
-              className={`group metal-panel rivet press rounded-2xl border-amber-500/40 p-5 text-left transition-all hover:scale-[1.02] ${menuChoice === 1 ? 'ring-2 ring-amber-400/70' : ''}`}
-              style={{ animation: 'pulse-glow 2.5s ease-in-out infinite' }}
-            >
-              <Flame className="h-7 w-7 text-orange-500" />
-              <div className="mt-2 text-lg font-bold">Bitwa 4 graczy</div>
-              <div className="text-xs text-zinc-400">Pełny chaos — cała klawiatura w ogniu</div>
-              <div className="mt-3 flex items-center gap-1 text-xs font-bold text-amber-400">DALEJ <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></div>
-            </button>
-            <button
-              onClick={() => { setMenuChoice(2); gameAudio.init(); gameAudio.uiClick(); setPlayers(PLAYER_DEFS.map((p, i) => ({ ...p, enabled: i < 3, isBot: i > 0 }))); goScreen('setup'); }}
-              className={`group metal-panel rivet press rounded-2xl p-5 text-left transition-all hover:scale-[1.02] hover:border-sky-500/50 ${menuChoice === 2 ? 'ring-2 ring-sky-400/70' : ''}`}
-            >
-              <Bot className="h-7 w-7 text-sky-400" />
-              <div className="mt-2 text-lg font-bold">Trening z botami</div>
-              <div className="text-xs text-zinc-400">Ty + 2 boty SI • nauka sterowania</div>
-              <div className="mt-3 flex items-center gap-1 text-xs font-bold text-sky-400">TRENING <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></div>
-            </button>
-          </div>
-
-          <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
-            <button
-              onClick={() => { gameAudio.init(); gameAudio.uiClick(); goScreen('setup'); }}
-              className="press flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-8 py-3 text-sm font-bold tracking-widest text-zinc-200 transition-all hover:bg-white/10"
-            >
-              <Settings2 className="h-4 w-4" /> PEŁNA KONFIGURACJA BITWY
-            </button>
-            <button
-              onClick={() => { gameAudio.init(); gameAudio.uiClick(); setShowPad(v => !v); if (padState.status === 'idle') padHost.start(); }}
-              className={`flex items-center gap-2 rounded-xl border px-6 py-3 text-sm font-bold tracking-widest transition-all ${padState.status === 'ready' ? 'border-green-500/50 bg-green-500/10 text-green-300' : 'border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'}`}
-            >
-              <Smartphone className="h-4 w-4" /> TELEFON JAKO PAD {padState.pads.length > 0 && <span className="rounded-full bg-green-500 px-2 py-0.5 text-[10px] text-black">{padState.pads.length}</span>}
-            </button>
-          </div>
-          {(showPad || padState.pads.length > 0) && (
-            <div className="mt-4 w-full max-w-3xl">
-              <PadHostPanel players={players} onClose={() => setShowPad(false)} />
-            </div>
-          )}
-
-          {/* features */}
-          <div className="rise-in mt-10 grid w-full max-w-4xl grid-cols-2 gap-2 text-center sm:grid-cols-4" style={{ animationDelay: '240ms' }}>
-            {[
-              { icon: <Target className="h-5 w-5" />, t: 'Rykoszety', d: 'Pociski odbijają się od ścian' },
-              { icon: <Flame className="h-5 w-5" />, t: 'Efekty AAA', d: 'Ogień, dym, kurz, deszcz' },
-              { icon: <Sparkles className="h-5 w-5" />, t: 'Nocne walki', d: 'Reflektory i neony miasta' },
-              { icon: <Shield className="h-5 w-5" />, t: 'Power-upy', d: 'Tarcze, turbo, ciężkie działa' },
-            ].map((f, i) => (
-              <div key={i} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/15 text-amber-400">{f.icon}</div>
-                <div className="mt-1.5 text-sm font-bold">{f.t}</div>
-                <div className="text-[11px] text-zinc-500">{f.d}</div>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-6 flex items-center gap-2 text-[11px] text-zinc-500">
-            <Keyboard className="h-3.5 w-3.5" /> Wskazówka: na klawiaturach membranowych maksymalnie 3–4 graczy naraz — laptopy radzą sobie najlepiej z 2–3.
-          </div>
-          {typeof window !== 'undefined' && 'ontouchstart' in window && (
-            <div className="mt-3 flex max-w-xl items-center justify-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-center text-xs font-bold text-amber-300">
-              <Smartphone className="h-3.5 w-3.5 shrink-0" /> To urządzenie ma ekran dotykowy. Najlepiej otwórz grę na komputerze/TV, a tutaj użyj trybu{' '}
-              <a href="#pad" className="underline">telefon jako pad</a>.
-            </div>
-          )}
-        </div>
+  if (screen === 'menu') return <>
+    <GameSetup info={gameInfo('tanks')} music={menuMusicOn} onMusic={() => toggleMenuMusic(!menuMusicOn)} onExit={onExit} onStart={() => handleRemote('select')} onPads={() => setShowPad(true)} startLabel={menuChoice === 0 ? 'Rozpocznij pojedynek' : 'Dopasuj rozgrywkę'} navigationHint="← → / ↑ ↓ Wybierz tryb · Enter Zatwierdź"
+      hint="Lewy joystick prowadzi czołg, prawy celuje wieżą. Wykorzystuj osłony i rykoszety." win="Zdobądź ustaloną liczbę fragów lub przetrwaj przeciwników.">
+      <div className="cine-tank-modes" role="group" aria-label="Tryb bitwy">
+        {[
+          { title: 'Pojedynek 1v1', detail: 'Dwóch graczy. Jeden zwycięzca.', tag: 'SZYBKI START', icon: <Users size={23} /> },
+          { title: 'Bitwa 4 graczy', detail: 'Cała ekipa na jednym polu bitwy.', tag: 'WSPÓLNA ARENA', icon: <Flame size={23} /> },
+          { title: 'Trening z botami', detail: 'Poznaj teren. Dopracuj celność.', tag: 'TY + 2 BOTY', icon: <Bot size={23} /> },
+        ].map((choice, index) => <button key={choice.title} aria-pressed={menuChoice === index} onClick={() => { setMenuChoice(index); gameAudio.uiClick(); }}><span>{choice.icon}<small>0{index + 1}</small></span><small>{choice.tag}</small><h3>{choice.title}</h3><p>{choice.detail}</p><i /></button>)}
+        <button className="cine-full-config" onClick={() => goScreen('setup')}><Settings2 size={16} /> Pełna konfiguracja bitwy</button>
       </div>
-      <ScreenCurtain state={curtain.state} />
-      </>
-    );
-  }
+    </GameSetup>
+    {showPad && <ConnectionsScreen onClose={() => setShowPad(false)} />}
+    <ScreenCurtain state={curtain.state} />
+  </>;
 
   /* ============ SETUP ============ */
   if (screen === 'setup') {
     return (
       <>
-      <div className="relative min-h-screen bg-[#0a0a0b] text-white">
+      <div className="cine-tank-setup relative min-h-screen bg-[#0a0a0b] text-white">
         <div className="hazard-stripes h-2 w-full opacity-80" />
         <div className="mx-auto w-full max-w-6xl px-4 py-6">
           <div className="flex items-center justify-between">
             <button onClick={() => goScreen('menu')} className="press flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-bold text-zinc-300 hover:bg-white/10">
               <Home className="h-4 w-4" /> MENU
             </button>
-            <h2 className="font-display text-2xl tracking-wide text-amber-400 sm:text-3xl">KONFIGURACJA BITWY</h2>
-            <button onClick={onExit} className="flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-bold text-zinc-300 hover:text-amber-300"><Home className="h-4 w-4" /> <span className="hidden sm:inline">JOYPAD</span></button>
+            <h2 className="font-display text-2xl tracking-wide text-orange-400 sm:text-3xl">KONFIGURACJA BITWY</h2>
+            <button onClick={onExit} className="flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-bold text-zinc-300 hover:text-orange-300"><Home className="h-4 w-4" /> <span className="hidden sm:inline">JOYPAD</span></button>
           </div>
 
           {/* phones as pads */}
           <div className="mt-6 rise-in" style={{ animationDelay: '60ms' }}>
             <PadHostPanel players={players} />
+            <ReadyStatus />
           </div>
 
           {/* players */}
@@ -455,7 +365,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
                   {p.id !== 0 && p.enabled && (
                     <button
                       onClick={() => setPlayers(pl => pl.map(x => x.id === p.id ? { ...x, isBot: !x.isBot } : x))}
-                      className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs font-bold transition-all ${p.isBot ? 'border-sky-500/50 bg-sky-500/15 text-sky-300' : 'border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10'}`}
+                      className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs font-bold transition-all ${p.isBot ? 'border-orange-500/50 bg-orange-500/15 text-orange-300' : 'border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10'}`}
                     >
                       {p.isBot ? <><Bot className="h-3.5 w-3.5" /> BOT (SI)</> : <><Gamepad2 className="h-3.5 w-3.5" /> CZŁOWIEK</>}
                     </button>
@@ -493,14 +403,14 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
                   <button
                     key={id}
                     onClick={() => { gameAudio.init(); gameAudio.uiClick(); setMapId(id); }}
-                    className={`overflow-hidden rounded-2xl border-2 text-left transition-all hover:scale-[1.01] ${active ? 'border-amber-400 shadow-[0_0_30px_rgba(251,191,36,0.25)]' : 'border-white/10'}`}
+                    className={`overflow-hidden rounded-2xl border-2 text-left transition-all hover:scale-[1.01] ${active ? 'border-orange-400 shadow-[0_0_30px_rgba(251,191,36,0.25)]' : 'border-white/10'}`}
                   >
                     <div className="relative h-24 overflow-hidden">
                       <MapThumb map={id} className="absolute inset-0 h-full w-full" />
                       <div className="absolute inset-x-3 bottom-2 flex gap-1">
                         {m.night && <span className="flex items-center gap-1 rounded bg-black/60 px-2 py-0.5 text-[10px] font-bold text-indigo-300 backdrop-blur-sm"><Moon className="h-3 w-3" /> NOC</span>}
                         {m.weather === 'rain' && <span className="flex items-center gap-1 rounded bg-black/60 px-2 py-0.5 text-[10px] font-bold text-sky-300 backdrop-blur-sm"><CloudRain className="h-3 w-3" /> DESZCZ</span>}
-                        {m.weather === 'dust' && <span className="flex items-center gap-1 rounded bg-black/60 px-2 py-0.5 text-[10px] font-bold text-amber-300 backdrop-blur-sm"><Wind className="h-3 w-3" /> PYŁ</span>}
+                        {m.weather === 'dust' && <span className="flex items-center gap-1 rounded bg-black/60 px-2 py-0.5 text-[10px] font-bold text-orange-300 backdrop-blur-sm"><Wind className="h-3 w-3" /> PYŁ</span>}
                       </div>
                     </div>
                     <div className="bg-zinc-900 p-3">
@@ -520,9 +430,9 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => { gameAudio.uiClick(); setMode('deathmatch'); }}
-                  className={`rounded-xl border-2 p-3 text-left transition-all ${mode === 'deathmatch' ? 'border-amber-400 bg-amber-500/10' : 'border-white/10 bg-white/[0.03]'}`}
+                  className={`rounded-xl border-2 p-3 text-left transition-all ${mode === 'deathmatch' ? 'border-orange-400 bg-orange-500/10' : 'border-white/10 bg-white/[0.03]'}`}
                 >
-                  <Crosshair className="h-5 w-5 text-amber-400" />
+                  <Crosshair className="h-5 w-5 text-orange-400" />
                   <div className="mt-1 font-bold">Deathmatch</div>
                   <div className="text-[11px] text-zinc-400">Kto pierwszy zdobędzie limit fragów. Odrodzenia bez limitu.</div>
                 </button>
@@ -540,7 +450,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
               <div className="mb-3 flex items-center gap-2 text-sm font-bold tracking-widest text-zinc-400"><Timer className="h-4 w-4" /> ZASADY</div>
               {mode === 'deathmatch' ? (
                 <div>
-                  <div className="mb-2 text-sm text-zinc-300">Limit fragów: <b className="text-amber-400">{killLimit}</b></div>
+                  <div className="mb-2 text-sm text-zinc-300">Limit fragów: <b className="text-orange-400">{killLimit}</b></div>
                   <SegmentedControl
                     options={([3, 5, 8, 10, 15] as const).map(v => ({ value: String(v), label: String(v) }))}
                     value={String(killLimit)}
@@ -562,7 +472,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
                 </div>
               )}
               <div className="mt-3 flex items-center gap-2 rounded-lg bg-white/5 p-2.5 text-[11px] text-zinc-400">
-                <Info className="h-4 w-4 shrink-0 text-sky-400" />
+                <Info className="h-4 w-4 shrink-0 text-orange-400" />
                 Limit czasu: 5 minut. Przy remisie wygrywa gracz z największą liczbą fragów. Pociski rykoszetują raz — uważaj na własne odbicia!
               </div>
             </div>
@@ -572,7 +482,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
             <button
               onClick={() => { if (canStart) { gameAudio.init(); gameAudio.uiClick(); startGame(); } }}
               disabled={!canStart}
-              className={`flex items-center gap-3 rounded-2xl px-12 py-4 text-xl font-black tracking-widest transition-all ${canStart ? 'bg-gradient-to-b from-amber-400 to-orange-600 text-black shadow-[0_0_40px_rgba(251,146,60,0.4)] hover:scale-105' : 'cursor-not-allowed bg-zinc-800 text-zinc-500'}`}
+              className={`flex items-center gap-3 rounded-2xl px-12 py-4 text-xl font-black tracking-widest transition-all ${canStart ? 'bg-gradient-to-b from-orange-400 to-orange-600 text-black shadow-[0_0_40px_rgba(251,146,60,0.4)] hover:scale-105' : 'cursor-not-allowed bg-zinc-800 text-zinc-500'}`}
             >
               <Play className="h-6 w-6 fill-current" /> DO BOJU!
             </button>
@@ -590,66 +500,12 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
   if (screen === 'over' && results) {
     const winner = results.tanks.find(t => t.id === results.winner);
     const sorted = [...results.tanks].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
-    return (
-      <>
-      <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#0a0a0b] px-4 py-10 text-white">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_30%,rgba(251,191,36,0.12),transparent_60%)]" />
-        <div className="hazard-stripes absolute left-0 right-0 top-0 h-2" />
-        <div className="hazard-stripes absolute bottom-0 left-0 right-0 h-2" />
-        {winner ? (
-          <>
-            <Crown className="crown-drop h-14 w-14 text-amber-400 drop-shadow-[0_0_20px_rgba(251,191,36,0.6)]" />
-            <div className="rise-in mt-2 text-sm font-bold tracking-[0.3em] text-zinc-400" style={{ animationDelay: '120ms' }}>ZWYCIĘZCA</div>
-            <h2 className="font-display rise-in mt-1 text-5xl sm:text-7xl" style={{ color: winner.color, textShadow: `0 0 40px ${winner.color}`, animationDelay: '200ms' }}>{winner.name}</h2>
-            <div className="rise-in mt-2 flex items-center gap-2 text-zinc-400" style={{ animationDelay: '300ms' }}>
-              <Trophy className="h-4 w-4 text-amber-400" />
-              <CountUp value={winner.kills} /> fragów • <CountUp value={winner.deaths} /> zgonów {mode === 'survival' && `• ${winner.lives} żyć`}
-            </div>
-          </>
-        ) : (
-          <>
-            <Swords className="h-14 w-14 text-zinc-400" />
-            <h2 className="font-display mt-2 text-5xl text-zinc-200">REMIS!</h2>
-            <div className="mt-2 text-zinc-400">Żaden czołg nie zdominował pola bitwy.</div>
-          </>
-        )}
-
-        <div className="mt-8 w-full max-w-2xl overflow-hidden rounded-2xl border border-white/10">
-          <div className="grid grid-cols-[1fr_70px_70px_70px] gap-2 bg-zinc-900 px-4 py-2.5 text-[11px] font-bold tracking-widest text-zinc-500">
-            <span>GRACZ</span><span className="text-center">FRAGI</span><span className="text-center">ZGONY</span><span className="text-center">K/D</span>
-          </div>
-          {sorted.map((t, i) => (
-            <div key={t.id} className={`rise-in grid grid-cols-[1fr_70px_70px_70px] items-center gap-2 px-4 py-3 ${i % 2 ? 'bg-white/[0.02]' : 'bg-white/[0.05]'} ${t.id === results.winner ? 'border-l-4' : 'border-l-4 border-transparent'}`} style={{ animationDelay: `${350 + i * 80}ms`, ...(t.id === results.winner ? { borderColor: t.color, background: `color-mix(in srgb, ${t.color} 8%, rgba(255,255,255,${i % 2 ? 0.02 : 0.05}))` } : {}) }}>
-              <div className="flex items-center gap-2">
-                <span className="font-mono2 text-xs text-zinc-500">#{i + 1}</span>
-                <span className="h-3 w-3 rounded-full" style={{ background: t.color, boxShadow: `0 0 8px ${t.color}` }} />
-                <span className="font-bold" style={{ color: t.color }}>{t.name}</span>
-              </div>
-              <span className="text-center font-mono2 font-bold text-green-400"><CountUp value={t.kills} /></span>
-              <span className="text-center font-mono2 text-red-400"><CountUp value={t.deaths} /></span>
-              <span className="text-center font-mono2 text-zinc-300">{(t.kills / Math.max(1, t.deaths)).toFixed(2)}</span>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <button onClick={() => startGame()} className="flex items-center gap-2 rounded-xl bg-gradient-to-b from-amber-400 to-orange-600 px-8 py-3 font-black tracking-widest text-black transition-all hover:scale-105">
-            <RotateCcw className="h-5 w-5" /> REWANŻ
-          </button>
-          <button onClick={() => goScreen('setup')} className="press flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-8 py-3 font-bold text-zinc-200 hover:bg-white/10">
-            <Settings2 className="h-5 w-5" /> ZMIEŃ ZASADY
-          </button>
-          <button onClick={() => goScreen('menu')} className="press flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-8 py-3 font-bold text-zinc-200 hover:bg-white/10">
-            <Home className="h-5 w-5" /> MENU BITWY
-          </button>
-          <button onClick={onExit} className="flex items-center gap-2 rounded-xl border border-orange-400/40 bg-orange-500/10 px-8 py-3 font-bold text-orange-200 hover:bg-orange-500/20">
-            <Gamepad2 className="h-5 w-5" /> JOYPAD
-          </button>
-        </div>
-      </div>
+    return <>
+      <GameResults info={gameInfo('tanks')} title={winner ? winner.name : 'Remis.'} subtitle={winner ? `${winner.kills} fragów. Pole bitwy należy do Ciebie.` : 'Żaden czołg nie zdominował pola bitwy.'} winnerSlot={results.winner ?? null} scoreLabel="FRAGI"
+        players={sorted.map(t => ({ slot: t.id, name: t.name, color: t.color, score: t.kills, detail: `${t.deaths} zgonów · K/D ${(t.kills / Math.max(1, t.deaths)).toFixed(2)}${mode === 'survival' ? ` · ${t.lives} żyć` : ''}` }))}
+        onRestart={() => startGame()} onSettings={() => goScreen('setup')} onMenu={() => goScreen('menu')} onExit={onExit} />
       <ScreenCurtain state={curtain.state} />
-      </>
-    );
+    </>;
   }
 
   /* ============ GAME ============ */
@@ -732,16 +588,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
           </div>
 
           {/* pause overlay */}
-          {hud?.paused && (
-            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm">
-              <Pause className="h-12 w-12 text-amber-400" />
-              <div className="font-display mt-2 text-4xl text-white">PAUZA</div>
-              <div className="mt-1 text-sm text-zinc-400">Naciśnij P lub ESC, aby kontynuować</div>
-              <button onClick={() => gameRef.current?.togglePause()} className="mt-4 flex items-center gap-2 rounded-xl bg-amber-500 px-6 py-2.5 font-bold text-black hover:bg-amber-400">
-                <Play className="h-4 w-4" /> KONTYNUUJ
-              </button>
-            </div>
-          )}
+          {hud?.paused && <PauseSheet game="Stalowy Front" onResume={() => gameRef.current?.togglePause()} onExit={onExit} />}
 
           {/* pad overlay */}
           {showPad && (

@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import { useConsolePreferences } from '../console/preferences';
 
 /** Słucha preferencji systemu „ogranicz animacje” (WCAG). */
 export function useReducedMotion(): boolean {
+  const prefs = useConsolePreferences();
   const [reduced, setReduced] = useState(() => {
     try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
   });
@@ -12,5 +14,5 @@ export function useReducedMotion(): boolean {
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
   }, []);
-  return reduced;
+  return reduced || prefs.motion === 'reduced';
 }

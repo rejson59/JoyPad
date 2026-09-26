@@ -1,3 +1,4 @@
+import { QuickPadTestTV } from '../console/QuickPadTest';
 import { useEffect, useRef, useState } from 'react';
 import { Check, Gamepad2, X } from 'lucide-react';
 import { padHost } from '../net/padHost';
@@ -22,7 +23,7 @@ const ZONE_ANCHORS: [number, number][] = [[0.18, 0.3], [0.5, 0.18], [0.82, 0.3],
 interface Body { x: number; y: number; vx: number; vy: number; r: number; rot: number; vr: number; color: string; square: boolean }
 interface Pulse { x: number; y: number; t: number; color: string; label: string }
 
-export function JoyLab({ onClose }: { onClose: () => void }) {
+function SensorLab({ onClose }: { onClose: () => void }) {
   const state = usePadHost();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const inputRef = useRef({ gx: 0, gy: 0, shake: 0, mask: 0, spin: 0 });
@@ -246,4 +247,9 @@ export function JoyLab({ onClose }: { onClose: () => void }) {
       </div>
     </div>
   );
+}
+
+export function JoyLab({ onClose }: { onClose: () => void }) {
+  const [explore, setExplore] = useState(false);
+  return explore ? <SensorLab onClose={onClose} /> : <QuickPadTestTV onClose={onClose} onExplore={() => setExplore(true)} />;
 }

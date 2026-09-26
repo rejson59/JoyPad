@@ -1,6 +1,7 @@
 import { AdditiveBlending, BufferAttribute, BufferGeometry, DynamicDrawUsage, NormalBlending, Points, ShaderMaterial, Vector3 } from 'three';
 
 export interface EmitOpts {
+  opacity?: number;
   gravity?: number;
   drag?: number;
   grow?: number;
@@ -17,6 +18,7 @@ export class Particles {
   private vel: Float32Array;
   private life: Float32Array;
   private maxLife: Float32Array;
+  private opacity: Float32Array;
   private baseSize: Float32Array;
   private grav: Float32Array;
   private drag: Float32Array;
@@ -35,6 +37,7 @@ export class Particles {
     this.vel = new Float32Array(max * 3);
     this.life = new Float32Array(max);
     this.maxLife = new Float32Array(max);
+    this.opacity = new Float32Array(max);
     this.baseSize = new Float32Array(max);
     this.grav = new Float32Array(max);
     this.drag = new Float32Array(max);
@@ -109,6 +112,7 @@ export class Particles {
     this.baseCol[i * 3 + 2] = b;
     this.life[i] = life;
     this.maxLife[i] = life;
+    this.opacity[i] = Math.max(0, Math.min(1, o.opacity ?? 1));
     this.baseSize[i] = size;
     this.grav[i] = o.gravity ?? 0;
     this.drag[i] = o.drag ?? 1;
@@ -157,7 +161,7 @@ export class Particles {
       this.pos[i * 3] += this.vel[i * 3] * dt;
       this.pos[i * 3 + 1] += this.vel[i * 3 + 1] * dt;
       this.pos[i * 3 + 2] += this.vel[i * 3 + 2] * dt;
-      this.alpha[i] = t < 0.7 ? t / 0.7 : 1;
+      this.alpha[i] = (t < 0.7 ? t / 0.7 : 1) * this.opacity[i];
       this.size[i] = this.baseSize[i] * (1 + this.grow[i] * (1 - t));
       this.col[i * 3] = this.baseCol[i * 3];
       this.col[i * 3 + 1] = this.baseCol[i * 3 + 1];

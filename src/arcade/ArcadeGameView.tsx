@@ -1,12 +1,17 @@
+import { readChoice, remember } from '../console/history';
+import { GameSetup } from '../console/GameSetup';
+import { GameResults } from '../console/GameResults';
+import { ConnectionsScreen } from '../components/ConnectionsScreen';
+import { PauseSheet } from '../console/PauseSheet';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, Gamepad2, Home, Keyboard, LoaderCircle, Pause, Play, RotateCcw, Settings2, Smartphone, Sparkles, Timer, Trophy, Users, Volume2, VolumeX, Zap } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Gamepad2, Home, LoaderCircle, Pause, Smartphone, Timer, Volume2, VolumeX, Zap } from 'lucide-react';
 import { gameAudio } from '../game/audio';
 import { menuMusic } from '../game/menuMusic';
 import { PLAYER_DEFS } from '../game/types';
 import { padHost } from '../net/padHost';
 import type { RemoteCommand, RemoteEvent } from '../net/protocol';
-import { usePadHost, PadHostPanel } from '../pad/PadHostPanel';
-import { CountUp, ScreenCurtain, SegmentedControl, useCurtain } from '../components/motion';
+import { PadHostPanel } from '../pad/PadHostPanel';
+import { ScreenCurtain, SegmentedControl, useCurtain } from '../components/motion';
 import { gameInfo, type GameId } from './catalog';
 import { useMenuMusic } from '../lib/useMenuMusic';
 import { COLORS, type DisplayMode, type GameRound, type Racer, type RenderQuality, type RoundConfig, type RoundHud, type RoundResult } from './runtime';
@@ -83,14 +88,14 @@ function OptionStepper({ title, value, change, accent, help }: { title: string; 
 function Segmented<T extends string>({ title, values, value, onChange, accent, labels }: { title: string; values: readonly T[]; value: T; onChange: (value: T) => void; accent: string; labels: Record<T, string> }) {
   return <div className="arcade-option rounded-2xl p-4"><div className="joy-kicker text-slate-400">{title}</div>
     <div className="mt-3"><SegmentedControl options={values.map(v => ({ value: v, label: labels[v] }))} value={value} onChange={onChange} accent={accent} label={title} /></div>
-    <div className="mt-3 text-center text-[11px] text-slate-500">{value === 'split' ? '2–4 widoki na jednym ekranie' : 'Wspólna arena dla całej kanapy'}</div></div>;
+    <div className="mt-3 text-center text-[11px] text-slate-500">{value === 'split' ? '2–4 widoki na jednym ekranie' : value === 'shared' ? 'Wspólna arena dla całej kanapy' : value === 'performance' ? 'Niższa rozdzielczość, priorytet płynności' : value === 'quality' ? 'Więcej detali, większe obciążenie GPU' : 'Równowaga płynności i jakości'}</div></div>;
 }
 
 export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: () => void; remote: RemoteEvent | null }) {
   const info = gameInfo(id), rules = RULES[id];
   const [stage, setStage] = useState<Stage>('menu');
-  const [primary, setPrimary] = useState(id === 'race' || id === 'snake' || id === 'league' ? 1 : 0);
-  const [secondary, setSecondary] = useState(id === 'race' || id === 'league' ? 2 : 1);
+  const [primary, setPrimary] = useState(() => readChoice(`${id}.primary`, rules.primary.map((_, i) => i), id === 'race' || id === 'snake' || id === 'league' ? 1 : 0));
+  const [secondary, setSecondary] = useState(() => readChoice(`${id}.secondary`, rules.secondary.map((_, i) => i), id === 'race' || id === 'league' ? 2 : 1));
   const [displayMode, setDisplayMode] = useState<DisplayMode>(() => readPreference('joypad-display-mode', 'shared', ['shared', 'split'] as const));
   const [quality, setQuality] = useState<RenderQuality>(() => readPreference('joypad-render-quality', 'balanced', ['performance', 'balanced', 'quality'] as const));
   const [hud, setHud] = useState<RoundHud | null>(null);
@@ -117,7 +122,6 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   }, [hud?.countdown]);
   // Muzyka menu: gra w lobby/ustawieniach rundy, cichnie na czas gry.
   useEffect(() => { menuMusic.setContext(stage === 'game' ? 'game' : 'menu'); }, [stage]);
-  const host = usePadHost();
   const canvas = useRef<HTMLCanvasElement>(null);
   const round = useRef<GameRound | null>(null);
   const stageRef = useRef(stage);
@@ -139,7 +143,10 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   const changeDisplay = (next: DisplayMode) => { setDisplayMode(next); try { localStorage.setItem('joypad-display-mode', next); } catch { /* optional */ } };
   const changeQuality = (next: RenderQuality) => { setQuality(next); try { localStorage.setItem('joypad-render-quality', next); } catch { /* optional */ } };
 
+  useEffect(() => { remember(`${id}.primary`, primary); remember(`${id}.secondary`, secondary); }, [id, primary, secondary]);
+
   const start = useCallback(() => {
+    remember('game', id);
     // Start rundy idzie pod kurtyną w kolorze gry — menu znika, arena wstaje.
     curtain.begin(info.accent, () => {
       const pads = padHost.slots().filter((p): p is NonNullable<typeof p> => p !== null);
@@ -176,6 +183,7 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
 
   useEffect(() => {
     padHost.setMenuOptions(stage === 'menu' ? {
+      revision: `${displayMode}/${quality}`,
       primaryLabel: rules.primaryLabel, primaryValue: rules.primary[primary],
       secondaryLabel: rules.secondaryLabel, secondaryValue: rules.secondary[secondary],
     } : undefined);
@@ -183,7 +191,7 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
       padHost.setScreen('over', { winnerSlot: result.winnerSlot, winnerName: result.title, allWon: result.allWon });
       for (const p of result.players) if (!p.isBot) padHost.sendFx(p.slot, result.allWon || result.winnerSlot === p.slot ? 'win' : 'lose');
     } else padHost.setScreen(stage);
-  }, [stage, result, primary, secondary, rules]);
+  }, [stage, result, primary, secondary, rules, displayMode, quality]);
 
   useEffect(() => {
     if (stage !== 'game' || !roundKey || !canvas.current) return;
@@ -195,6 +203,8 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
         if (cancelled) return;
         setHud(next);
         for (const p of next.players) if (!p.isBot) padHost.sendArcadeHud(p.slot, {
+          countdown: next.countdown,
+          paused: next.paused,
           score: p.score,
           timeLeft: next.timeLeft,
           title: next.objective,
@@ -216,6 +226,7 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
 
   const handleCommand = useCallback((command: RemoteCommand) => {
     const current = stageRef.current;
+    if (showPads && current === 'menu') { window.dispatchEvent(new CustomEvent('joypad-dialog-command', { detail: command })); return; }
     if (command === 'home' || (command === 'back' && current === 'menu')) { onExit(); return; }
     if (current === 'menu') {
       if (command === 'left') stepPrimary(-1);
@@ -229,7 +240,7 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
       if (command === 'select' || command === 'restart') start();
       if (command === 'back') setStage('menu');
     }
-  }, [onExit, start, stepPrimary, stepSecondary]);
+  }, [onExit, start, stepPrimary, stepSecondary, showPads]);
 
   const lastRemote = useRef(0);
   useEffect(() => {
@@ -238,6 +249,7 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (stageRef.current === 'game' || e.target instanceof HTMLInputElement) return;
+      if (e.code === 'Enter' && e.target instanceof Element && e.target.closest('button,summary,a')) return;
       const controls: Record<string, RemoteCommand> = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', Enter: 'select', Escape: 'back' };
       if (controls[e.code]) { e.preventDefault(); handleCommand(controls[e.code]); }
     };
@@ -246,72 +258,20 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   }, [handleCommand]);
 
   const mute = () => { gameAudio.init(); gameAudio.setMuted(!muted); setMuted(!muted); };
-  const background = `${import.meta.env.BASE_URL}${info.cover}`;
   const cssVars = { '--game-accent': info.accent, '--game-soft': info.accentSoft } as React.CSSProperties;
 
-  if (stage === 'menu') return (
-    <>
-    <div className={`arcade-page arcade-${id} relative min-h-screen overflow-hidden text-white`} style={cssVars}>
-      <div className="arcade-texture pointer-events-none absolute inset-0" />
-      <div className="relative mx-auto max-w-[1280px] px-4 pb-16 sm:px-7">
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 py-5">
-          <button onClick={onExit} className="flex items-center gap-2 rounded-full border border-white/20 bg-black/30 px-4 py-2 text-xs font-bold text-white transition hover:border-white/50"><ArrowLeft size={15} /> JOYPAD / GRY</button>
-          <div className="joy-kicker flex items-center gap-2 text-white/60"><span className="h-2 w-2 rounded-full" style={{ background: info.accent }} /> {info.eyebrow} <span className="text-white/30">/</span> {info.number}</div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => toggleMenuMusic(!menuMusicOn)} title={menuMusicOn ? 'Wyłącz muzykę menu' : 'Włącz muzykę menu'} aria-label="Muzyka menu" className="flex items-center gap-2 rounded-full border border-white/20 bg-black/30 px-3 py-2 text-xs font-semibold hover:bg-white/10">{menuMusicOn ? <Volume2 size={15} /> : <VolumeX size={15} />}</button>
-            <button onClick={() => setShowPads(true)} className="flex items-center gap-2 rounded-full border border-white/20 bg-black/30 px-4 py-2 text-xs font-semibold hover:bg-white/10"><Smartphone size={15} /> Pady {host.pads.length}/4 <span className="font-mono2" style={{ color: info.accent }}>{host.code}</span></button>
-          </div>
-        </header>
-
-        <section className="arcade-hero rise-in relative mt-7 flex min-h-[390px] items-end overflow-hidden rounded-[30px] border border-white/15 p-6 sm:min-h-[440px] sm:p-10">
-          <img src={background} alt="" className="absolute inset-0 h-full w-full object-cover" />
-          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(5,8,12,.96)_0%,rgba(5,8,12,.78)_45%,rgba(5,8,12,.12)_100%),linear-gradient(0deg,rgba(5,8,12,.92),transparent_70%)]" />
-          <div className="relative z-10 max-w-[650px]"><div className="joy-kicker" style={{ color: info.accent }}>◆ {info.eyebrow} / {info.genre.toUpperCase()}</div>
-            <h1 className="arcade-title mt-4 text-[44px] font-extrabold leading-[.96] tracking-[-.055em] sm:text-[76px]">{info.title}</h1>
-            <p className="mt-5 max-w-[510px] text-sm leading-relaxed text-white/80 sm:text-base">{info.description}</p>
-            <div className="mt-6 flex flex-wrap items-center gap-3"><button onClick={start} className="arcade-start press flex items-center gap-3 rounded-xl px-6 py-3.5 text-sm font-black text-[#101117] transition hover:-translate-y-0.5 hover:brightness-110" style={{ background: info.accent, boxShadow: `0 16px 45px ${info.accent}50` }}><Play size={18} fill="currentColor" /> ROZPOCZNIJ GRĘ <ArrowRight size={17} /></button><span className="rounded-full border border-white/20 bg-black/40 px-3 py-2 text-xs text-white/80">{info.players}</span><span className="rounded-full border border-white/15 bg-black/35 px-3 py-2 text-xs font-bold" style={{ color: info.accent }}>{info.renderTag}</span></div>
-          </div>
-          <span className="pointer-events-none absolute right-7 top-3 text-[140px] font-black leading-none text-white/[.08]">{info.number}</span>
-        </section>
-
-        <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(280px,1fr)]">
-          <div className="arcade-panel rise-in rounded-[26px] p-5 sm:p-6" style={{ animationDelay: '90ms' }}><div className="mb-4 flex items-center gap-2 font-bold"><Settings2 size={18} style={{ color: info.accent }} /> Ustawienia rozgrywki</div>
-            <div className="grid gap-3 sm:grid-cols-2"><OptionStepper title={rules.primaryLabel} value={rules.primary[primary]} accent={info.accent} change={stepPrimary} help="Pilot: ← / →" /><OptionStepper title={rules.secondaryLabel} value={rules.secondary[secondary]} accent={info.accent} change={stepSecondary} help="Pilot: ↑ / ↓" /><Segmented title="WIDOK ARENY" values={['shared', 'split'] as const} value={displayMode} onChange={changeDisplay} accent={info.accent} labels={{ shared: 'WSPÓLNY', split: 'SPLIT-SCREEN' }} /><Segmented title="PROFIL SPRZĘTU" values={['performance', 'balanced', 'quality'] as const} value={quality} onChange={changeQuality} accent={info.accent} labels={{ performance: 'PŁYNNOŚĆ', balanced: 'BALANS', quality: 'DETAL' }} /></div>
-            <div className="mt-4 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-xs leading-relaxed text-slate-300"><b style={{ color: info.accent }}>JAK GRAĆ</b> · {rules.hint}<br /><span className="text-slate-400">{rules.win} Telefon: {info.controls}</span></div>
-            <div className="mt-3 flex items-center gap-2 text-[10px] text-slate-500"><span className="status-dot" /> Render 60 FPS · tekstury proceduralne · {quality === 'performance' ? 'DPR 1× / priorytet płynności' : quality === 'quality' ? 'DPR do 2× / maksymalna ostrość' : 'DPR adaptacyjny / bezpieczny balans'}</div>
-          </div>
-          <div className="arcade-panel rise-in rounded-[26px] p-5 sm:p-6" style={{ animationDelay: '170ms' }}><div className="mb-4 flex items-center justify-between"><div className="flex items-center gap-2 font-bold"><Users size={18} style={{ color: info.accent }} /> Gracze</div><span className="text-xs text-slate-400">{host.pads.length} podłączonych</span></div>
-            <div className="grid grid-cols-2 gap-2">{PLAYER_DEFS.map((p, i) => { const pad = host.pads.find(x => x.slot === i); return <div key={p.id} className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: COLORS[i] }} /><span className="min-w-0 truncate text-xs font-semibold text-white/85">{pad?.nick || (i === 0 && !host.pads.length ? 'Klawiatura' : 'Wolne')}</span></div>; })}</div>
-            <div className="mt-5 grid grid-cols-3 gap-2 text-center text-[10px] text-slate-500"><div className="rounded-xl border border-white/10 bg-black/20 p-2"><b className="block text-sm text-white">{info.features[0]}</b>MECHANIKA</div><div className="rounded-xl border border-white/10 bg-black/20 p-2"><b className="block text-sm text-white">{info.features[1]}</b>TRYB</div><div className="rounded-xl border border-white/10 bg-black/20 p-2"><b className="block text-sm text-white">{info.features[2]}</b>DNA GRY</div></div>
-            <button onClick={() => setShowPads(true)} className="mt-4 flex items-center gap-2 text-xs font-semibold hover:underline" style={{ color: info.accent }}><Smartphone size={15} /> Zaproś telefon · kod {host.code} <ArrowRight size={14} /></button>
-            <div className="mt-2 text-[11px] leading-relaxed text-slate-500">Można zagrać samemu z klawiaturą. Telefony dołączone podczas rundy zagrają od następnej.</div>
-          </div>
-        </div>
-        <div className="mt-5 flex items-center justify-center gap-2 text-center text-xs text-slate-500"><Keyboard size={14} /> Klawiatura: WSAD / strzałki + Q / Enter · P / ESC = pauza</div>
-      </div>
-      {showPads && <div className="fixed inset-0 z-50 flex items-center justify-center overflow-auto bg-black/80 p-4 backdrop-blur" onClick={() => setShowPads(false)}><div className="w-full max-w-2xl" onClick={e => e.stopPropagation()}><PadHostPanel players={PLAYER_DEFS} onClose={() => setShowPads(false)} context="arcade" /></div></div>}
-    </div>
+  if (stage === 'menu') return <>
+    <GameSetup info={info} music={menuMusicOn} onMusic={() => toggleMenuMusic(!menuMusicOn)} onExit={onExit} onStart={start} onPads={() => setShowPads(true)} hint={rules.hint} win={rules.win}>
+      <OptionStepper title={rules.primaryLabel} value={rules.primary[primary]} accent={info.accent} change={stepPrimary} help="Pilot: ← / →" /><OptionStepper title={rules.secondaryLabel} value={rules.secondary[secondary]} accent={info.accent} change={stepSecondary} help="Pilot: ↑ / ↓" /><Segmented title="WIDOK ARENY" values={['shared', 'split'] as const} value={displayMode} onChange={changeDisplay} accent={info.accent} labels={{ shared: 'WSPÓLNY', split: 'SPLIT-SCREEN' }} /><Segmented title="PROFIL SPRZĘTU" values={['performance', 'balanced', 'quality'] as const} value={quality} onChange={changeQuality} accent={info.accent} labels={{ performance: 'PŁYNNOŚĆ', balanced: 'BALANS', quality: 'DETAL' }} />
+    </GameSetup>
+    {showPads && <ConnectionsScreen onClose={() => setShowPads(false)} />}
     <ScreenCurtain state={curtain.state} />
-    </>
-  );
+  </>;
 
-  if (stage === 'over' && result) return (
-    <>
-    <div className={`arcade-page arcade-${id} relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-4 py-10 text-white`} style={cssVars}>
-      <img src={background} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-25" /><div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#0a101d]/70 via-[#0a101d]/95 to-[#0a101d]" />
-      <div className="rise-in relative z-10 w-full max-w-[700px] text-center" style={{ animationDelay: '120ms' }}><div className="joy-kicker" style={{ color: info.accent }}>{info.eyebrow} / KONIEC RUNDY</div>
-        <span className="crown-drop mx-auto mt-5 block h-14 w-14" style={{ color: info.accent, filter: `drop-shadow(0 0 18px ${info.accent}88)` }}>{result.allWon ? <Sparkles className="h-14 w-14" /> : <Trophy className="h-14 w-14" />}</span>
-        <h1 className="arcade-title mt-4 text-4xl font-extrabold leading-tight sm:text-6xl">{result.title}</h1><p className="mt-3 text-sm text-slate-300">{result.subtitle}</p>
-        <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/30 px-3 py-1.5 text-[11px] text-slate-300"><span className="text-slate-500">LOKALNY REKORD</span><b className="font-mono2" style={{ color: info.accent }}><CountUp value={record} duration={1100} /></b></div>
-        <div className="mt-8 overflow-hidden rounded-2xl border border-white/15 bg-black/35 text-left"><div className="joy-kicker flex justify-between border-b border-white/10 px-5 py-3 text-slate-400"><span>DRUŻYNA / KLASYFIKACJA</span><span>WYNIK</span></div>
-          {result.players.map((p, i) => { const winner = !result.allWon && p.slot === result.winnerSlot; return <div key={p.slot} className="rise-in flex items-center justify-between gap-2 border-b border-white/[.08] px-5 py-3 last:border-none" style={{ animationDelay: `${300 + i * 80}ms`, background: winner ? `color-mix(in srgb, ${p.color} 10%, transparent)` : undefined, boxShadow: winner ? `inset 3px 0 0 ${p.color}` : undefined }}><div className="flex items-center gap-3"><span className="font-mono2 text-xs text-slate-500">{String(i + 1).padStart(2, '0')}</span><span className="h-2.5 w-2.5 rounded-full" style={{ background: p.color, boxShadow: `0 0 8px ${p.color}` }} /><span className="text-sm font-bold">{p.name}</span>{p.isBot && <span className="text-[10px] text-slate-500">BOT</span>}</div><div className="text-right"><b className="font-mono2 text-lg" style={{ color: p.color }}><CountUp value={p.score} duration={900} /></b><span className="ml-3 text-[11px] text-slate-400">{p.detail}</span></div></div>; })}
-        </div>
-        <div className="mt-8 flex flex-wrap justify-center gap-3"><button onClick={start} className="press flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-black text-[#101117] hover:brightness-110" style={{ background: info.accent }}><RotateCcw size={17} /> REWANŻ</button><button onClick={() => curtain.begin(info.accent, () => setStage('menu'))} className="arcade-secondary"><Settings2 size={17} /> ZMIEŃ USTAWIENIA</button><button onClick={onExit} className="arcade-secondary"><Home size={17} /> WSZYSTKIE GRY</button></div>
-      </div>
-    </div>
+  if (stage === 'over' && result) return <>
+    <GameResults info={info} title={result.title} subtitle={result.subtitle} players={result.players} winnerSlot={result.winnerSlot} allWon={result.allWon} record={record} onRestart={start} onSettings={() => curtain.begin(info.accent, () => setStage('menu'))} onExit={onExit} />
     <ScreenCurtain state={curtain.state} />
-    </>
-  );
+  </>;
 
   return (
     <>
@@ -329,7 +289,7 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
         </div>}
         {hud?.countdown !== undefined && hud.countdown > 0 && <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/30"><span className="joy-kicker text-white/70">PRZYGOTUJ SIĘ</span><span key={Math.ceil(hud.countdown)} className="count-pop arcade-title text-8xl font-black drop-shadow-lg sm:text-9xl" style={{ color: info.accent, textShadow: `0 0 70px ${info.accent}99` }}>{Math.ceil(hud.countdown)}</span></div>}
         {startFlash && <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"><span className="start-flash arcade-title text-7xl font-black sm:text-9xl" style={{ color: info.accent, textShadow: `0 0 90px ${info.accent}` }}>START</span></div>}
-        {hud?.paused && <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm"><Pause className="h-12 w-12" style={{ color: info.accent }} /><h2 className="arcade-title mt-3 text-4xl font-bold">PAUZA</h2><p className="mt-2 text-xs text-slate-400">P / ESC lub pilot administratora, aby kontynuować</p><button onClick={() => round.current?.togglePause()} className="mt-5 flex items-center gap-2 rounded-xl px-6 py-2.5 font-bold text-[#101117]" style={{ background: info.accent }}><Play size={17} /> KONTYNUUJ</button></div>}
+        {hud?.paused && <PauseSheet game={info.title} onResume={() => round.current?.togglePause()} onExit={onExit} />}
         {!hud && <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 text-sm text-slate-300"><LoaderCircle size={20} className="animate-spin" /> Ładowanie areny…</div>}
         {showPads && <div className="absolute inset-0 z-40 flex items-center justify-center overflow-auto bg-black/80 p-4 backdrop-blur" onClick={() => setShowPads(false)}><div className="w-full max-w-2xl" onClick={e => e.stopPropagation()}><PadHostPanel players={PLAYER_DEFS} onClose={() => setShowPads(false)} context="arcade" /></div></div>}
       </div>

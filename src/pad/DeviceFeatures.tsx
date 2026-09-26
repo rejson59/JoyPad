@@ -1,3 +1,4 @@
+import { ConsoleSettings } from '../console/Settings';
 import { Check, Expand, Gauge, LockKeyhole, SunMedium } from 'lucide-react';
 import { HapticsStatus } from './HapticsStatus';
 
@@ -51,7 +52,7 @@ export function DeviceFeatures({
         <span className="min-w-0 flex-1"><span className="block text-xs font-bold text-zinc-100">Sterowanie przechyłem</span><span className="block text-[10px] text-zinc-500">Tryb opcjonalny: {tiltCopy[tiltStatus]}</span></span>
         <span className={`relative h-5 w-9 shrink-0 rounded-full ${tiltEnabled ? 'bg-cyan-400' : 'bg-zinc-700'}`}><span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${tiltEnabled ? 'left-[18px]' : 'left-0.5'}`} /></span>
       </button>
-      <HapticsStatus compact />
+      <ConsoleSettings controller /><HapticsStatus compact />
       <div className="flex items-start gap-2 px-1 pt-1 text-[10px] leading-snug text-zinc-500"><LockKeyhole size={12} className="mt-0.5 shrink-0" /> Kamera, mikrofon, lokalizacja i powiadomienia nie są potrzebne do pada.</div>
     </div>
   );

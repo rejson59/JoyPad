@@ -1,3 +1,4 @@
+import { useConsolePreferences } from '../console/preferences';
 import { useState } from 'react';
 import { Check, Smartphone, VolumeX, Zap } from 'lucide-react';
 import { getHapticStatus, haptic, unlockHaptics, type HapticStatus } from './haptics';
@@ -10,13 +11,14 @@ const COPY: Record<HapticStatus, { title: string; detail: string }> = {
 };
 
 export function HapticsStatus({ compact = false }: { compact?: boolean }) {
+  const prefs = useConsolePreferences();
   const [status, setStatus] = useState<HapticStatus>(() => getHapticStatus());
   const test = () => {
     const next = unlockHaptics();
     setStatus(next);
     if (next === 'ready') window.setTimeout(() => haptic([35, 28, 35]), 55);
   };
-  const copy = COPY[status];
+  const copy = prefs.haptics === 'off' ? { title: 'Wibracje wyłączone', detail: 'Wybierz subtelne lub wyraźne w ustawieniach, aby przetestować.' } : COPY[status];
   const good = status === 'ready';
   const unsupported = status === 'unsupported';
   return (

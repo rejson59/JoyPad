@@ -1,10 +1,11 @@
 import type { PadFx, PadInput } from '../net/protocol';
+import { PLAYER_DEFS } from '../game/types';
 import { gameAudio } from '../game/audio';
 
 export const WIDTH = 1200;
 export const HEIGHT = 720;
 /** Warm player colors read well on a graphite/orange UI and on low-brightness TVs. */
-export const COLORS = ['#fbbf24', '#fb923c', '#38bdf8', '#a3e635'];
+export const COLORS = PLAYER_DEFS.map(player => player.color);
 
 export type DisplayMode = 'shared' | 'split';
 export type RenderQuality = 'performance' | 'balanced' | 'quality';

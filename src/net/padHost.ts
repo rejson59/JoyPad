@@ -11,6 +11,11 @@ import type { GameId } from '../arcade/catalog';
 import { GAMES } from '../arcade/catalog';
 
 export interface PadInfo {
+  lastInputAt?: number;
+  inputStale?: boolean;
+  suggestedGame?: GameId;
+  ready?: boolean;
+  rematch?: boolean;
   connId: string;
   slot: number;
   nick: string;
@@ -36,6 +41,7 @@ export type SignalState = 'offline' | 'connecting' | 'online' | 'lost';
 export type RelayState = 'off' | 'connecting' | 'online';
 
 export interface PadHostState {
+  screen: HostScreen;
   status: HostStatus;
   code: string;
   error: string | null;
@@ -88,6 +94,8 @@ export class PadHost {
   private conns = new Map<string, PadLink>();
   private pads = new Map<string, PadInfo>();
   /** pid telefonu -> connId jego aktywnego pada (anti-duplicate slot). */
+  private returningSlots = new Map<string, { slot: number; until: number }>();
+  private lastReminder = 0;
   private padsByPid = new Map<string, string>();
   private listeners = new Set<Listener>();
   private slotMeta: SlotMeta[] = [];
@@ -142,6 +150,7 @@ export class PadHost {
 
   snapshot(): PadHostState {
     return {
+      screen: this.screen,
       status: this.status,
       code: this.code,
       error: this.error,
@@ -168,7 +177,7 @@ export class PadHost {
     return {
       game: this.game, screen: this.screen, selection: this.selection,
       adminSlot: this.admin()?.slot ?? null,
-      roster: [...this.pads.values()].sort((a, b) => a.slot - b.slot).map(p => ({ slot: p.slot, nick: p.nick })),
+      roster: [...this.pads.values()].sort((a, b) => a.slot - b.slot).map(p => ({ slot: p.slot, nick: p.nick, ready: !!p.ready, rematch: !!p.rematch, suggestedGame: p.suggestedGame })),
       options: this.menuOptions,
     };
   }
@@ -178,17 +187,24 @@ export class PadHost {
     for (const pad of this.pads.values()) this.send(pad.connId, msg);
   }
 
+  private clearIntent() {
+    for (const p of this.pads.values()) { p.ready = false; p.rematch = false; p.suggestedGame = undefined; }
+    this.emit();
+  }
+
   setGame(game: GameId | null) {
+    const changed = game !== this.game;
     this.game = game;
     this.menuOptions = undefined;
     // „Brak gry” jest zawsze powrotem do biblioteki. Wcześniej między
     // setGame(null) a setScreen('lobby') telefon mógł dostać krótką sesję
     // z game=null i ekranem starego menu, przez co pilot blokował wybór.
     if (game === null) this.screen = 'lobby';
+    if (changed) this.clearIntent(); else this.emit();
     this.broadcastSession();
   }
   setSelection(index: number) { this.selection = index; this.broadcastSession(); }
-  setMenuOptions(options?: SessionOptions) { this.menuOptions = options; this.broadcastSession(); }
+  setMenuOptions(options?: SessionOptions) { if (JSON.stringify(options) !== JSON.stringify(this.menuOptions)) this.clearIntent(); this.menuOptions = options; this.broadcastSession(); }
 
   setSlotMeta(meta: SlotMeta[]) {
     this.slotMeta = meta;
@@ -199,7 +215,9 @@ export class PadHost {
   }
 
   setScreen(screen: HostScreen, extra?: { winnerSlot?: number | null; winnerName?: string; winnerColor?: string; allWon?: boolean }) {
+    const changed = this.screen !== screen;
     this.screen = screen;
+    if (changed) this.clearIntent();
     for (const p of this.pads.values()) {
       this.send(p.connId, {
         t: 'screen', screen,
@@ -534,15 +552,31 @@ export class PadHost {
    * Telefon nieaktywny dłużej niż STALE_PAD_MS (nie ma input/ping) traktujemy
    * jako rozłączony — zwalnia slot, nawet jeśli gniazdo nie zgłosiło się o tym.
    */
+  private sweepInputs(now = Date.now()) {
+    for (const [pid, saved] of this.returningSlots) if (saved.until < now) this.returningSlots.delete(pid);
+    for (const p of [...this.pads.values()]) {
+      // Input heartbeats are independent of ping. Never keep driving on stale input.
+      if (now - (p.lastInputAt ?? p.connectedAt) > 800) {
+        this.inputs[p.slot] = { ...ZERO_INPUT };
+        if (!p.inputStale) { p.inputStale = true; this.emit(); }
+      }
+      if (now - p.lastSeen > STALE_PAD_MS) this.dropConn(p.connId);
+    }
+  }
+
+  remindReady() {
+    const now = Date.now();
+    if (!this.game || !['menu', 'setup'].includes(this.screen) || now - this.lastReminder < 8000) return;
+    this.lastReminder = now;
+    for (const p of this.pads.values()) if (!p.ready) this.send(p.connId, { t: 'readyReminder' });
+  }
+
   private startSweep() {
     clearInterval(this.sweepTimer);
     this.sweepTimer = window.setInterval(() => {
       if (!this.running) return;
-      const now = Date.now();
-      for (const p of [...this.pads.values()]) {
-        if (now - p.lastSeen > STALE_PAD_MS) this.dropConn(p.connId);
-      }
-    }, 5_000);
+      this.sweepInputs();
+    }, 200);
   }
 
   /** Kasuje stan i próbuje jeszcze raz (np. po kliknięciu „Spróbuj ponownie”). */
@@ -567,6 +601,7 @@ export class PadHost {
     for (const c of this.conns.values()) { try { c.close(); } catch { /* ignore */ } }
     this.conns.clear();
     this.padsByPid.clear();
+    this.returningSlots.clear();
     this.pads.clear();
     this.inputs.forEach((_, i) => { this.inputs[i] = { ...ZERO_INPUT }; });
     this.destroyPeer();
@@ -645,7 +680,9 @@ export class PadHost {
             }
           }
         }
-        const slot = this.freeSlot();
+        const saved = pid ? this.returningSlots.get(pid) : undefined;
+        const slot = saved && saved.until > Date.now() && ![...this.pads.values()].some(p => p.slot === saved.slot) ? saved.slot : this.freeSlot();
+        if (pid) this.returningSlots.delete(pid);
         if (slot < 0) {
           this.send(id, { t: 'rejected', reason: 'Wszystkie 4 miejsca są zajęte.' });
           setTimeout(() => link.close(), 200);
@@ -668,6 +705,8 @@ export class PadHost {
         const p = this.pads.get(id);
         if (!p) return;
         p.lastSeen = Date.now();
+        p.lastInputAt = p.lastSeen;
+        if (p.inputStale) { p.inputStale = false; this.emit(); }
         const clamp = (v: unknown) => Math.max(-1, Math.min(1, Number(v) || 0));
         const steer = normSteer(msg.steer);
         if (steer) p.steer = steer;
@@ -693,6 +732,28 @@ export class PadHost {
         this.emit();
         this.broadcastSession();
         this.onSlotsChanged?.(this.slots());
+        break;
+      }
+      case 'suggest': {
+        const p = this.pads.get(id);
+        if (!p || this.screen !== 'over') break;
+        if (msg.game !== null && !GAMES.some(g => g.id === msg.game && !g.wip && g.id !== this.game)) break;
+        p.suggestedGame = msg.game ?? undefined;
+        this.emit(); this.broadcastSession();
+        break;
+      }
+      case 'remind': {
+        if (this.admin()?.connId === id) this.remindReady();
+        break;
+      }
+      case 'intent': {
+        const p = this.pads.get(id);
+        if (!p || typeof msg.value !== 'boolean' || !this.game) break;
+        const allowed = msg.kind === 'ready' ? this.screen === 'menu' || this.screen === 'setup' : msg.kind === 'rematch' && this.screen === 'over';
+        if (!allowed || p[msg.kind] === msg.value) break;
+        p[msg.kind] = msg.value;
+        p.lastSeen = Date.now();
+        this.emit(); this.broadcastSession();
         break;
       }
       case 'pause': {
@@ -727,6 +788,7 @@ export class PadHost {
     this.hudTimers.delete(connId);
     if (p) {
       this.pads.delete(connId);
+      if (p.pid) this.returningSlots.set(p.pid, { slot: p.slot, until: Date.now() + 60_000 });
       if (p.pid) {
         const holder = this.padsByPid.get(p.pid);
         if (holder === connId) this.padsByPid.delete(p.pid);

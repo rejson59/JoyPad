@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useReducedMotion } from '../lib/useReducedMotion';
+import { getPreferences } from '../console/preferences';
 
 /* ============================================================================
  * Wspólny system przejść i mikrointerakcji całego interfejsu JoyPad.
- * Zasada: podmiana ekranu dzieje się POD kurtyną w kolorze gry — użytkownik
- * nigdy nie widzi twardego cutu między scenami.
+ * Biblioteka może użyć wspólnej okładki View Transitions. Sceny canvas
+ * i pozostałe przeglądarki korzystają z krótkiego przyciemnienia.
  * ========================================================================== */
 
 export type CurtainPhase = 'idle' | 'cover' | 'reveal';
@@ -13,36 +15,47 @@ export interface CurtainState {
   color: string;
 }
 
-const CURTAIN_COVER_MS = 210;
-const CURTAIN_TOTAL_MS = CURTAIN_COVER_MS + 90 + 400;
+const CURTAIN_COVER_MS = 100;
+const CURTAIN_TOTAL_MS = CURTAIN_COVER_MS + 180;
 
 /**
- * Sekwencja kurtyny: `begin(kolor, wymiana)` zasłania scenę, w połowie
- * wywołuje `wymiana` ( podmiana stanu Reacta ) i odsłania nowy ekran.
+ * `begin(kolor, wymiana)` chroni przed równoległymi przejściami.
+ * Fallback: 100 ms zasłonięcia + 180 ms odsłonięcia; bez sztucznego ładowania.
  * Przy `prefers-reduced-motion` wymiana dzieje się natychmiast.
  */
-export function useCurtain() {
+export function useCurtain(sharedElements = false) {
   const [state, setState] = useState<CurtainState>({ phase: 'idle', color: '#f97316' });
   const busy = useRef(false);
+  const timers = useRef<number[]>([]);
+  useEffect(() => () => { timers.current.forEach(clearTimeout); busy.current = false; }, []);
 
   const begin = useCallback((color: string, swap: () => void) => {
-    if (busy.current) { swap(); return; }
+    if (busy.current) return;
     let reduced = false;
     try { reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { /* brakuje API */ }
-    if (reduced) { swap(); return; }
+    if (reduced || getPreferences().motion === 'reduced') { swap(); return; }
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
     busy.current = true;
+    if (sharedElements && !document.querySelector('canvas,dialog[open]') && typeof document.startViewTransition === 'function') {
+      const transition = document.startViewTransition(() => { flushSync(swap); });
+      const timeout = window.setTimeout(() => transition.skipTransition(), 700);
+      timers.current.push(timeout);
+      void transition.finished.catch(() => {}).finally(() => { clearTimeout(timeout); busy.current = false; });
+      return;
+    }
     setState({ phase: 'cover', color });
-    window.setTimeout(() => {
+    timers.current.push(window.setTimeout(() => {
       swap();
       setState({ phase: 'reveal', color });
-    }, CURTAIN_COVER_MS);
-    window.setTimeout(() => {
+    }, CURTAIN_COVER_MS));
+    timers.current.push(window.setTimeout(() => {
       setState({ phase: 'idle', color });
       busy.current = false;
-    }, CURTAIN_TOTAL_MS);
-  }, []);
+    }, CURTAIN_TOTAL_MS));
+  }, [sharedElements]);
 
-  return { state, begin };
+  return useMemo(() => ({ state, begin }), [state, begin]);
 }
 
 export function ScreenCurtain({ state }: { state: CurtainState }) {

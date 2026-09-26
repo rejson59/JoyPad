@@ -1,5 +1,6 @@
+import { Sheet } from '../console/Sheet';
 import { useEffect, useState } from 'react';
-import { Antenna, Check, Copy, RefreshCw, Wifi, WifiOff, X } from 'lucide-react';
+import { Antenna, Check, Copy, RefreshCw, Wifi, WifiOff } from 'lucide-react';
 import { padHost } from '../net/padHost';
 import { padUrlFor } from '../net/protocol';
 import { usePadHost } from '../pad/PadHostPanel';
@@ -22,7 +23,7 @@ export function ConnectionsScreen({ onClose }: { onClose: () => void }) {
     let live = true;
     if (!url) return;
     void import('qrcode')
-      .then(({ default: QRCode }) => QRCode.toDataURL(url, { width: 420, margin: 1, color: { dark: '#17120d', light: '#ffffff' } }))
+      .then(({ default: QRCode }) => QRCode.toDataURL(url, { width: 420, margin: 1, color: { dark: '#070a10', light: '#ffffff' } }))
       .then(result => { if (live) setQr(result); })
       .catch(() => { if (live) setQr(''); });
     return () => { live = false; };
@@ -33,17 +34,9 @@ export function ConnectionsScreen({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" onClick={onClose} role="dialog" aria-label="Połączenia">
-      <div className="joy-room max-h-[94vh] w-full max-w-3xl overflow-y-auto rounded-[26px] p-5 sm:p-7" onClick={e => e.stopPropagation()}>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="joy-kicker text-orange-300">CENTRUM POŁĄCZEŃ</div>
-            <h2 className="joy-heading mt-2 text-2xl font-bold text-white">Połączenia</h2>
-            <p className="mt-2 max-w-lg text-sm leading-relaxed text-slate-400">Telefony łączą się bezpośrednio (P2P). Gdy sieć nie pozwala, każdy pad sam przechodzi na awaryjny przekaźnik — także między różnymi sieciami (Wi‑Fi ↔ LTE).</p>
-          </div>
-          <button onClick={onClose} className="arcade-icon shrink-0" aria-label="Zamknij"><X size={17} /></button>
-        </div>
-
+    <Sheet wide title="Twoja ekipa." onClose={onClose}>
+      <div>
+        <p className="os-note">Zeskanuj kod aparatem telefonu. Nie potrzebujesz konta ani instalacji aplikacji.</p>
         <div className="mt-6 grid gap-5 md:grid-cols-[240px_minmax(0,1fr)]">
           <div className="flex flex-col items-center rounded-2xl border border-white/10 bg-[#0b0d0e] p-4">
             <QrFrame src={qr} size={172} />
@@ -60,7 +53,7 @@ export function ConnectionsScreen({ onClose }: { onClose: () => void }) {
               <span className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-semibold ${state.signal === 'online' ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-300' : 'border-white/15 bg-white/5 text-slate-400'}`}>
                 {state.signal === 'online' ? <Wifi size={13} /> : <WifiOff size={13} />} Serwer sygnalizacji: {state.signal === 'online' ? 'online' : state.signal === 'connecting' ? 'łączenie…' : 'offline'}
               </span>
-              <span className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-semibold ${state.relay === 'online' ? 'border-sky-400/30 bg-sky-500/10 text-sky-300' : 'border-white/15 bg-white/5 text-slate-400'}`}>
+              <span className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-semibold ${state.relay === 'online' ? 'border-orange-400/30 bg-orange-500/10 text-orange-300' : 'border-white/15 bg-white/5 text-slate-400'}`}>
                 <Antenna size={13} /> Przekaźnik zapasowy: {state.relay === 'online' ? 'online' : state.relay === 'connecting' ? 'łączenie…' : 'wyłączony'}
               </span>
             </div>
@@ -78,7 +71,7 @@ export function ConnectionsScreen({ onClose }: { onClose: () => void }) {
                     <span className="h-8 w-8 shrink-0 rounded-lg text-center text-sm font-bold leading-8" style={{ color: player.color, background: `${player.color}22` }}>{index + 1}</span>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-semibold text-white">{pad?.nick || 'Wolne miejsce'}</div>
-                      <div className="text-[11px] text-slate-500">{pad ? <>{admin ? '★ Administrator · ' : ''}{pad.via === 'relay' ? <>przekaźnik <Antenna size={11} className="inline text-sky-400" /></> : <>P2P <Wifi size={11} className="inline text-emerald-400" /></>} · {pad.latency} ms</> : `Gracz ${index + 1}`}</div>
+                      <div className="text-[11px] text-slate-500">{pad ? <>{admin ? '★ Administrator · ' : ''}{pad.via === 'relay' ? <>przekaźnik <Antenna size={11} className="inline text-orange-400" /></> : <>P2P <Wifi size={11} className="inline text-emerald-400" /></>} · {pad.latency} ms</> : `Gracz ${index + 1}`}</div>
                     </div>
                   </div>
                 );
@@ -87,10 +80,10 @@ export function ConnectionsScreen({ onClose }: { onClose: () => void }) {
 
             <div className="mt-4"><ConnectionCheck defaultOpen={false} /></div>
             {state.error && <p className="mt-2 text-xs text-amber-300">{state.error}</p>}
-            {state.note && <p className="mt-2 text-xs text-sky-300">{state.note}</p>}
+            {state.note && <p className="mt-2 text-xs text-orange-300">{state.note}</p>}
           </div>
         </div>
       </div>
-    </div>
+    </Sheet>
   );
 }

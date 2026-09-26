@@ -1,6 +1,8 @@
+import { usesStableStick } from '../console/DeviceProfile';
 import { useCallback, useEffect, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from 'react';
 import type { PadSteer } from '../net/protocol';
 import { unlockHaptics } from './haptics';
+import { useConsolePreferences } from '../console/preferences';
 
 /** Martwa strefa (część promienia) — drżący palec nie rusza czołgu. */
 const DEAD_ZONE = 0.12;
@@ -77,6 +79,9 @@ export function Joystick({
   zIndex = 20,
   bottomPadding = 46,
 }: JoystickProps) {
+  const prefs = useConsolePreferences();
+  size = Math.min(size * prefs.controlSize, window.innerWidth * zoneWidthPct / 100 - 12, window.innerHeight * .55);
+  bottomPadding += prefs.controlHeight;
   const zoneRef = useRef<HTMLDivElement>(null);
   const pointerId = useRef<number | null>(null);
   /** Środek gałki (współrzędne strefy) — domowy albo ten „złapany” palcem. */
@@ -173,7 +178,9 @@ export function Joystick({
   }, []);
 
   const release = useCallback(() => {
+    const id = pointerId.current;
     pointerId.current = null;
+    if (id !== null) { try { zoneRef.current?.releasePointerCapture(id); } catch { /* capture may already be lost */ } }
     engaged.current = false;
     if (hotRef.current) { hotRef.current = false; onHotRef.current?.(false); }
     setFloating(null);
@@ -191,12 +198,12 @@ export function Joystick({
     engaged.current = false;
     try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ }
     const p = localPoint(e.clientX, e.clientY);
-    const origin = {
+    const origin = usesStableStick(prefs.deviceProfile) ? home : {
       x: clampRange(radius + 6, p.x, zoneW - radius - 6),
       y: clampRange(radius + 6, p.y, zoneH - radius - bottomPad + 10),
     };
     originRef.current = origin;
-    setFloating(origin);
+    setFloating(usesStableStick(prefs.deviceProfile) ? null : origin);
     setActive(true);
     setKnob({ x: 0, y: 0 });
     onChangeRef.current(0, 0);
@@ -205,6 +212,7 @@ export function Joystick({
 
   const onPointerMove = (e: RPointerEvent<HTMLDivElement>) => {
     if (e.pointerId !== pointerId.current) return;
+    if (e.pointerType === 'mouse' && e.buttons === 0) { release(); return; }
     const p = localPoint(e.clientX, e.clientY);
     emit(p.x - originRef.current.x, p.y - originRef.current.y);
     e.preventDefault();
@@ -218,6 +226,26 @@ export function Joystick({
   // Gałka musi wrócić do zera, nawet gdy ekran pada znika spod palca.
   useEffect(() => () => { onChangeRef.current(0, 0); }, []);
   useEffect(() => { if (disabled) release(); }, [disabled, release]);
+  useEffect(() => {
+    const hidden = () => { if (document.hidden) release(); };
+    const end = (e: PointerEvent) => { if (e.pointerId === pointerId.current) release(); };
+    const noTouches = (e: TouchEvent) => { if (!e.touches.length && pointerId.current !== null) release(); };
+    const events = ['blur', 'pagehide', 'orientationchange', 'resize', 'joypad-release-input'] as const;
+    events.forEach(event => window.addEventListener(event, release));
+    window.addEventListener('pointerup', end, true);
+    window.addEventListener('pointercancel', end, true);
+    window.addEventListener('touchend', noTouches, { passive: true });
+    window.addEventListener('touchcancel', noTouches, { passive: true });
+    window.visualViewport?.addEventListener('resize', release);
+    document.addEventListener('visibilitychange', hidden);
+    return () => {
+      events.forEach(event => window.removeEventListener(event, release));
+      window.removeEventListener('pointerup', end, true); window.removeEventListener('pointercancel', end, true);
+      window.removeEventListener('touchend', noTouches); window.removeEventListener('touchcancel', noTouches);
+      window.visualViewport?.removeEventListener('resize', release);
+      document.removeEventListener('visibilitychange', hidden);
+    };
+  }, [release]);
 
   /* ---- wygląd ---- */
   const knobMag = Math.min(1, Math.hypot(knob.x, knob.y) / maxTravel);
@@ -229,6 +257,8 @@ export function Joystick({
   return (
     <div
       ref={zoneRef}
+      data-joystick={side}
+      data-active={active}
       className={`fixed bottom-0 top-0 select-none ${side === 'right' ? 'right-0' : 'left-0'}`}
       style={{ width: `${zoneWidthPct}%`, touchAction: 'none', zIndex, opacity: disabled ? 0.4 : 1 }}
       onPointerDown={onPointerDown}
@@ -349,13 +379,13 @@ export function Joystick({
 
           {/* gałka (knob) */}
           <div
-            className="absolute left-1/2 top-1/2 rounded-full"
+            className="pad-stick-knob absolute left-1/2 top-1/2 rounded-full"
             style={{
               width: knobR * 2, height: knobR * 2,
               transform: `translate(calc(-50% + ${knob.x}px), calc(-50% + ${knob.y}px))`,
               background: `radial-gradient(circle at 35% 30%, ${color} 0%, ${color}cc 40%, #1a1a1e 100%)`,
-              boxShadow: `0 6px 18px rgba(0,0,0,0.7), inset 0 -4px 10px rgba(0,0,0,0.5), 0 0 22px ${color}66`,
-              transition: active ? 'none' : 'transform 120ms ease-out',
+              boxShadow: `${-knob.x * .15}px ${6 - knob.y * .12}px 16px rgba(0,0,0,.7), inset 0 1px 2px #ffffff20, 0 0 0 2px ${color}22`,
+              transition: active ? 'none' : 'transform 200ms cubic-bezier(.2,1.35,.4,1)',
             }}
           >
             <div className="absolute inset-[30%] rounded-full" style={{ background: 'repeating-radial-gradient(circle, rgba(0,0,0,0.25) 0 1px, transparent 1px 4px)' }} />

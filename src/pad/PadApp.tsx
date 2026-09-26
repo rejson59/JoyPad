@@ -1,5 +1,10 @@
+import { DeviceProfile } from '../console/DeviceProfile';
+import { Sheet } from '../console/Sheet';
+import { useConsolePreferences } from '../console/preferences';
+import { PadShell } from '../console/PadShell';
+import { useViewport } from '../console/useViewport';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Gamepad2, Settings, X, Loader2, LogOut, Maximize2, Pause, Smartphone, Wifi, WifiOff, RotateCcw } from 'lucide-react';
+import { Gamepad2, Settings, Loader2, LogOut, Maximize2, Pause, Smartphone, Wifi, WifiOff, RotateCcw } from 'lucide-react';
 import { padClient, type PadClientState } from '../net/padClient';
 import { CODE_LENGTH, normalizeCode, normalizeNick, padCodeFromHash, type PadFx, type PadSteer } from '../net/protocol';
 import { Joystick } from './Joystick';
@@ -34,7 +39,7 @@ const AUTO_FIRE_RING = 0.82;
 
 function readLayout(): PadLayout {
   try {
-    const raw = JSON.parse(localStorage.getItem(LS_LAYOUT) || '{}') as Partial<PadLayout>;
+    const raw = JSON.parse(safeRead(LS_LAYOUT) || '{}') as Partial<PadLayout>;
     const mode: PadLayoutMode = raw.mode === 'minimal' || raw.mode === 'twin'
       ? raw.mode
       : raw.aimStick === false ? 'minimal' : DEFAULT_LAYOUT.mode;
@@ -66,7 +71,7 @@ const FX_VIBE: Record<PadFx, number | number[]> = {
 /** Witamy kolejne telefony w pokoju — pierwszy ma swoją chwilę (Lab kontrolera). */
 function PadJoinSplash({ color, slot }: { color: string; slot: number }) {
   return (
-    <div className="pointer-events-none fixed inset-0 z-[70] flex items-center justify-center" aria-live="polite">
+    <div className="pad-joined" aria-live="polite">
       <div className="join-splash-card" style={{ '--pc': color, padding: '26px 42px' } as React.CSSProperties}>
         <div className="joy-kicker flex items-center justify-center gap-2 text-white/60">
           <Smartphone size={12} /> DOŁĄCZONO DO POKOJU
@@ -78,15 +83,17 @@ function PadJoinSplash({ color, slot }: { color: string; slot: number }) {
   );
 }
 
-export default function PadApp() {
+function PadContent() {
+  const viewport = useViewport();
+  const prefs = useConsolePreferences();
+  const [labSkipped, setLabSkipped] = useState(false);
   const [st, setSt] = useState<PadClientState>(padClient.state);
   const [booted, setBooted] = useState(false);
-  const [labDone, setLabDone] = useState(false);
-  const [code, setCode] = useState(() => padCodeFromHash() || localStorage.getItem(LS_CODE) || '');
-  const [nick, setNick] = useState(() => localStorage.getItem(LS_NICK) || '');
+  const [code, setCode] = useState(() => padCodeFromHash() || safeRead(LS_CODE) || '');
+  const [nick, setNick] = useState(() => safeRead(LS_NICK) || '');
   const [flash, setFlash] = useState<string | null>(null);
   const [landscapeHint, setLandscapeHint] = useState(false);
-  const [wakeLockEnabled, setWakeLockEnabled] = useState(() => localStorage.getItem(LS_KEEP_AWAKE) === 'on');
+  const [wakeLockEnabled, setWakeLockEnabled] = useState(() => safeRead(LS_KEEP_AWAKE) === 'on');
   const [wakeLockStatus, setWakeLockStatus] = useState<WakeLockStatus>('off');
   const [fullscreenStatus, setFullscreenStatus] = useState<FullscreenStatus>('off');
   const [tiltEnabled, setTiltEnabled] = useState(false);
@@ -100,6 +107,7 @@ export default function PadApp() {
   }, []);
 
   useEffect(() => padClient.subscribe(setSt), []);
+  useEffect(() => { if (st.screen !== 'lab') setLabSkipped(false); }, [st.screen]);
 
   // Nick zmieniony w menu pozostaje też w polu następnego połączenia,
   // nie tylko w localStorage i stanie klienta sieciowego.
@@ -109,7 +117,8 @@ export default function PadApp() {
 
   useEffect(() => {
     padClient.onFx = (fx) => {
-      vibrate(FX_VIBE[fx]);
+      window.dispatchEvent(new CustomEvent('joypad-pad-fx', { detail: fx }));
+      haptic(FX_VIBE[fx], fx === 'hit' || fx === 'dead' || fx === 'win' ? 2 : 1);
       if (fx === 'hit') showFlash('rgba(239,68,68,0.45)', 140);
       if (fx === 'dead') showFlash('rgba(0,0,0,0.8)', 500);
       if (fx === 'kill') showFlash('rgba(251,191,36,0.4)', 250);
@@ -129,8 +138,8 @@ export default function PadApp() {
   useEffect(() => {
     const c = padCodeFromHash();
     if (c && c.length === CODE_LENGTH && padClient.state.status === 'idle') {
-      localStorage.setItem(LS_CODE, c);
-      padClient.connect(c, localStorage.getItem(LS_NICK) || '');
+      safeWrite(LS_CODE, c);
+      padClient.connect(c, safeRead(LS_NICK) || '');
     }
   }, []);
 
@@ -139,10 +148,10 @@ export default function PadApp() {
   const [joinFx, setJoinFx] = useState<{ key: number } | null>(null);
   const wasConnected = useRef(st.status === 'connected');
   useEffect(() => {
-    if (st.status === 'connected' && !wasConnected.current && st.slot !== st.adminSlot) {
+    if (st.status === 'connected' && !wasConnected.current && true) {
       wasConnected.current = true;
-      const t1 = window.setTimeout(() => { haptic([60, 50, 120]); setJoinFx({ key: Date.now() }); }, 550);
-      const t2 = window.setTimeout(() => setJoinFx(null), 550 + 2500);
+      const t1 = window.setTimeout(() => { haptic([30, 40, 55]); setJoinFx({ key: Date.now() }); }, 0);
+      const t2 = window.setTimeout(() => setJoinFx(null), 1800);
       return () => { window.clearTimeout(t1); window.clearTimeout(t2); };
     }
     if (st.status !== 'connected') wasConnected.current = false;
@@ -222,7 +231,7 @@ export default function PadApp() {
 
   const changeWakeLock = (enabled: boolean) => {
     setWakeLockEnabled(enabled);
-    try { localStorage.setItem(LS_KEEP_AWAKE, enabled ? 'on' : 'off'); } catch { /* optional */ }
+    try { safeWrite(LS_KEEP_AWAKE, enabled ? 'on' : 'off'); } catch { /* optional */ }
   };
 
   // Żyroskop/przechył to osobny, domyślnie wyłączony tryb. Na iOS prośbę o zgodę
@@ -287,8 +296,8 @@ export default function PadApp() {
     const c = normalizeCode(code);
     const n = normalizeNick(nick);
     if (c.length !== CODE_LENGTH) return;
-    localStorage.setItem(LS_CODE, c);
-    localStorage.setItem(LS_NICK, n);
+    safeWrite(LS_CODE, c);
+    safeWrite(LS_NICK, n);
     unlockHaptics();
     padClient.connect(c, n);
   };
@@ -328,7 +337,7 @@ export default function PadApp() {
   const updateLayout = (patch: Partial<PadLayout>) => {
     setLayoutState(prev => {
       const next = { ...prev, ...patch };
-      try { localStorage.setItem(LS_LAYOUT, JSON.stringify(next)); } catch { /* ignore */ }
+      try { safeWrite(LS_LAYOUT, JSON.stringify(next)); } catch { /* ignore */ }
       return next;
     });
     vibrate(12);
@@ -337,6 +346,7 @@ export default function PadApp() {
 
   /* Ogień = przycisk ALBO (auto-ogień i gałka celowania w czerwonym pierścieniu). */
   const fireBtn = useRef(false);
+  const firePointer = useRef<number | null>(null);
   const aimHot = useRef(false);
   const fireSent = useRef(false);
   const autoFireRef = useRef(layout.autoFire);
@@ -353,6 +363,21 @@ export default function PadApp() {
     if (v) { unlockHaptics(); vibrate(10); }
     syncFire();
   };
+  useEffect(() => {
+    const reset = () => {
+      firePointer.current = null; fireBtn.current = false; aimHot.current = false; fireSent.current = false;
+      padClient.setInput({ fwd: 0, turn: 0, dirX: 0, dirY: 0, aimX: 0, aimY: 0, fire: false });
+    };
+    const end = (e: PointerEvent) => { if (e.pointerId === firePointer.current) { firePointer.current = null; fireBtn.current = false; syncFire(); } };
+    window.addEventListener('pointerup', end, true); window.addEventListener('pointercancel', end, true);
+    if (showSettings || st.hud?.paused) reset();
+    const hidden = () => { if (document.hidden) reset(); };
+    const safetyEvents = ['blur', 'pagehide', 'orientationchange', 'resize', 'joypad-release-input'] as const;
+    safetyEvents.forEach(event => window.addEventListener(event, reset));
+    document.addEventListener('visibilitychange', hidden);
+    return () => { window.removeEventListener('pointerup', end, true); window.removeEventListener('pointercancel', end, true); safetyEvents.forEach(event => window.removeEventListener(event, reset)); document.removeEventListener('visibilitychange', hidden); };
+  }, [showSettings, st.hud?.paused, syncFire]);
+
   const onAimHot = useCallback((hot: boolean) => {
     aimHot.current = hot;
     if (hot && autoFireRef.current) vibrate(12);
@@ -375,28 +400,24 @@ export default function PadApp() {
     padClient.setInput({ fwd: 0, turn: 0, dirX: 0, dirY: 0, aimX: 0, aimY: 0, fire: false });
   }, [st.screen, st.game]);
 
-  // Lab kontrolera pokazuje się tylko raz — po opuszczeniu lobby nie wraca w tej sesji.
-  useEffect(() => {
-    if (st.screen !== 'lobby') setLabDone(true);
-  }, [st.screen]);
-
   /* ---------- Connection screen ---------- */
   if (!booted) return <BootSplash onDone={() => setBooted(true)} />;
   if (st.status !== 'connected') {
     // „lost” też jest zajęte — klient sam próbuje wrócić do gry.
     const busy = st.status === 'connecting' || st.status === 'lost';
     return (
-      <div className="pad-joy flex min-h-[100dvh] flex-col items-center justify-center px-5 py-8 text-white" style={{ background: 'radial-gradient(ellipse at 50% 4%,rgba(249,115,22,.16),transparent 52%),#0b0e0f' }}>
+      <div className="pad-joy flex min-h-[100dvh] flex-col items-center justify-center px-5 py-8 text-white" style={{ background: 'radial-gradient(ellipse at 50% 4%,rgba(145,213,255,.07),transparent 52%),#070a10' }}>
         <div className="fixed left-0 right-0 top-0 h-1 bg-gradient-to-r from-orange-600 via-amber-300 to-orange-700" />
         <div className="joy-enter mb-3 flex items-center gap-2 rounded-full border border-orange-400/30 bg-orange-500/10 px-4 py-1.5 text-[11px] font-bold tracking-[0.2em] text-orange-300">
           <Smartphone className="h-3.5 w-3.5" /> TELEFON JAKO PAD
         </div>
         <h1 className="joy-brand joy-enter joy-enter-1 text-center text-5xl font-extrabold tracking-[-.06em]">Joy<span className="text-orange-400">Pad.</span></h1>
-        <p className="joy-enter joy-enter-2 mt-2 max-w-sm text-center text-sm text-slate-400">Jeden ekran, siedem gier i telefon w roli kontrolera.</p>
+        <p className="joy-enter joy-enter-2 mt-2 max-w-sm text-center text-sm text-slate-400">Wspólny ekran. Twój telefon. Jeden system gry.</p>
 
         <div className="joy-room joy-enter joy-enter-3 mt-6 w-full max-w-sm rounded-2xl p-5">
-          <label className="block text-[11px] font-bold tracking-widest text-zinc-400">KOD Z EKRANU KOMPUTERA</label>
+          <label htmlFor="pad-room-code" className="block text-[11px] font-bold tracking-widest text-zinc-400">KOD Z EKRANU KOMPUTERA</label>
           <input
+            id="pad-room-code"
             value={code}
             onChange={e => setCode(normalizeCode(e.target.value))}
             onKeyDown={e => { if (e.key === 'Enter') connect(); }}
@@ -408,8 +429,9 @@ export default function PadApp() {
             maxLength={CODE_LENGTH}
             className="font-mono2 mt-1.5 w-full rounded-xl border border-white/15 bg-black/60 px-4 py-3 text-center text-3xl font-extrabold tracking-[0.4em] text-orange-300 outline-none focus:border-orange-400"
           />
-          <label className="mt-4 block text-[11px] font-bold tracking-widest text-zinc-400">TWÓJ NICK</label>
+          <label htmlFor="pad-nickname" className="mt-4 block text-[11px] font-bold tracking-widest text-zinc-400">TWÓJ NICK</label>
           <input
+            id="pad-nickname"
             value={nick}
             onChange={e => setNick(e.target.value.slice(0, 14))}
             onKeyDown={e => { if (e.key === 'Enter') connect(); }}
@@ -420,17 +442,17 @@ export default function PadApp() {
           <button
             onClick={connect}
             disabled={busy || normalizeCode(code).length !== CODE_LENGTH}
-            className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-400 to-amber-200 py-3.5 text-lg font-black tracking-widest text-[#0b0e0f] shadow-[0_0_30px_rgba(249,115,22,0.24)] disabled:opacity-40 disabled:shadow-none"
+            className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-400 to-amber-200 py-3.5 text-lg font-black tracking-widest text-[#070a10] shadow-[0_0_30px_rgba(249,115,22,0.24)] disabled:opacity-40 disabled:shadow-none"
           >
             {busy ? <><Loader2 className="h-5 w-5 animate-spin" /> ŁĄCZENIE…</> : <><Wifi className="h-5 w-5" /> POŁĄCZ</>}
           </button>
 
           {busy && (
             <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100">
-              <div className="font-bold leading-snug">{st.progress || 'Łączę…'}</div>
+              <div className="font-bold leading-snug">{st.status === 'lost' ? 'Łączymy ponownie. Sterowanie jest bezpiecznie zatrzymane.' : 'Łączymy Twój pad…'}</div>
               <div className="mt-1 text-[11px] text-amber-200/70">
                 {st.elapsed > 0 && <>Czas: {st.elapsed} s • </>}
-                Serwer: {st.signaling}
+                <details><summary>Szczegóły połączenia</summary>{st.progress}<br />Serwer: {st.signaling}</details>
               </div>
               <button
                 onClick={() => padClient.disconnect()}
@@ -477,10 +499,10 @@ export default function PadApp() {
   // Pilot biblioteki, menu poszczególnych gier i cztery dedykowane pady arcade.
   // Oryginalny pad twin-stick Stalowego Frontu poniżej pozostaje nietknięty.
   // Tuż po sparowaniu, przed menu głównym: Lab kontrolera (wibracje, akcelerometr, żyroskop).
-  if (st.status === 'connected' && st.screen === 'lobby' && !labDone) {
-    return <JoyLabPad nick={st.nick || st.name} color={st.color} onDone={() => setLabDone(true)} />;
+  if (st.status === 'connected' && st.screen === 'lab' && !labSkipped) {
+    return <JoyLabPad nick={st.nick || st.name} color={st.color} onDone={() => { if (st.slot === st.adminSlot) padClient.sendCommand('back'); else setLabSkipped(true); }} />;
   }
-  if (st.screen !== 'game' || st.game !== 'tanks') return <><JoypadController st={st} fullscreen={goFullscreen} fullscreenStatus={fullscreenStatus} wakeLockEnabled={wakeLockEnabled} onWakeLockChange={changeWakeLock} wakeLockStatus={wakeLockStatus} tiltEnabled={tiltEnabled} onTiltChange={changeTilt} tiltStatus={tiltStatus} />{flash && <div className="pointer-events-none fixed inset-0 z-[60]" style={{ background: flash }} />}{joinFx && <PadJoinSplash color={st.color} slot={st.slot} key={joinFx.key} />}</>;
+  if (st.screen !== 'game' || st.game !== 'tanks') return <><JoypadController st={st} fullscreen={goFullscreen} fullscreenStatus={fullscreenStatus} wakeLockEnabled={wakeLockEnabled} onWakeLockChange={changeWakeLock} wakeLockStatus={wakeLockStatus} tiltEnabled={tiltEnabled} onTiltChange={changeTilt} tiltStatus={tiltStatus} />{flash && <div className="pointer-events-none fixed inset-0 z-[60]" style={{ boxShadow: `inset 0 0 65px -12px ${flash}`, border: `2px solid ${flash}` }} />}{joinFx && <PadJoinSplash color={st.color} slot={st.slot} key={joinFx.key} />}</>;
 
   /* ---------- Controller screen ---------- */
   const hud = st.hud;
@@ -488,11 +510,11 @@ export default function PadApp() {
 
   return (
     <div
-      className="fixed inset-0 select-none overflow-hidden text-white"
+      className="pad-hardware fixed inset-0 select-none overflow-hidden text-white"
       style={{ background: `radial-gradient(ellipse at 50% 120%, ${st.darkColor}66 0%, #0a0a0b 60%)`, touchAction: 'none' }}
     >
       {/* flash overlay */}
-      {flash && <div className="pointer-events-none absolute inset-0 z-40" style={{ background: flash }} />}
+      {flash && <div className="pointer-events-none absolute inset-0 z-40" style={{ boxShadow: `inset 0 0 65px -12px ${flash}`, border: `2px solid ${flash}` }} />}
       {joinFx && <PadJoinSplash color={st.color} slot={st.slot} key={joinFx.key} />}
 
       {/* top bar — tylko kolor, nick i ikony; wyniki są na ekranie głównym */}
@@ -532,15 +554,15 @@ export default function PadApp() {
         const aimSide = layout.swap ? 'left' : 'right';
         const twin = layout.mode === 'twin' && layout.aimStick;
         const stickSize = twin
-          ? Math.min(190, Math.max(130, Math.floor(Math.min(window.innerWidth * 0.3, window.innerHeight * 0.44))))
-          : Math.min(210, Math.max(140, Math.floor(Math.min(window.innerWidth * 0.34, window.innerHeight * 0.46))));
-        const bigFire = Math.min(170, Math.max(120, Math.floor(window.innerHeight * 0.38)));
-        const smallFire = Math.min(96, Math.max(72, Math.floor(window.innerHeight * 0.22)));
+          ? Math.min(190, Math.max(130, Math.floor(Math.min(viewport.width * 0.3, viewport.height * 0.44))))
+          : Math.min(210, Math.max(140, Math.floor(Math.min(viewport.width * 0.34, viewport.height * 0.46))));
+        const bigFire = Math.min(170 * prefs.controlSize, Math.max(100, Math.floor(viewport.height * 0.38 * prefs.controlSize)), viewport.width * .4);
+        const smallFire = Math.min(96 * prefs.controlSize, Math.max(64, Math.floor(viewport.height * 0.22 * prefs.controlSize)));
         const fireHandlers = {
-          onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => { e.preventDefault(); e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); setFire(true); },
-          onPointerUp: () => setFire(false),
-          onPointerCancel: () => setFire(false),
-          onLostPointerCapture: () => setFire(false),
+          onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => { e.preventDefault(); e.stopPropagation(); if (firePointer.current !== null) return; firePointer.current = e.pointerId; try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* Window release fallback. */ } setFire(true); },
+          onPointerUp: (e: React.PointerEvent<HTMLButtonElement>) => { if (e.pointerId === firePointer.current) { firePointer.current = null; setFire(false); } },
+          onPointerCancel: () => { firePointer.current = null; setFire(false); },
+          onLostPointerCapture: () => { firePointer.current = null; setFire(false); },
           onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
         };
         const fireStyle = (d: number, font: string): React.CSSProperties => ({
@@ -557,7 +579,7 @@ export default function PadApp() {
               size={stickSize}
               color={color}
               onChange={onStick}
-              disabled={tiltEnabled}
+              disabled={tiltEnabled || showSettings || Boolean(hud?.paused)}
               onTick={onStickTick}
               mode={steer}
               zoneWidthPct={twin ? 50 : 55}
@@ -586,7 +608,7 @@ export default function PadApp() {
                 size={stickSize}
                 color="#f87171"
                 onChange={onAim}
-                disabled={tiltEnabled}
+                disabled={tiltEnabled || showSettings || Boolean(hud?.paused)}
                 zoneWidthPct={50}
                 hotRing={layout.autoFire ? AUTO_FIRE_RING : undefined}
                 onHotChange={onAimHot}
@@ -594,7 +616,7 @@ export default function PadApp() {
                 caption={layout.autoFire ? 'CELOWANIE • DO KOŃCA = OGIEŃ' : 'CELOWANIE WIEŻĄ'}
                 sideSlot={
                   <div className="flex flex-col items-center gap-1">
-                    <button {...fireHandlers} className="flex items-center justify-center rounded-full border-4 border-red-900 font-display tracking-widest text-white active:scale-95" style={fireStyle(smallFire, '15px')}>
+                    <button {...fireHandlers} disabled={showSettings || !hud?.alive || Boolean(hud?.paused)} className="pad-action flex items-center justify-center rounded-full border-4 border-red-900 font-display tracking-widest text-white active:scale-95" style={fireStyle(smallFire, '15px')}>
                       OGIEŃ
                     </button>
                   </div>
@@ -603,9 +625,9 @@ export default function PadApp() {
             ) : (
               <div
                 className={`absolute bottom-0 z-20 flex flex-col items-center gap-2 px-6 ${aimSide === 'right' ? 'right-0' : 'left-0'}`}
-                style={{ paddingBottom: 'max(18px, env(safe-area-inset-bottom))' }}
+                style={{ paddingBottom: `max(${18 + prefs.controlHeight}px, env(safe-area-inset-bottom))` }}
               >
-                <button {...fireHandlers} className="flex items-center justify-center rounded-full border-4 border-red-900 font-display tracking-widest text-white active:scale-95" style={fireStyle(bigFire, '24px')}>
+                <button {...fireHandlers} disabled={showSettings || !hud?.alive || Boolean(hud?.paused)} className="pad-action flex items-center justify-center rounded-full border-4 border-red-900 font-display tracking-widest text-white active:scale-95" style={fireStyle(bigFire, '24px')}>
                   OGIEŃ
                 </button>
                 {layout.mode !== 'minimal' && <span className="text-[10px] font-bold tracking-widest text-zinc-500">PRZYTRZYMAJ = SERIA</span>}
@@ -616,13 +638,7 @@ export default function PadApp() {
       })()}
 
       {/* ustawienia sterowania */}
-      {showSettings && (
-        <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setShowSettings(false)}>
-          <div className="metal-panel w-full max-w-sm rounded-2xl p-4" onClick={e => e.stopPropagation()}>
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm font-black tracking-widest text-amber-300"><Settings className="h-4 w-4" /> STEROWANIE</div>
-              <button onClick={() => setShowSettings(false)} className="rounded-lg p-1 text-zinc-400 hover:bg-white/10"><X className="h-4 w-4" /></button>
-            </div>
+{showSettings && <Sheet title="Twój kontroler." onClose={() => setShowSettings(false)}>
             <NickEditor st={st} compact />
             <div className="mb-3 mt-3">
               <div className="mb-1 text-[10px] font-bold tracking-widest text-zinc-500">UKŁAD PADA</div>
@@ -676,9 +692,7 @@ export default function PadApp() {
               onTiltChange={changeTilt}
               tiltStatus={tiltStatus}
             />
-          </div>
-        </div>
-      )}
+      </Sheet>}
 
       {landscapeHint && (
         <button onClick={goFullscreen} className="absolute left-1/2 top-[30%] z-30 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/15 px-3 py-2 text-[11px] font-bold text-amber-200">
@@ -688,3 +702,8 @@ export default function PadApp() {
     </div>
   );
 }
+
+export default function PadApp() { const prefs = useConsolePreferences(); return prefs.deviceChosen ? <PadShell><PadContent /></PadShell> : <DeviceProfile welcome />; }
+
+function safeRead(key: string) { try { return localStorage.getItem(key); } catch { return null; } }
+function safeWrite(key: string, value: string) { try { localStorage.setItem(key, value); } catch { /* optional */ } }

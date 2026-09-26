@@ -21,6 +21,8 @@ jobs:
         run: npm run typecheck
       - name: Selftest — protokół i silniki arcade
         run: npm run selftest:arcade
+      - name: Selftest — system konsoli i haptyka
+        run: npm run selftest:console
       - name: Selftest — awaryjny przekaźnik MQTT
         run: npm run selftest:relay
       - name: Build

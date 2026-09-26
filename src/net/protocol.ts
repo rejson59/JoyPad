@@ -85,12 +85,14 @@ export const ZERO_INPUT: PadInput = { fwd: 0, turn: 0, fire: false };
 
 export type PadFx = 'fire' | 'hit' | 'kill' | 'dead' | 'pickup' | 'shield' | 'respawn' | 'win' | 'lose';
 
-export type HostScreen = 'lobby' | 'menu' | 'setup' | 'game' | 'over';
+export type HostScreen = 'lab' | 'lobby' | 'menu' | 'setup' | 'game' | 'over';
 export type RemoteCommand = 'left' | 'right' | 'up' | 'down' | 'select' | 'back' | 'pause' | 'restart' | 'home';
 export const REMOTE_COMMANDS: readonly RemoteCommand[] = ['left', 'right', 'up', 'down', 'select', 'back', 'pause', 'restart', 'home'];
 export interface RemoteEvent { id: number; command: RemoteCommand }
 
 export interface ArcadeHud {
+  countdown?: number;
+  paused?: boolean;
   score: number;
   timeLeft: number;
   title: string;
@@ -100,6 +102,8 @@ export interface ArcadeHud {
 }
 
 export interface SessionOptions {
+  /** Host-only configuration fingerprint; changing settings clears ready votes. */
+  revision?: string;
   primaryLabel: string;
   primaryValue: string;
   secondaryLabel: string;
@@ -111,7 +115,7 @@ export interface SessionState {
   screen: HostScreen;
   selection: number;
   adminSlot: number | null;
-  roster: { slot: number; nick: string }[];
+  roster: { slot: number; nick: string; ready?: boolean; rematch?: boolean; suggestedGame?: GameId }[];
   options?: SessionOptions;
 }
 
@@ -120,6 +124,9 @@ export type PadMessage =
   /** `pid` = stały identyfikator telefonu (localStorage) — zapobiega dwóm slotom na tym samym telefonie po zmianie transportu. */
   | { t: 'hello'; nick: string; ua: string; v: number; pid?: string; steer?: PadSteer }
   | { t: 'input'; fwd: number; turn: number; fire: boolean; steer?: PadSteer; dirX?: number; dirY?: number; aimX?: number; aimY?: number }
+  | { t: 'suggest'; game: GameId | null }
+  | { t: 'remind' }
+  | { t: 'intent'; kind: 'ready' | 'rematch'; value: boolean }
   | { t: 'pause' }
   | { t: 'command'; command: RemoteCommand }
   | { t: 'choose'; index: number }
@@ -128,6 +135,7 @@ export type PadMessage =
 
 /** Komputer -> telefon */
 export type HostMessage =
+  | { t: 'readyReminder' }
   | { t: 'welcome'; slot: number; name: string; nick?: string; color: string; darkColor: string; screen: HostScreen }
   | { t: 'nick'; nick: string }
   | { t: 'rejected'; reason: string }

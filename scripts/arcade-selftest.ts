@@ -52,6 +52,34 @@ for (const [i, link] of links.entries()) {
 assert.equal(host.session().adminSlot, 0);
 assert.deepEqual(host.session().roster.map(p => p.slot), [0, 1, 2]);
 const receive = (index: number, msg: PadMessage) => (host as unknown as { onMessage: (l: PadLink, m: PadMessage) => void }).onMessage(links[index], msg);
+// Intent is per-connection, available to all players, and never starts a round.
+host.setGame('race'); host.setScreen('menu');
+receive(1, { t: 'intent', kind: 'ready', value: true });
+assert.equal(host.session().roster[1].ready, true);
+assert.equal(host.session().roster[0].ready, false);
+receive(1, { t: 'intent', kind: 'ready', value: false });
+assert.equal(host.session().roster[1].ready, false);
+receive(1, { t: 'intent', kind: 'ready', value: true });
+receive(1, { t: 'intent', kind: 'rematch', value: true });
+assert.equal(host.session().roster[1].rematch, false);
+receive(1, { t: 'intent', kind: 'ready', value: 'yes' } as unknown as PadMessage);
+receive(1, { t: 'intent', kind: '__proto__', value: true } as unknown as PadMessage);
+assert.equal(host.session().roster[1].ready, true);
+host.setMenuOptions({ primaryLabel: 'laps', primaryValue: '3', secondaryLabel: 'bots', secondaryValue: '2' });
+assert.equal(host.session().roster[1].ready, false, 'settings invalidate readiness');
+receive(1, { t: 'intent', kind: 'ready', value: true });
+host.setMenuOptions({ primaryLabel: 'laps', primaryValue: '3', secondaryLabel: 'bots', secondaryValue: '2' });
+assert.equal(host.session().roster[1].ready, true, 'same settings do not reset a vote');
+host.setScreen('game');
+receive(1, { t: 'intent', kind: 'ready', value: true });
+assert.equal(host.session().roster[1].ready, false);
+host.setScreen('over');
+receive(2, { t: 'intent', kind: 'rematch', value: true });
+assert.equal(host.session().roster[2].rematch, true);
+assert.deepEqual(commands, [], 'a rematch vote is not a host command');
+host.setGame(null); host.setScreen('lobby');
+assert.ok(host.session().roster.every(p => !p.ready && !p.rematch));
+console.log('SESSION INTENT SELFTEST: OK (authority, validation, toggles, settings reset, game boundaries)');
 receive(1, { t: 'command', command: 'home' });
 receive(2, { t: 'choose', index: 4 });
 assert.deepEqual(commands, []); assert.deepEqual(picks, []);
@@ -102,6 +130,19 @@ assert.equal(client.state.screen, 'lobby');
 (client as unknown as { onMessage: (l: PadLink, m: unknown) => void }).onMessage(mockLink('server'), { t: 'screen', screen: 'menu' });
 assert.equal(client.state.screen, 'lobby');
 
+// Optional lab is a shared host state, even without a selected game.
+(client as unknown as { onMessage: (l: PadLink, m: unknown) => void }).onMessage(mockLink('server'), {
+  t: 'session', session: { game: null, screen: 'lab', selection: 2, adminSlot: 1, roster: [] },
+});
+assert.equal(client.state.screen, 'lab');
+(client as unknown as { onMessage: (l: PadLink, m: unknown) => void }).onMessage(mockLink('server'), { t: 'screen', screen: 'lobby' });
+assert.equal(client.state.screen, 'lobby');
+(client as unknown as { onMessage: (l: PadLink, m: unknown) => void }).onMessage(mockLink('server'), {
+  t: 'arcadeHud', hud: { score: 0, timeLeft: 30, title: 'Race', detail: '', countdown: 3, paused: true },
+});
+assert.equal(client.state.arcadeHud?.countdown, 3);
+assert.equal(client.state.arcadeHud?.paused, true);
+
 // Wszystkie cztery silniki: prawdziwa inicjalizacja, wejście analogowe,
 // kilkaset kroków symulacji i pełne rysowanie na mocku Canvas 2D.
 const gradient = { addColorStop() {} };
@@ -145,3 +186,78 @@ for (const Round of rounds) {
   simulations++;
 }
 console.log(`ARCADE SELFTEST: OK (role admina, protokół, ${simulations} silniki + macierze WebGL2)`);
+
+// Disconnects cannot leave a phantom vote; an unknown connection cannot vote.
+const intentHost = new PadHost();
+const intentLink = mockLink('intent-phone');
+const internal = intentHost as unknown as { conns: Map<string, PadLink>; onMessage: (l: PadLink, m: PadMessage) => void; dropConn: (id: string) => void };
+internal.conns.set(intentLink.id, intentLink);
+internal.onMessage(intentLink, { t: 'hello', nick: 'Ada', ua: 'test', v: 1 });
+intentHost.setGame('race'); intentHost.setScreen('over');
+internal.onMessage(intentLink, { t: 'intent', kind: 'rematch', value: true });
+assert.equal(intentHost.session().roster[0].rematch, true);
+internal.dropConn(intentLink.id);
+internal.onMessage(intentLink, { t: 'intent', kind: 'rematch', value: true });
+assert.equal(intentHost.session().roster.length, 0);
+console.log('INTENT DISCONNECT SELFTEST: OK');
+
+// Missing touch release and missing network heartbeat are independent failures.
+const safetyHost = new PadHost();
+const safety = safetyHost as unknown as { conns: Map<string, PadLink>; onMessage: (l: PadLink, m: PadMessage) => void; dropConn: (id: string) => void; sweepInputs: (now: number) => void };
+function pairSafety(id: string, pid: string) {
+  const link = mockLink(id); safety.conns.set(id, link);
+  safety.onMessage(link, { t: 'hello', nick: id, ua: 'test', v: 1, pid });
+  return link;
+}
+const safetyAdmin = pairSafety('safety-admin', 'safety-admin');
+const safetyGuest = pairSafety('safety-guest', 'safety-guest');
+safetyHost.setGame('race'); safetyHost.setScreen('menu');
+safety.onMessage(safetyGuest, { t: 'remind' });
+assert.equal(safetyGuest.sent.filter(m => (m as { t: string }).t === 'readyReminder').length, 0);
+safety.onMessage(safetyAdmin, { t: 'intent', kind: 'ready', value: true });
+safety.onMessage(safetyAdmin, { t: 'remind' }); safety.onMessage(safetyAdmin, { t: 'remind' });
+assert.equal(safetyGuest.sent.filter(m => (m as { t: string }).t === 'readyReminder').length, 1);
+assert.equal(safetyAdmin.sent.filter(m => (m as { t: string }).t === 'readyReminder').length, 0);
+safety.onMessage(safetyGuest, { t: 'suggest', game: 'tanks' });
+assert.equal(safetyHost.session().roster[1].suggestedGame, undefined);
+safetyHost.setScreen('over');
+safety.onMessage(safetyGuest, { t: 'suggest', game: 'snake' });
+safety.onMessage(safetyGuest, { t: 'suggest', game: 'race' });
+assert.equal(safetyHost.session().roster[1].suggestedGame, undefined);
+safety.onMessage(safetyGuest, { t: 'suggest', game: 'tanks' });
+assert.equal(safetyHost.session().roster[1].suggestedGame, 'tanks');
+safety.onMessage(safetyGuest, { t: 'suggest', game: null });
+assert.equal(safetyHost.session().roster[1].suggestedGame, undefined);
+safetyHost.setScreen('game');
+safety.onMessage(safetyGuest, { t: 'input', fwd: 1, turn: 1, fire: true, dirX: 1, aimY: 1 });
+assert.equal(safetyHost.inputs[1].fire, true);
+const inputTime = Date.now();
+safety.onMessage(safetyGuest, { t: 'ping', at: performance.now() });
+safety.sweepInputs(inputTime + 1000);
+assert.equal(safetyHost.inputs[1].fire, false);
+assert.equal(safetyHost.inputs[1].fwd, 0);
+assert.equal(safetyHost.session().roster.length, 2, 'short input outage does not drop/pause the session');
+safety.dropConn(safetyGuest.id); safety.dropConn(safetyAdmin.id);
+const returned = pairSafety('safety-returned', 'safety-guest');
+assert.equal(safetyHost.session().roster[0].slot, 1, 'same device recovers its old slot even when slot 0 is free');
+safety.dropConn(returned.id);
+pairSafety('new-zero', 'new-zero'); pairSafety('new-one', 'new-one');
+pairSafety('return-occupied', 'safety-guest');
+assert.equal(safetyHost.snapshot().pads.find(p => p.connId === 'return-occupied')?.slot, 2, 'returning phone never displaces a new player');
+console.log('PAD SAFETY SELFTEST: OK (stale input, recovery slot, occupied slot, reminders, proposal validation)');
+
+// Tire wisps can be translucent without changing sparks/explosions globally.
+const { Particles } = await import('../src/arcade/neon/particles');
+const particleTest = new Particles(3, false, 1);
+particleTest.emit(0, 0, 0, 0, 0, 0, 1, 1, 1, .4, 1, { opacity: .16 });
+particleTest.emit(0, 0, 0, 0, 0, 0, 1, 1, 1, .4, 1);
+particleTest.update(.1);
+const opacityValues = particleTest.points.geometry.getAttribute('aAlpha');
+assert.ok(Math.abs(opacityValues.getX(0) - .16) < .001);
+assert.equal(opacityValues.getX(1), 1, 'existing emitters retain their original opacity');
+particleTest.update(2);
+assert.equal(opacityValues.getX(0), 0);
+particleTest.points.geometry.dispose();
+const particleMaterial = particleTest.points.material;
+if (!Array.isArray(particleMaterial)) particleMaterial.dispose();
+console.log('NEON PARTICLES SELFTEST: OK (per-emitter opacity, unchanged defaults, fade-out)');

@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "selftest:relay": "esbuild scripts/relay-selftest.ts --bundle --format=esm --platform=node --outfile=.cache/relay-selftest.mjs --log-level=warning && node .cache/relay-selftest.mjs",
-    "selftest:arcade": "esbuild scripts/arcade-selftest.ts --bundle --format=esm --platform=node --define:import.meta.env={} --outfile=.cache/arcade-selftest.mjs --log-level=warning && node .cache/arcade-selftest.mjs"
+    "selftest:arcade": "esbuild scripts/arcade-selftest.ts --bundle --format=esm --platform=node --define:import.meta.env={} --outfile=.cache/arcade-selftest.mjs --log-level=warning && node .cache/arcade-selftest.mjs",
+    "selftest:console": "esbuild scripts/console-selftest.ts --bundle --format=esm --platform=node --define:import.meta.env={} --outfile=.cache/console-selftest.mjs --log-level=warning && node .cache/console-selftest.mjs"
   },
   "dependencies": {
     "@fontsource/black-ops-one": "^5.3.0",

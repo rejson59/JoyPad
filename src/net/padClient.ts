@@ -46,7 +46,7 @@ export interface PadClientState {
   game: GameId | null;
   adminSlot: number | null;
   selection: number;
-  roster: { slot: number; nick: string }[];
+  roster: { slot: number; nick: string; ready?: boolean; rematch?: boolean; suggestedGame?: GameId }[];
   options?: SessionOptions;
   hud: PadHud | null;
   arcadeHud: ArcadeHud | null;
@@ -483,7 +483,7 @@ export class PadClient {
         break;
       }
       case 'screen': {
-        const effectiveScreen = this.state.game === null ? 'lobby' : msg.screen;
+        const effectiveScreen = this.state.game === null && msg.screen !== 'lab' ? 'lobby' : msg.screen;
         this.set({
           screen: effectiveScreen,
           hud: effectiveScreen === 'game' ? this.state.hud : null,
@@ -492,6 +492,9 @@ export class PadClient {
         });
         break;
       }
+      case 'readyReminder':
+        window.dispatchEvent(new Event('joypad-ready-reminder'));
+        break;
       case 'session': {
         const { game: rawGame, screen, adminSlot, selection, roster, options } = msg.session;
         // Twarda walidacja id gry z protokółu: nieznane id traktujemy jak brak
@@ -500,7 +503,7 @@ export class PadClient {
         // Sesja bez gry oznacza bibliotekę. Wymuszamy to także po stronie
         // telefonu, żeby pojedynczy opóźniony pakiet „menu gry” nie zablokował
         // ponownego wyboru po powrocie z rozgrywki.
-        const effectiveScreen = game === null ? 'lobby' : screen;
+        const effectiveScreen = game === null && screen !== 'lab' ? 'lobby' : screen;
         this.set({
           game, screen: effectiveScreen, adminSlot, selection, roster, options,
           hud: effectiveScreen === 'game' && game === 'tanks' ? this.state.hud : null,
@@ -539,6 +542,8 @@ export class PadClient {
     if (this.state.status === 'connected' && this.conn === link) {
       // Zerwane po starcie gry — próbujemy wrócić automatycznie.
       this.conn = null;
+      this.releaseInput();
+      window.dispatchEvent(new Event('joypad-release-input'));
       this.stopStreams();
       this.set({
         status: 'lost', hud: null,
@@ -734,6 +739,7 @@ export class PadClient {
 
   /** Ustaw aktualne wejście — wysyłka jest zbuforowana do ~30 Hz. */
   setInput(inp: Partial<PadInput>) {
+    if (typeof document !== 'undefined' && document.hidden) { this.releaseInput(); return; }
     this.pending = { ...this.pending, ...inp };
   }
 
@@ -765,6 +771,18 @@ export class PadClient {
 
   requestPause() {
     if (this.conn?.open) this.conn.send({ t: 'pause' });
+  }
+
+  suggestGame(game: GameId | null) { if (this.conn?.open) this.conn.send({ t: 'suggest', game }); }
+  remindReady() { if (this.conn?.open) this.conn.send({ t: 'remind' }); }
+  releaseInput() {
+    this.pending = { fwd: 0, turn: 0, fire: false, dirX: 0, dirY: 0, aimX: 0, aimY: 0 };
+    this.forceSend = true;
+    try { this.flush(); } catch { /* Host watchdog also releases stale input. */ }
+  }
+
+  sendIntent(kind: 'ready' | 'rematch', value: boolean) {
+    if (this.state.status === 'connected' && this.conn?.open) this.conn.send({ t: 'intent', kind, value });
   }
 
   sendCommand(command: RemoteCommand) {

@@ -4,6 +4,7 @@ export interface ConsolePreferences {
   deviceProfile: 'auto' | 'android' | 'ios';
   deviceChosen: boolean;
   previews: boolean;
+  replays: boolean;
   sound: boolean;
   haptics: 'off' | 'subtle' | 'full';
   motion: 'system' | 'reduced';
@@ -11,12 +12,13 @@ export interface ConsolePreferences {
   controlSize: number;
   controlHeight: number;
 }
-const defaults: ConsolePreferences = { deviceProfile: 'auto', deviceChosen: false, previews: true, sound: true, haptics: 'subtle', motion: 'system', hand: 'right', controlSize: 1, controlHeight: 0 };
+const defaults: ConsolePreferences = { deviceProfile: 'auto', deviceChosen: false, previews: true, replays: true, sound: true, haptics: 'subtle', motion: 'system', hand: 'right', controlSize: 1, controlHeight: 0 };
 export function sanitizePreferences(raw: Partial<ConsolePreferences>): ConsolePreferences {
   return {
     deviceProfile: raw.deviceProfile === 'ios' || raw.deviceProfile === 'android' ? raw.deviceProfile : 'auto',
     deviceChosen: raw.deviceChosen === true,
     previews: typeof raw.previews === 'boolean' ? raw.previews : true,
+    replays: typeof raw.replays === 'boolean' ? raw.replays : true,
     sound: typeof raw.sound === 'boolean' ? raw.sound : defaults.sound,
     haptics: raw.haptics === 'off' || raw.haptics === 'full' ? raw.haptics : 'subtle',
     motion: raw.motion === 'reduced' ? 'reduced' : 'system',

@@ -1,3 +1,4 @@
+import { JoyPadLogo } from '../components/JoyPadLogo';
 import { DeviceProfile } from '../console/DeviceProfile';
 import { Sheet } from '../console/Sheet';
 import { useConsolePreferences } from '../console/preferences';
@@ -411,7 +412,7 @@ function PadContent() {
         <div className="joy-enter mb-3 flex items-center gap-2 rounded-full border border-orange-400/30 bg-orange-500/10 px-4 py-1.5 text-[11px] font-bold tracking-[0.2em] text-orange-300">
           <Smartphone className="h-3.5 w-3.5" /> TELEFON JAKO PAD
         </div>
-        <h1 className="joy-brand joy-enter joy-enter-1 text-center text-5xl font-extrabold tracking-[-.06em]">Joy<span className="text-orange-400">Pad.</span></h1>
+        <JoyPadLogo size={90} className="mx-auto mb-4" /><h1 className="joy-brand joy-enter joy-enter-1 text-center text-5xl font-extrabold tracking-[-.06em]">Joy<span className="text-orange-400">Pad.</span></h1>
         <p className="joy-enter joy-enter-2 mt-2 max-w-sm text-center text-sm text-slate-400">Wspólny ekran. Twój telefon. Jeden system gry.</p>
 
         <div className="joy-room joy-enter joy-enter-3 mt-6 w-full max-w-sm rounded-2xl p-5">

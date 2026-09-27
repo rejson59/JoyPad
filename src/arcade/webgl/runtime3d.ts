@@ -298,6 +298,7 @@ export abstract class WebGLRound3D implements GameRound {
       gl.viewport((index % columns) * panelWidth, (rows - 1 - Math.floor(index / columns)) * panelHeight, panelWidth, panelHeight);
       this.setView(index, panelWidth / panelHeight); this.renderScene(index, panelWidth / panelHeight);
     }
+    this.config.onFrame?.(this.canvas);
     this.hudDelay -= dt; if (this.hudDelay <= 0 && !this.finished) { this.hudDelay = .15; this.config.onHud(this.hud()); }
     if (!this.finished) this.raf = requestAnimationFrame(this.frame);
   };

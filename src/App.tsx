@@ -1,3 +1,5 @@
+import { navigateResults } from './console/resultsNavigation';
+import { useRecordedMoments } from './platform/useRecordedMoments';
 import { ReadyStatus } from './console/ReadyStatus';
 import { readChoice, remember } from './console/history';
 import { GameSetup } from './console/GameSetup';
@@ -107,6 +109,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
   const [mode, setMode] = useState<GameMode>(() => readChoice('tanks.mode', ['deathmatch', 'survival'] as const, 'deathmatch'));
   const [killLimit, setKillLimit] = useState(() => readChoice('tanks.kills', [3, 5, 8, 10, 15], 5));
   const [lives, setLives] = useState(() => readChoice('tanks.lives', [1, 2, 3, 5, 7], 3));
+  const { moments, replayNotice, begin: beginRecording, finish: finishRecording } = useRecordedMoments('tanks');
   const [hud, setHud] = useState<HudState | null>(null);
   const [muted, setMuted] = useState(false);
   const [results, setResults] = useState<{ winner: number | null; tanks: HudTank[] } | null>(null);
@@ -211,6 +214,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
 
   const handleRemote = useCallback((command: RemoteCommand) => {
     const stage = screenRef.current;
+    if (stage === 'over' && navigateResults(command)) return;
     if (showPad && stage === 'menu') { window.dispatchEvent(new CustomEvent('joypad-dialog-command', { detail: command })); return; }
     if (command === 'home' || (command === 'back' && stage === 'menu')) { onExit(); return; }
     if (command === 'pause' || (command === 'back' && stage === 'game')) { gameRef.current?.togglePause(); return; }
@@ -260,8 +264,11 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
     const canvas = canvasRef.current;
     if (!canvas) return;
     const { players, mapId, mode, killLimit, lives } = roundSetupRef.current;
+    const recording = beginRecording();
     const t = setTimeout(() => {
       gameAudio.init();
+      const recorder = recording.events;
+      recorder.observe({ timeLeft: TIME_LIMIT_S, countdown: 3, paused: false, players: players.filter(p => p.enabled).map((p) => ({ slot: p.id, name: p.name, color: p.color, score: 0 })) });
       const game = new TankGame(canvas, {
         players,
         mapId,
@@ -269,16 +276,18 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
         killLimit,
         lives,
         timeLimit: TIME_LIMIT_S,
-        onHud: (h) => { if (screenRef.current === 'game') setHud(h); },
-        onKill: () => {},
+        onFrame: recording.video.frame,
+        onHud: (h) => { recording.video.setPaused(h.paused || h.countdown > 0); recorder.observe({ ...h, players: h.tanks.map(t => ({ slot: t.id, name: t.name, color: t.color, score: t.kills })) }); if (screenRef.current === 'game') setHud(h); },
+        onKill: (event) => { if (event.killer !== event.victim) recorder.record({ kind: 'kill', slot: event.killer, title: 'Cel wyeliminowany', detail: `${event.killerName} eliminuje ${event.victimName}.`, at: event.time, weight: 58 }); },
         padInputs: padHost.inputs,
-        onPadFx: (slot, fx) => padHost.sendFx(slot, fx),
+        onPadFx: (slot, fx) => { recorder.fx(slot, fx); padHost.sendFx(slot, fx); },
         onPadHud: (slot, t, h) => padHost.sendHud(slot, {
           t: 'hud', hp: t.hp, maxHp: t.maxHp, alive: t.alive, kills: t.kills, deaths: t.deaths, lives: t.lives,
           respawn: t.respawn, countdown: h.countdown, paused: h.paused, timeLeft: h.timeLeft,
           shield: t.shield > 0, rapid: t.rapid, big: t.big, speed: t.speed, mode: h.mode,
         }),
         onGameOver: (winner, tanks) => {
+          finishRecording(recording);
           setResults({ winner, tanks });
           setScreen('over');
         },
@@ -288,10 +297,11 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
     }, 60);
     return () => {
       clearTimeout(t);
+      if (!recording.finished) recording.video.dispose();
       gameRef.current?.destroy();
       gameRef.current = null;
     };
-  }, [screen]);
+  }, [screen, beginRecording, finishRecording]);
 
   const toggleMute = () => {
     const m = !muted;
@@ -501,7 +511,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
     const winner = results.tanks.find(t => t.id === results.winner);
     const sorted = [...results.tanks].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
     return <>
-      <GameResults info={gameInfo('tanks')} title={winner ? winner.name : 'Remis.'} subtitle={winner ? `${winner.kills} fragów. Pole bitwy należy do Ciebie.` : 'Żaden czołg nie zdominował pola bitwy.'} winnerSlot={results.winner ?? null} scoreLabel="FRAGI"
+      <GameResults replayNotice={replayNotice} moments={moments} info={gameInfo('tanks')} title={winner ? winner.name : 'Remis.'} subtitle={winner ? `${winner.kills} fragów. Pole bitwy należy do Ciebie.` : 'Żaden czołg nie zdominował pola bitwy.'} winnerSlot={results.winner ?? null} scoreLabel="FRAGI"
         players={sorted.map(t => ({ slot: t.id, name: t.name, color: t.color, score: t.kills, detail: `${t.deaths} zgonów · K/D ${(t.kills / Math.max(1, t.deaths)).toFixed(2)}${mode === 'survival' ? ` · ${t.lives} żyć` : ''}` }))}
         onRestart={() => startGame()} onSettings={() => goScreen('setup')} onMenu={() => goScreen('menu')} onExit={onExit} />
       <ScreenCurtain state={curtain.state} />

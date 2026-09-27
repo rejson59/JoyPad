@@ -1,3 +1,6 @@
+import { Moments } from '../platform/Moments';
+import type { Moment } from '../platform/momentRecorder';
+import { JoyPadLogo } from '../components/JoyPadLogo';
 import { GAMES } from '../arcade/catalog';
 import { padHost } from '../net/padHost';
 import type { CSSProperties } from 'react';
@@ -6,7 +9,8 @@ import type { GameInfo } from '../arcade/catalog';
 import { usePadHost } from '../pad/PadHostPanel';
 import { CountUp } from '../components/motion';
 export interface ResultPlayer { slot: number; name: string; color: string; score: number; detail: string; isBot?: boolean }
-export function GameResults({ info, title, subtitle, players, winnerSlot, allWon = false, record, scoreLabel = 'WYNIK', onRestart, onSettings, onExit, onMenu }: {
+export function GameResults({ replayNotice = '', moments = [], info, title, subtitle, players, winnerSlot, allWon = false, record, scoreLabel = 'WYNIK', onRestart, onSettings, onExit, onMenu }: {
+  moments?: Moment[]; replayNotice?: string;
   info: GameInfo; title: string; subtitle: string; players: ResultPlayer[]; winnerSlot: number | null; allWon?: boolean; record?: number; scoreLabel?: string;
   onRestart: () => void; onSettings: () => void; onExit: () => void; onMenu?: () => void;
 }) {
@@ -15,7 +19,7 @@ export function GameResults({ info, title, subtitle, players, winnerSlot, allWon
   const winner = players.find(player => player.slot === winnerSlot);
   return <div className="cine-results" style={{ '--result-color': winner?.color || 'var(--os-accent)' } as CSSProperties}>
     <div className="cine-results-art" aria-hidden="true"><img src={`${import.meta.env.BASE_URL}${info.cover}`} alt="" /></div>
-    <header className="cine-result-header"><span className="os-wordmark">JoyPad<span>.</span></span><span>{info.title} <i /> KONIEC RUNDY</span><button className="cine-back" onClick={onExit}><Home size={16} /> Biblioteka</button></header>
+    <header className="cine-result-header"><span className="os-wordmark"><JoyPadLogo size={38} />JoyPad<span>.</span></span><span>{info.title} <i /> KONIEC RUNDY</span><button className="cine-back" onClick={onExit}><Home size={16} /> Biblioteka</button></header>
     <main className="cine-results-main"><section className="cine-result-moment">
       <span className="os-eyebrow">{allWon ? 'WSPÓLNA WYGRANA' : winner ? 'TEN MOMENT NALEŻY DO CIEBIE' : 'KAŻDA RUNDA TO NOWA HISTORIA'}</span>
       <div className="cine-result-emblem" aria-hidden="true"><span /><span /><Trophy size={54} strokeWidth={1} /><small>{allWon ? 'TEAM' : winner ? 'WINNER' : 'ROUND'}</small></div>
@@ -23,6 +27,7 @@ export function GameResults({ info, title, subtitle, players, winnerSlot, allWon
       <h1>{title}</h1><p>{subtitle}</p>
       {(winner || allWon) && <div className="cine-winner-spotlight"><Crown size={18} aria-hidden="true" /><span>{allWon ? 'Cała drużyna' : winner?.name}<small>{allWon ? 'Wspólny cel osiągnięty' : `${scoreLabel}: ${winner?.score}`}</small></span></div>}
       {record !== undefined && <div className="cine-record"><Trophy size={16} /><span>LOKALNY REKORD</span><CountUp value={record} duration={950} /></div>}
+      <Moments notice={replayNotice} moments={moments} info={info} />
     </section><section className="cine-result-board" aria-label="Wyniki rundy"><div className="cine-board-heading"><div><span className="os-eyebrow">PO OSTATNIM RUCHU</span><h2>Wyniki rundy.</h2></div><span>{String(players.length).padStart(2, '0')}<small>GRACZY</small></span></div>
       <div className="cine-score-labels"><span>GRACZ / KLASYFIKACJA</span><span>{scoreLabel}</span></div>
       <ol className="cine-ranking">{players.map((player, index) => <li key={player.slot} className={allWon || player.slot === winnerSlot ? 'is-winner' : ''} style={{ '--player-color': player.color, '--row-delay': `${index * 65}ms` } as CSSProperties}>

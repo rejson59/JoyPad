@@ -1,3 +1,5 @@
+import { SessionNotifications } from '../platform/notifications';
+import { JoyPadLogo } from '../components/JoyPadLogo';
 import { lastGame } from '../console/history';
 import { Component, lazy, Suspense, useCallback, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
 import { ConsoleLibrary } from '../console/ConsoleLibrary';
@@ -11,7 +13,6 @@ import type { RemoteCommand, RemoteEvent } from '../net/protocol';
 import { usePadHost } from '../pad/PadHostPanel';
 import { BootSplash } from '../components/BootSplash';
 import { ConnectionsScreen } from '../components/ConnectionsScreen';
-import { JoinSplash, type JoinSplashData } from '../components/JoinSplash';
 import { JoyLab } from '../components/JoyLab';
 import { ScreenCurtain, useCurtain } from '../components/motion';
 import { GAMES, gameInfo, type GameId } from './catalog';
@@ -76,29 +77,6 @@ export default function JoypadApp() {
   const curtain = useCurtain(true);
   const beginTransition = curtain.begin;
 
-  // Splash „NOWY GRACZ” — witamy każdy telefon, który dołączy po starcie strony.
-  const [splash, setSplash] = useState<JoinSplashData | null>(null);
-  const previousPads = useRef(state.pads);
-  const knownPads = useRef<Set<string> | null>(null);
-  if (knownPads.current === null) knownPads.current = new Set(state.pads.map(p => p.connId));
-  useEffect(() => {
-    const known = knownPads.current!;
-    const fresh = state.pads.filter(p => !known.has(p.connId));
-    const gone = previousPads.current.filter(p => !state.pads.some(current => current.connId === p.connId));
-    previousPads.current = state.pads;
-    if (gone.length && !fresh.length) { const pad = gone[0]; setSplash({ nick: pad.nick, slot: pad.slot, color: PLAYER_DEFS[pad.slot]?.color ?? '#edbd78', key: Date.now(), disconnected: true }); }
-    knownPads.current = new Set(state.pads.map(p => p.connId));
-    if (!fresh.length) return;
-    const pad = fresh[fresh.length - 1];
-    systemSound('join');
-    setSplash({ nick: pad.nick, slot: pad.slot, color: PLAYER_DEFS[pad.slot]?.color ?? '#f97316', key: Date.now() });
-  }, [state.pads]);
-  useEffect(() => {
-    if (!splash) return;
-    const timer = window.setTimeout(() => setSplash(null), 2400);
-    return () => window.clearTimeout(timer);
-  }, [splash]);
-
   // Podmiana ekranów pod kurtyną w kolorze docelowej gry — bez twardych cutów.
   const open = useCallback((id: GameId) => {
     if (gameInfo(id).wip) return; // gry „w budowie” nie startują
@@ -144,8 +122,12 @@ export default function JoypadApp() {
 
   useEffect(() => {
     const handle = (command: RemoteCommand) => {
+      if (padHost.session().room?.dimmed) {
+        if (['select', 'back', 'home'].includes(command)) padHost.manageRoom({ kind: 'dimmed', value: false });
+        return;
+      }
       if (showLab) { if (command === 'back' || command === 'home' || command === 'select') closeLab(); return; }
-      if (showConnections || overlay.current) { window.dispatchEvent(new CustomEvent('joypad-dialog-command', { detail: command })); return; }
+      if (showConnections || overlay.current || document.querySelector('dialog[open]')) { window.dispatchEvent(new CustomEvent('joypad-dialog-command', { detail: command })); return; }
       if (selectedRef.current) { setRemote({ id: ++serial.current, command }); return; }
       const active = document.activeElement as HTMLElement | null;
       if (command === 'up') { document.querySelector<HTMLElement>('.os-topbar nav button')?.focus(); return; }
@@ -223,7 +205,8 @@ export default function JoypadApp() {
     <>
       {content}
       <ScreenCurtain state={curtain.state} />
-      <JoinSplash data={splash} />
+      <SessionNotifications session={padHost.session()} />
+      {state.room.dimmed && <div className="joy-screen-rest"><JoyPadLogo size={150} /><span className="os-eyebrow">JOYPAD / CHWILA PRZERWY</span><h1>Dobry wieczór trwa.</h1><p>Ekipa nadal jest połączona. Wróćcie, kiedy chcecie.</p><button onClick={() => padHost.manageRoom({ kind: 'dimmed', value: false })}>Wróć do ekranu</button><small>Administrator może też odsłonić ekran z telefonu.</small></div>}
       {state.screen === 'game' && state.pads.some(p => p.inputStale) && <div className="os-link-state" role="status">Brak sygnału: {state.pads.filter(p => p.inputStale).map(p => p.nick).join(', ')} · Sterowanie zatrzymane. Czekamy na powrót.</div>}
     </>
   );

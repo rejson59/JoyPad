@@ -1,9 +1,14 @@
+import { RoomControls } from '../platform/RoomControls';
+import { Sheet } from './Sheet';
+import { Crown } from 'lucide-react';
+import { SessionNotifications } from '../platform/notifications';
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { padClient } from '../net/padClient';
 import { haptic } from '../pad/haptics';
 /** Identity remains constant while the game atmosphere changes. Status comes from host state. */
 export function PadShell({ children }: { children: ReactNode }) {
   const [fx, setFx] = useState('');
+  const [roomOpen, setRoomOpen] = useState(false);
   const [reminder, setReminder] = useState(false);
   useEffect(() => {
     let timer = 0;
@@ -34,6 +39,9 @@ export function PadShell({ children }: { children: ReactNode }) {
   useEffect(() => { if (beat > 0) haptic(12, 1); }, [beat]);
   return <div className="pad-shell" style={{ '--player-color': state.color || 'var(--os-accent)' } as CSSProperties}>
     {children}
+    {state.status === 'connected' && <SessionNotifications session={state} />}
+    {state.status === 'connected' && state.slot === state.adminSlot && state.screen === 'game' && <button className="pad-room-key" onClick={() => { window.dispatchEvent(new Event('joypad-release-input')); padClient.releaseInput(); if (!paused && !(countdown && countdown > 0)) padClient.sendCommand('pause'); setRoomOpen(true); }}><Crown size={13} /> POKÓJ</button>}
+    {roomOpen && state.status === 'connected' && state.slot === state.adminSlot && <Sheet title="Centrum pokoju." onClose={() => setRoomOpen(false)}><RoomControls session={state} onAction={action => padClient.manageRoom(action)} /></Sheet>}
     {reminder && state.status === 'connected' && (state.screen === 'menu' || state.screen === 'setup') && <div className="pad-reminder" role="status">Ekipa czeka. Potwierdź gotowość, gdy będziesz gotowy.</div>}
     <div className="pad-lightbar" data-fx={fx} data-state={state.status === 'connected' ? state.screen : state.status} />
     {state.status === 'connected' && state.screen === 'game' && (paused || (countdown ?? 0) > 0) && <div className="pad-stage-status" role="status">{paused ? 'PAUZA · ODPOCZNIJ' : `GOTOWOŚĆ · ${Math.ceil(countdown!)}`}</div>}

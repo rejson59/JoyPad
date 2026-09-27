@@ -1,3 +1,5 @@
+import { loadProfile, saveProfile, normalizeProfile, type PlayerProfile } from '../platform/profile';
+import { DEFAULT_ROOM, type RoomAction, type RoomSettings, type SessionState } from './protocol';
 import Peer, { type DataConnection } from 'peerjs';
 import {
   DEFAULT_PAD_STEER, PROTOCOL_VERSION, normalizeNick, roomIdFromCode,
@@ -21,6 +23,7 @@ export interface PadHud {
 }
 
 export interface PadClientState {
+  room?: RoomSettings;
   status: PadStatus;
   code: string;
   error: string | null;
@@ -46,7 +49,7 @@ export interface PadClientState {
   game: GameId | null;
   adminSlot: number | null;
   selection: number;
-  roster: { slot: number; nick: string; ready?: boolean; rematch?: boolean; suggestedGame?: GameId }[];
+  roster: SessionState['roster'];
   options?: SessionOptions;
   hud: PadHud | null;
   arcadeHud: ArcadeHud | null;
@@ -463,6 +466,7 @@ export class PadClient {
           screen: msg.screen, error: null, progress: '', phase: 'idle', elapsed: 0, lastFailure: null,
           viaRelay: link.kind === 'relay',
         });
+        this.setProfile(loadProfile());
         break;
       }
       case 'rejected':
@@ -496,7 +500,7 @@ export class PadClient {
         window.dispatchEvent(new Event('joypad-ready-reminder'));
         break;
       case 'session': {
-        const { game: rawGame, screen, adminSlot, selection, roster, options } = msg.session;
+        const { game: rawGame, screen, adminSlot, selection, roster, options, room } = msg.session;
         // Twarda walidacja id gry z protokółu: nieznane id traktujemy jak brak
         // gry (biblioteka) zamiast łamać ekran pada w gameInfo().
         const game = isGameId(rawGame) ? rawGame : null;
@@ -505,7 +509,7 @@ export class PadClient {
         // ponownego wyboru po powrocie z rozgrywki.
         const effectiveScreen = game === null && screen !== 'lab' ? 'lobby' : screen;
         this.set({
-          game, screen: effectiveScreen, adminSlot, selection, roster, options,
+          game, screen: effectiveScreen, adminSlot, selection, roster, options, room: room ?? { ...DEFAULT_ROOM },
           hud: effectiveScreen === 'game' && game === 'tanks' ? this.state.hud : null,
           arcadeHud: effectiveScreen === 'game' && game !== 'tanks' ? this.state.arcadeHud : null,
         });
@@ -773,6 +777,12 @@ export class PadClient {
     if (this.conn?.open) this.conn.send({ t: 'pause' });
   }
 
+  setProfile(profile: PlayerProfile) {
+    const clean = normalizeProfile(profile);
+    saveProfile(clean);
+    if (this.conn?.open) this.conn.send({ t: 'profile', profile: clean });
+  }
+  manageRoom(action: RoomAction) { if (this.conn?.open) this.conn.send({ t: 'room', action }); }
   suggestGame(game: GameId | null) { if (this.conn?.open) this.conn.send({ t: 'suggest', game }); }
   remindReady() { if (this.conn?.open) this.conn.send({ t: 'remind' }); }
   releaseInput() {

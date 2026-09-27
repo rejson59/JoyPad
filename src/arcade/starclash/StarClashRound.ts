@@ -46,6 +46,7 @@ export class StarClashRound implements GameRound {
 
     this.game = new Game(container, { lowFx: config.quality === 'performance' });
     this.game.padMode = true;
+    this.game.onFrame = config.onFrame;
     this.game.readCtrl = (i: number) => this.readCtrl(i);
     this.game.onShipFx = (slot: number, fx: 'hit' | 'kill' | 'dead') => this.config.onFx(slot, fx);
     this.game.onHud = () => this.pushHud();

@@ -121,4 +121,6 @@ Na wynikach telefony mogą proponować następną grę, ale wybór zatwierdza go
 
 Ilustracje pozostają na kafelkach wyboru gier. Tłem biblioteki jest teraz krótkie **nagranie rozgrywki botów** wybranego tytułu: Stalowy Front, Neonowy Pęd lub Orbitalna Fala. To ośmiosekundowe, bezgłośne klipy z rzeczywistych silników, a nie uruchomiona gra w tle.
 
-Na dużym ekranie podgląd startuje po chwili zatrzymania wyboru. Telefon, ograniczony ruch i wykryte oszczędzanie danych wymagają ręcznego odtwarzania. Przycisk odtwarzania/pauzy na górnym pasku oraz ustawienie „Automatyczne podglądy gier” dają kontrolę nad ruchem. Brak obsługi pliku zostawia okładkę i nie blokuje gry. Informacje o nagraniach: [public/previews/README.md](public/previews/README.md).
+Nagrania to prawdziwe Full HD (1920×1080, 24 fps) z silników gier — plansza jest dopasowana do własnego kształtu 16:9, więc cały obraz widać i na małym laptopie, i na telewizorze panoramicznym, a okładka wybranej gry pozostaje rozmytym tłem. Panel „WSPÓLNY EKRAN” jest półprzezroczystym szkłem, więc nie zasłania rozgrywki.
+
+Na dużym ekranie podgląd startuje po chwili zatrzymania wyboru (także w przeglądarkach telewizorów). Telefon, ograniczony ruch i wykryte oszczędzanie danych wymagają ręcznego odtwarzania. Przycisk odtwarzania/pauzy na górnym pasku oraz ustawienie „Automatyczne podglądy gier” dają kontrolę nad ruchem. Brak obsługi pliku zostawia okładkę i nie blokuje gry. Informacje o nagraniach: [public/previews/README.md](public/previews/README.md).

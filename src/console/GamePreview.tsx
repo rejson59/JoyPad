@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { Pause, Play } from 'lucide-react';
 import type { GameInfo } from '../arcade/catalog';
@@ -6,6 +6,9 @@ import { useReducedMotion } from '../lib/useReducedMotion';
 import { useConsolePreferences } from './preferences';
 
 export const PREVIEW_GAMES = ['tanks', 'race', 'orbit'] as const;
+/** Bump when public/previews/* is re-recorded: the files keep stable names, so a query
+ *  string is what stops browsers and CDNs from serving a previous recording. */
+const PREVIEW_REVISION = '2';
 /** Recorded offline: never import an engine, connect a pad or advance a real match here. */
 export function GamePreview({ game, suspended, controlsTarget }: { game: GameInfo; suspended: boolean; controlsTarget: HTMLElement | null }) {
   const prefs = useConsolePreferences();
@@ -20,8 +23,11 @@ export function GamePreview({ game, suspended, controlsTarget }: { game: GameInf
   const [settled, setSettled] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [failed, setFailed] = useState(false);
+  // The frame is fitted to the recording's own shape, so a 21:9 TV and a 4:3 laptop both show all of it.
+  const [ratio, setRatio] = useState('16 / 9');
   useEffect(() => {
-    const media = matchMedia('(min-width: 900px) and (pointer: fine)');
+    // Big screens (TV browsers report a coarse pointer) autoplay too; phones and metered links do not.
+    const media = matchMedia('(min-width: 1000px) and (pointer: fine), (min-width: 1400px)');
     const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string; addEventListener?: (name: string, fn: () => void) => void; removeEventListener?: (name: string, fn: () => void) => void } }).connection;
     const update = () => setAutomatic(media.matches && !connection?.saveData && !['slow-2g', '2g', '3g'].includes(connection?.effectiveType || ''));
     const visibility = () => setForeground(!document.hidden);
@@ -49,13 +55,13 @@ export function GamePreview({ game, suspended, controlsTarget }: { game: GameInf
   }, [mounted]);
   if (!PREVIEW_GAMES.some(id => id === game.id)) return null;
   return <>
-    <div ref={root} className={`os-wallpaper os-game-preview ${playing && mounted ? 'is-playing' : ''}`}>
+    <div ref={root} className={`os-wallpaper os-game-preview ${playing && mounted ? 'is-playing' : ''}`} style={{ '--preview-ratio': ratio } as CSSProperties}>
       <img className="is-selected" src={`${import.meta.env.BASE_URL}${game.cover}`} alt="" style={{ viewTransitionName: playing && mounted ? 'none' : 'game-cover' }} />
-      {mounted && <video ref={video} style={{ viewTransitionName: playing ? 'game-cover' : 'none' }} muted playsInline loop preload="none" aria-label={`Nagrana rozgrywka botów — ${game.title}`} onPlaying={() => setPlaying(true)} onWaiting={() => setPlaying(false)} onError={() => { setFailed(true); setPlaying(false); }}>
-        <source src={`${import.meta.env.BASE_URL}previews/${game.id}.mp4`} type="video/mp4" />
-        <source src={`${import.meta.env.BASE_URL}previews/${game.id}.webm`} type="video/webm" />
+      {mounted && <video ref={video} style={{ viewTransitionName: playing ? 'game-cover' : 'none' }} muted playsInline loop preload="none" aria-label={`Nagrana rozgrywka botów w Full HD — ${game.title}`} onLoadedMetadata={event => { const { videoWidth, videoHeight } = event.currentTarget; if (videoWidth && videoHeight) setRatio(`${videoWidth} / ${videoHeight}`); }} onPlaying={() => setPlaying(true)} onWaiting={() => setPlaying(false)} onError={() => { setFailed(true); setPlaying(false); }}>
+        <source src={`${import.meta.env.BASE_URL}previews/${game.id}.mp4?v=${PREVIEW_REVISION}`} type="video/mp4" />
+        <source src={`${import.meta.env.BASE_URL}previews/${game.id}.webm?v=${PREVIEW_REVISION}`} type="video/webm" />
       </video>}
     </div>
-    {controlsTarget && createPortal(<button type="button" className="os-icon os-background-toggle" disabled={failed} title={failed ? 'Podgląd niedostępny · okładka pozostaje' : mounted ? 'Zatrzymaj tło z rozgrywką' : 'Odtwórz rozgrywkę w tle'} aria-label={mounted ? 'Zatrzymaj podgląd' : 'Odtwórz podgląd rozgrywki'} onClick={() => { if (mounted) { setPaused(true); setRequested(false); } else { setPaused(false); setRequested(true); } }}>{mounted ? <Pause size={18} /> : <Play size={18} />}</button>, controlsTarget)}
+    {controlsTarget && createPortal(<button type="button" className="os-icon os-background-toggle" disabled={failed} title={failed ? 'Podgląd niedostępny · okładka pozostaje' : mounted ? 'Zatrzymaj nagranie rozgrywki' : 'Odtwórz nagranie rozgrywki'} aria-label={mounted ? 'Zatrzymaj podgląd rozgrywki' : 'Odtwórz podgląd rozgrywki'} onClick={() => { if (mounted) { setPaused(true); setRequested(false); } else { setPaused(false); setRequested(true); } }}>{mounted ? <Pause size={18} /> : <Play size={18} />}</button>, controlsTarget)}
   </>;
 }

@@ -30,7 +30,7 @@ export function ConsoleSettings({ controller = false }: { controller?: boolean }
     <SettingSection number={controller ? '01' : '02'} title="Ruch i przejścia" detail="Spokojne tempo, bez utraty responsywności." icon={<ScanLine size={19} />}>
       <ChoiceGroup label="Ruch interfejsu" value={prefs.motion} options={[{ value: 'system', label: 'Systemowy', detail: 'Zgodnie z urządzeniem' }, { value: 'reduced', label: 'Ograniczony', detail: 'Bez animacji przejść' }]} onChange={motion => setPreferences({ motion })} />
     </SettingSection>
-    {!controller && <SettingSection number="03" title="Podglądy gier" detail="Nagrane boty, bez dźwięku i bez uruchamiania silnika w tle." icon={<Sparkles size={19} />}>
+    {!controller && <SettingSection number="03" title="Podglądy gier" detail="Nagrania Full HD z silników, bez dźwięku i bez uruchamiania gry w tle." icon={<Sparkles size={19} />}>
       <button type="button" className="cine-sound-switch" role="switch" aria-label="Automatyczne podglądy gier" aria-checked={prefs.previews} onClick={() => setPreferences({ previews: !prefs.previews })}><span>{prefs.previews ? 'Automatycznie na dużym ekranie' : 'Tylko po naciśnięciu odtwarzania'}<small>Telefon, oszczędzanie danych i ograniczony ruch: start ręczny.</small></span><span className="cine-switch-track"><i /></span></button>
     </SettingSection>}
     {controller && <>

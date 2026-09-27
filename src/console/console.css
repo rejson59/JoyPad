@@ -32,7 +32,15 @@ body { background:var(--os-bg); }
 .os-play-symbol { font-size:11px; }
 .os-feature-tags { display:flex; gap:19px; margin-top:28px; color:var(--os-secondary); font-size:11px; }
 .os-feature-tags span+span::before { content:'·'; margin-right:19px; color:var(--os-accent); }
-.os-session { border:1px solid #ffffff18; background:linear-gradient(150deg,#19191de8,#111114ef); border-radius:20px; padding:23px; box-shadow:0 12px 45px #0002,inset 0 1px #ffffff05; }
+/* Shared screen panel: smoked glass over the running gameplay, so the preview stays readable
+   underneath instead of being covered by an opaque card. */
+.os-session { position:relative; border:1px solid #ffffff1f; border-radius:20px; padding:23px; background:linear-gradient(150deg,#1c1c21a6,#101013c4); box-shadow:0 18px 55px #0005,inset 0 1px #ffffff14,inset 0 -30px 60px #00000045; backdrop-filter:blur(22px) saturate(135%); -webkit-backdrop-filter:blur(22px) saturate(135%); }
+.os-session::before { content:''; position:absolute; inset:0 0 auto; height:1px; border-radius:20px 20px 0 0; background:linear-gradient(90deg,transparent,#ffffff2e 22%,#ffffff2e 78%,transparent); pointer-events:none; }
+.os-session .os-pairing { border-radius:14px; padding:11px; background:#ffffff09; box-shadow:inset 0 1px #ffffff0f; }
+.os-session .os-roster,.os-session h2,.os-session p,.os-session-status { text-shadow:0 1px 12px #000a; }
+.os-session .os-player>span { background:#0b0b0d8c; }
+@media(prefers-reduced-transparency:reduce) { .os-session { backdrop-filter:none; -webkit-backdrop-filter:none; background:linear-gradient(150deg,#1c1c21f2,#101013fa); } }
+@supports not ((backdrop-filter:blur(8px)) or (-webkit-backdrop-filter:blur(8px))) { .os-session { background:linear-gradient(150deg,#1c1c21f0,#101013f7); } }
 .os-session-heading { display:flex; justify-content:space-between; align-items:center; color:var(--os-secondary); }
 .os-session .os-eyebrow { font-size:8px; letter-spacing:1.8px; }
 .os-session h2 { font-size:22px; letter-spacing:-.6px; margin:18px 0 5px; font-weight:500; }
@@ -241,15 +249,30 @@ html[data-motion="reduced"]::view-transition-group(*),html[data-motion="reduced"
 .os-device-welcome .os-device-choices button:nth-child(3) { animation-delay:90ms; }
 @media(prefers-reduced-motion:reduce) { .os-device-welcome .os-device-choices button { animation:none; } }
 
-/* Full-bleed recorded gameplay; illustrated selection tiles are unchanged. */
-.os-game-preview { pointer-events:none; }
-.os-game-preview img.is-selected { opacity:.85; }
-.os-game-preview video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; opacity:0; transition:opacity 600ms ease; }
+/* Recorded gameplay sits on a floating screen: Full HD masters, always whole — never cropped, and
+   scaled up by at most ~1.25×. The band grows with the viewport, so a TV and a small laptop both
+   show the entire frame; only the letterbox width changes, and the bars carry the game's own art. */
+.os-game-preview { pointer-events:none; height:min(100dvh,1350px); container-type:size; }
+.os-game-preview img.is-selected { opacity:.62; transition:opacity 500ms ease,filter 500ms ease,transform 700ms ease; }
+/* While the recording plays the cover becomes ambient art for the letterbox bars. */
+.os-game-preview.is-playing>img { opacity:.44; transform:scale(1.07); filter:blur(9px) saturate(.9) brightness(.6); }
+.os-game-preview video {
+  position:absolute; left:50%; top:50%; translate:-50% -50%;
+  /* Contain-fit in container units keeps the whole 16:9 frame visible on any screen shape. */
+  width:min(100cqw,calc(100cqh * var(--preview-ratio,16/9)));
+  aspect-ratio:var(--preview-ratio,16/9);
+  height:auto; object-fit:contain; object-position:center;
+  border-radius:clamp(0px,1.1cqw,22px); background:#050506;
+  box-shadow:0 0 0 1px #ffffff12,0 30px 90px #000a,0 0 120px color-mix(in srgb,var(--game-accent) 10%,transparent);
+  opacity:0; transition:opacity 600ms ease;
+}
 .os-game-preview.is-playing video { opacity:1; }
-.os-game-preview.is-playing>img { opacity:0; }
-.os-game-preview::after { background:linear-gradient(0deg,var(--os-bg) 0%,#09090b08 32%,#09090b08 80%,#09090b55 100%),linear-gradient(90deg,#09090bc7 0%,#09090b85 32%,#09090b10 65%,#09090b35 100%); }
-.os-feature h1,.os-feature p,.os-genre,.os-feature-tags { text-shadow:0 2px 16px #000b; }
+.os-game-preview::after { background:linear-gradient(0deg,var(--os-bg) 0%,#09090b00 26%,#09090b00 78%,#09090b66 100%),linear-gradient(90deg,#09090bf5 0%,#09090bc4 24%,#09090b4a 46%,transparent 66%); }
+.os-feature h1,.os-feature p,.os-genre,.os-feature-tags { text-shadow:0 2px 14px #000c,0 0 55px #0009; }
 .os-preview-controls { display:flex; }
 .os-background-toggle { background:#11111485; }
 .os-background-toggle:disabled { opacity:.5; cursor:default; }
-@media(max-width:720px) { .os-game-preview::after { background:linear-gradient(0deg,var(--os-bg),#09090b50 50%,#09090b75); }.os-topbar nav { gap:8px; } }
+/* Fallback for browsers without container units: containment still holds, the frame is just full-bleed. */
+@supports not (width:1cqw) { .os-game-preview video { width:100%; height:100%; } }
+@media(max-width:720px) { .os-game-preview { height:min(78dvh,700px); }.os-game-preview::after { background:linear-gradient(0deg,var(--os-bg),#09090b40 50%,#09090b80); }.os-topbar nav { gap:8px; } }
+@media(prefers-reduced-motion:reduce) { .os-game-preview video { transition:none; } }

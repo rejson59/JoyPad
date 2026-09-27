@@ -122,17 +122,28 @@ console.log('DEVICE PROFILE SELFTEST: OK (selection, defaults, readiness names)'
 assert.equal(sanitizePreferences({}).previews, true);
 assert.equal(sanitizePreferences({ previews: false }).previews, false);
 const { statSync } = await import('node:fs');
+/** Full HD masters are the point of the previews: never let them shrink back to a small upscale. */
+const previewWidth = 1920, previewHeight = 1080;
+const mp4Size = (buffer: Buffer) => {
+  const stsd = buffer.indexOf('stsd');
+  const entry = stsd < 0 ? -1 : buffer.indexOf('avc1', stsd + 16);
+  return entry < 0 ? null : [buffer.readUInt16BE(entry + 28), buffer.readUInt16BE(entry + 30)];
+};
 let previewBytes = 0;
 for (const id of ['tanks', 'race', 'orbit']) {
-  for (const extension of ['mp4', 'webm']) {
+  for (const extension of ['mp4', 'webm'] as const) {
     const path = `public/previews/${id}.${extension}`;
     const bytes = statSync(path).size;
-    assert.ok(bytes > 10000 && bytes < 2_000_000, `${path}: bounded, nonempty clip`);
+    assert.ok(bytes > 100_000 && bytes < 8_000_000, `${path}: bounded, nonempty Full HD clip`);
     previewBytes += bytes;
-    const header = readFileSync(path).subarray(0, 16);
-    if (extension === 'mp4') assert.equal(header.toString('ascii', 4, 8), 'ftyp');
-    else assert.equal(header.subarray(0, 4).toString('hex'), '1a45dfa3');
+    const buffer = readFileSync(path);
+    if (extension === 'mp4') {
+      assert.equal(buffer.subarray(4, 8).toString('ascii'), 'ftyp');
+      assert.deepEqual(mp4Size(buffer), [previewWidth, previewHeight], `${path}: native Full HD track`);
+    } else {
+      assert.equal(buffer.subarray(0, 4).toString('hex'), '1a45dfa3');
+    }
   }
 }
-assert.ok(previewBytes < 8_000_000, 'compressed library preview asset budget');
-console.log('PREVIEW SELFTEST: OK (preferences, three recordings, MP4/WebM headers and asset budget)');
+assert.ok(previewBytes < 30_000_000, 'compressed library preview asset budget');
+console.log('PREVIEW SELFTEST: OK (preferences, three Full HD recordings, MP4/WebM headers and asset budget)');

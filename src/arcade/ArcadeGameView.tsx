@@ -1,3 +1,6 @@
+import { navigateResults } from '../console/resultsNavigation';
+import { useRecordedMoments } from '../platform/useRecordedMoments';
+import type { MomentEvent } from '../platform/momentRecorder';
 import { readChoice, remember } from '../console/history';
 import { GameSetup } from '../console/GameSetup';
 import { GameResults } from '../console/GameResults';
@@ -98,6 +101,7 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   const [secondary, setSecondary] = useState(() => readChoice(`${id}.secondary`, rules.secondary.map((_, i) => i), id === 'race' || id === 'league' ? 2 : 1));
   const [displayMode, setDisplayMode] = useState<DisplayMode>(() => readPreference('joypad-display-mode', 'shared', ['shared', 'split'] as const));
   const [quality, setQuality] = useState<RenderQuality>(() => readPreference('joypad-render-quality', 'balanced', ['performance', 'balanced', 'quality'] as const));
+  const { moments, replayNotice, begin: beginRecording, finish: finishRecording } = useRecordedMoments(id);
   const [hud, setHud] = useState<RoundHud | null>(null);
   const [result, setResult] = useState<RoundResult | null>(null);
   const [record, setRecord] = useState(() => readLocalRecord(id));
@@ -197,10 +201,17 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
     if (stage !== 'game' || !roundKey || !canvas.current) return;
     let cancelled = false;
     const { participants, primary, secondary, displayMode, quality } = roundSetupRef.current;
+    const recording = beginRecording();
+    const recorder = recording.events;
+    recorder.observe({ timeLeft: 0, countdown: 3, paused: false, players: participants.map(p => ({ ...p, score: 0 })) });
     const config = {
+      onFrame: recording.video.frame,
+      onMoment: (event: MomentEvent) => recorder.record(event),
       players: participants, padInputs: padHost.inputs, primary, secondary, displayMode, quality,
       onHud: (next: RoundHud) => {
         if (cancelled) return;
+        recording.video.setPaused(next.paused || next.countdown > 0);
+        recorder.observe(next);
         setHud(next);
         for (const p of next.players) if (!p.isBot) padHost.sendArcadeHud(p.slot, {
           countdown: next.countdown,
@@ -213,19 +224,20 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
           maxValue: p.maxValue,
         });
       },
-      onFx: (slot: number, fx: Parameters<typeof padHost.sendFx>[1]) => padHost.sendFx(slot, fx),
-      onFinish: (next: RoundResult) => { if (!cancelled) { setResult(next); setStage('over'); } },
+      onFx: (slot: number, fx: Parameters<typeof padHost.sendFx>[1]) => { recorder.fx(slot, fx); padHost.sendFx(slot, fx); },
+      onFinish: (next: RoundResult) => { if (!cancelled) { finishRecording(recording); setResult(next); setStage('over'); } },
     };
     void createRound(id, canvas.current, config).then(engine => {
-      if (cancelled) return;
+      if (cancelled) { engine.destroy(); return; }
       round.current = engine;
       engine.start();
     }).catch(error => { console.error('Nie udało się włączyć gry', error); if (!cancelled) setStage('menu'); });
-    return () => { cancelled = true; round.current?.destroy(); round.current = null; };
-  }, [roundKey, stage, id]);
+    return () => { cancelled = true; if (!recording.finished) recording.video.dispose(); round.current?.destroy(); round.current = null; };
+  }, [roundKey, stage, id, beginRecording, finishRecording]);
 
   const handleCommand = useCallback((command: RemoteCommand) => {
     const current = stageRef.current;
+    if (current === 'over' && navigateResults(command)) return;
     if (showPads && current === 'menu') { window.dispatchEvent(new CustomEvent('joypad-dialog-command', { detail: command })); return; }
     if (command === 'home' || (command === 'back' && current === 'menu')) { onExit(); return; }
     if (current === 'menu') {
@@ -269,7 +281,7 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   </>;
 
   if (stage === 'over' && result) return <>
-    <GameResults info={info} title={result.title} subtitle={result.subtitle} players={result.players} winnerSlot={result.winnerSlot} allWon={result.allWon} record={record} onRestart={start} onSettings={() => curtain.begin(info.accent, () => setStage('menu'))} onExit={onExit} />
+    <GameResults replayNotice={replayNotice} moments={moments} info={info} title={result.title} subtitle={result.subtitle} players={result.players} winnerSlot={result.winnerSlot} allWon={result.allWon} record={record} onRestart={start} onSettings={() => curtain.begin(info.accent, () => setStage('menu'))} onExit={onExit} />
     <ScreenCurtain state={curtain.state} />
   </>;
 

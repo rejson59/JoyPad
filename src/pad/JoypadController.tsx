@@ -1,11 +1,17 @@
+import { NickEditor } from './NickEditor';
+export { NickEditor } from './NickEditor';
+import { JoyPadLogo } from '../components/JoyPadLogo';
+import { RoomControls } from '../platform/RoomControls';
+import { GameSuggestions, PlayerLounge } from '../platform/PlayerLounge';
+import { loadProfile, THEMES } from '../platform/profile';
 import { readinessText } from '../console/sessionSummary';
 import { playableIndices } from '../console/navigation';
 import { Sheet } from '../console/Sheet';
 import { useCallback, useEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Crown, Gamepad2, Home, LogOut, Maximize2, Menu, Pause, Pencil, Play, RotateCcw, Settings, Trophy } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Crown, Home, LogOut, Maximize2, Menu, Pause, Play, RotateCcw, Settings, Trophy } from 'lucide-react';
 import { GAMES, gameInfo } from '../arcade/catalog';
 import { padClient, type PadClientState } from '../net/padClient';
-import { normalizeNick, type RemoteCommand } from '../net/protocol';
+import { type RemoteCommand } from '../net/protocol';
 import { Joystick } from './Joystick';
 import { getHapticStatus, haptic, unlockHaptics } from './haptics';
 import { useConsolePreferences } from '../console/preferences';
@@ -25,49 +31,6 @@ type ControllerFeatures = {
 
 function vibrate(n = 14) { haptic(n); }
 function send(command: RemoteCommand) { if (getHapticStatus() !== 'ready') unlockHaptics(); haptic(14); padClient.sendCommand(command); }
-
-/** Edycja nicku działa po welcome — nie zrywa połączenia ani nie zmienia slotu. */
-export function NickEditor({ st, compact = false }: { st: PadClientState; compact?: boolean }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(st.nick || st.name || `Gracz ${st.slot + 1}`);
-  useEffect(() => {
-    if (!editing) setDraft(st.nick || st.name || `Gracz ${st.slot + 1}`);
-  }, [editing, st.name, st.nick, st.slot]);
-
-  const save = () => {
-    const next = normalizeNick(draft, st.nick || st.name || `Gracz ${st.slot + 1}`);
-    padClient.setNick(next);
-    setDraft(next);
-    setEditing(false);
-    vibrate(12);
-  };
-
-  return (
-    <div className={`rounded-2xl border border-orange-400/20 bg-orange-500/[.07] ${compact ? 'p-3' : 'mt-4 p-3.5'}`}>
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <div className="text-[10px] font-black tracking-[.18em] text-orange-200">TWÓJ NICK</div>
-          <div className="mt-1 text-[10px] text-slate-400">Widoczny w lobby i w każdej grze</div>
-        </div>
-        {!editing && <button type="button" onClick={() => setEditing(true)} className="flex shrink-0 items-center gap-1.5 rounded-lg border border-orange-300/25 bg-orange-400/10 px-2.5 py-1.5 text-[11px] font-bold text-orange-100 hover:bg-orange-400/20"><Pencil size={13} /> EDYTUJ</button>}
-      </div>
-      {editing ? (
-        <div className="mt-2 flex gap-2">
-          <input
-            autoFocus
-            value={draft}
-            maxLength={14}
-            onChange={e => setDraft(e.target.value.slice(0, 14))}
-            onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
-            className="min-w-0 flex-1 rounded-lg border border-orange-300/40 bg-black/40 px-3 py-2 text-sm font-bold text-white outline-none focus:border-orange-300"
-            aria-label="Nick gracza"
-          />
-          <button type="button" onClick={save} className="flex shrink-0 items-center gap-1 rounded-lg bg-orange-300 px-3 py-2 text-[11px] font-black text-[#071521]"><Check size={14} /> ZAPISZ</button>
-        </div>
-      ) : <div className="mt-2 truncate text-lg font-black text-white">{st.nick || st.name || `Gracz ${st.slot + 1}`}</div>}
-    </div>
-  );
-}
 
 function RemoteButton({
   command,
@@ -128,16 +91,34 @@ function RemoteNavigation({ admin, accent }: { admin: boolean; accent: string })
   );
 }
 
+function LandscapeRemote({ st, onSettings, onRoom, onLounge, fullscreen }: { st: PadClientState; onSettings: () => void; onRoom: () => void; onLounge: () => void; fullscreen: () => void }) {
+  const admin = st.slot === st.adminSlot;
+  const game = st.game ? gameInfo(st.game) : GAMES[st.selection] ?? GAMES[0];
+  return <div className="landscape-remote">
+    <header><JoyPadLogo size={38} /><span>JOYPAD <small>CONTROLLER MODE</small></span><div><button onClick={onLounge}>Mój profil</button>{admin && <button onClick={onRoom}>Pokój</button>}<button aria-label="Ustawienia telefonu" onClick={onSettings}><Settings size={17} /></button><button aria-label="Pełny ekran" onClick={fullscreen}><Maximize2 size={17} /></button></div></header>
+    {admin ? <main className="landscape-controls"><div className="landscape-dpad"><span className="pad-shoulder">L / NAWIGACJA</span><div className="physical-dpad"><RemoteButton command="up" label="W górę" admin><ArrowUp /></RemoteButton><RemoteButton command="left" label="W lewo" admin><ArrowLeft /></RemoteButton><span className="dpad-hub" /><RemoteButton command="right" label="W prawo" admin><ArrowRight /></RemoteButton><RemoteButton command="down" label="W dół" admin><ArrowDown /></RemoteButton></div></div>
+      <div className="landscape-display"><span className="os-eyebrow">{st.screen === 'lobby' ? 'BIBLIOTEKA' : st.screen === 'over' ? 'WYNIKI' : 'PRZYGOTOWANIE'}</span><h1>{game.title}</h1>{st.options ? <p>{st.options.primaryValue} · {st.options.secondaryValue}</p> : <p>{st.screen === 'over' ? 'Strzałki: Moments i akcje. A: wybierz.' : 'Strzałki wybierają. A zatwierdza.'}</p>}<div><button onClick={() => send('home')}><Home size={16} /> HOME</button><button onClick={onRoom}><Crown size={16} /> ADMIN</button></div><small>Obróć pionowo, aby użyć pilota</small></div>
+      <div className="landscape-ab"><span className="pad-shoulder">R / AKCJA</span><button className="physical-b" aria-label="B — Wstecz" onClick={() => send('back')}>B<small>WSTECZ</small></button><button className="physical-a" aria-label="A — Zatwierdź" onClick={() => send('select')}>A<small>WYBIERZ</small></button></div>
+    </main> : <main className="landscape-wait"><div><JoyPadLogo size={110} /><h1>Twój pad. Twój styl.</h1><p>{st.nick}, ekipa zaraz startuje.</p><button onClick={onLounge}>Personalizuj Player Pass</button>{st.game && ['menu', 'setup', 'over'].includes(st.screen) && <button onClick={() => { const kind = st.screen === 'over' ? 'rematch' : 'ready'; padClient.sendIntent(kind, !st.roster.find(p => p.slot === st.slot)?.[kind]); }}>{st.screen === 'over' ? 'Chcę rewanż' : st.roster.find(p => p.slot === st.slot)?.ready ? 'Gotowy ✓' : 'Jestem gotowy'}</button>}</div>{['lobby', 'over'].includes(st.screen) && <GameSuggestions st={st} />}</main>}
+    <footer><span>● {st.nick} / PAD {st.slot + 1}</span><span>{admin ? 'STERUJ DUŻYM EKRANEM' : 'POŁĄCZONO Z EKIPĄ'} · {st.code}</span></footer>
+  </div>;
+}
+
 function RemoteController({ st, ...features }: { st: PadClientState } & ControllerFeatures) {
   const { fullscreen, fullscreenStatus, wakeLockEnabled, onWakeLockChange, wakeLockStatus, tiltEnabled, onTiltChange, tiltStatus } = features;
   const admin = st.slot === st.adminSlot;
   const [deviceSettings, setDeviceSettings] = useState(false);
+  const [roomOpen, setRoomOpen] = useState(false);
+  const [loungeOpen, setLoungeOpen] = useState(false);
+  const [profile, setProfile] = useState(loadProfile);
+  useEffect(() => { if (!admin) setRoomOpen(false); }, [admin]);
+  const viewport = useViewport();
+  const landscape = viewport.width > viewport.height;
   const selected = GAMES[st.selection] ?? GAMES[0];
   const game = st.game ? gameInfo(st.game) : null;
-  const accent = game?.accent || selected.accent;
+  const accent = THEMES[profile.theme];
   const intentKind = st.screen === 'over' ? 'rematch' : 'ready';
   const intent = !!st.roster.find(player => player.slot === st.slot)?.[intentKind];
-  const suggestedGame = st.roster.find(player => player.slot === st.slot)?.suggestedGame;
   const [reminderCooldown, setReminderCooldown] = useState(false);
   useEffect(() => { if (!reminderCooldown) return; const t = window.setTimeout(() => setReminderCooldown(false), 8000); return () => clearTimeout(t); }, [reminderCooldown]);
   const intentCount = st.roster.filter(player => player[intentKind]).length;
@@ -150,14 +131,21 @@ function RemoteController({ st, ...features }: { st: PadClientState } & Controll
         ? 'WYBIERZ TRYB'
         : 'ROZPOCZNIJ';
 
+  const panels = <>
+    {roomOpen && admin && <Sheet title="Centrum pokoju." onClose={() => setRoomOpen(false)}><RoomControls session={st} onAction={action => padClient.manageRoom(action)} /></Sheet>}
+    {loungeOpen && <Sheet title="Twój Player Pass." onClose={() => setLoungeOpen(false)}><PlayerLounge st={st} onProfile={setProfile} /></Sheet>}
+    {deviceSettings && <Sheet title="Twój kontroler." onClose={() => setDeviceSettings(false)}><NickEditor st={st} compact /><DeviceFeatures wakeLockEnabled={wakeLockEnabled} onWakeLockChange={onWakeLockChange} wakeLockStatus={wakeLockStatus} fullscreenStatus={fullscreenStatus} onFullscreen={fullscreen} tiltEnabled={tiltEnabled} onTiltChange={onTiltChange} tiltStatus={tiltStatus} /></Sheet>}
+  </>;
+  if (landscape) return <div className="pad-landscape-mode" style={{ '--game-accent': accent } as React.CSSProperties}><LandscapeRemote st={st} onSettings={() => setDeviceSettings(true)} onRoom={() => setRoomOpen(true)} onLounge={() => setLoungeOpen(true)} fullscreen={fullscreen} />{panels}</div>;
+
   return (
-    <div className="pad-joy min-h-[100dvh] overflow-y-auto text-white" style={{ '--game-accent': accent } as React.CSSProperties}>
+    <div className="pad-joy pad-portrait-mode min-h-[100dvh] overflow-y-auto text-white" style={{ '--game-accent': accent } as React.CSSProperties}>
       <div className="pointer-events-none fixed inset-0 opacity-20" style={{ background: `radial-gradient(ellipse at 50% 0%, ${accent}, transparent 60%)` }} />
       <div className="relative mx-auto flex min-h-[100dvh] max-w-[430px] flex-col px-4 pb-8" style={{ paddingTop: 'max(16px, env(safe-area-inset-top))' }}>
         <header className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="joy-logo flex h-9 w-9 items-center justify-center rounded-xl"><Gamepad2 size={20} /></span>
-            <div><div className="joy-brand text-xl font-extrabold leading-none">Joy<span className="text-orange-400">Pad.</span></div><div className="joy-kicker mt-1 text-[8px] text-slate-500">PILOT</div></div>
+            <JoyPadLogo size={45} />
+            <div><div className="joy-brand text-xl font-extrabold leading-none">Joy<span className="text-orange-400">Pad.</span></div><div className="joy-kicker mt-1 text-[8px] text-slate-500">{admin ? 'REMOTE MODE / PIONOWO' : 'PLAYER LOUNGE'}</div></div>
           </div>
           <div className="flex items-center gap-1">
             <button type="button" onClick={() => setDeviceSettings(true)} title="Funkcje telefonu" className="pad-icon"><Settings size={17} /></button>
@@ -166,6 +154,7 @@ function RemoteController({ st, ...features }: { st: PadClientState } & Controll
           </div>
         </header>
 
+        <div className="pad-system-shortcuts"><button onClick={() => setLoungeOpen(true)}>✦ Mój Player Pass</button>{admin && <button onClick={() => setRoomOpen(true)}><Crown size={14} /> Centrum pokoju</button>}</div>
         <div className="mt-6 flex items-center justify-between gap-2">
           <span className="joy-kicker" style={{ color: accent }}>● {label}</span>
           <span className={`rounded-full border px-3 py-1 text-[10px] font-bold ${admin ? 'border-orange-300/30 bg-orange-400/10 text-orange-200' : 'border-white/15 bg-white/5 text-slate-300'}`}>
@@ -188,6 +177,7 @@ function RemoteController({ st, ...features }: { st: PadClientState } & Controll
             </div>
             <p className="mt-5 text-center text-sm leading-relaxed text-slate-300">{admin ? 'Pilotem wybierz grę strzałkami, a następnie naciśnij OK.' : 'Poczekaj, aż administrator wybierze grę.'}</p>
             {admin && <RemoteNavigation admin accent={accent} />}
+            <GameSuggestions st={st} />
           </>
         ) : (
           <>
@@ -207,10 +197,10 @@ function RemoteController({ st, ...features }: { st: PadClientState } & Controll
               {admin && st.screen !== 'over' && st.roster.some(p => !p.ready) && <button disabled={reminderCooldown} onClick={() => { padClient.remindReady(); setReminderCooldown(true); }}>{reminderCooldown ? 'Przypomnienie wysłane' : 'Przypomnij ekipie'}</button>}
               <p role="status">{intentCount}/{st.roster.length} {st.screen === 'over' ? 'chętnych na rewanż' : 'gotowych'} · Startuje gospodarz</p>
             </div>}
-            {st.screen === 'over' && <section className="pad-proposals" aria-label="Propozycja następnej gry"><h2>Co gramy dalej?</h2><p>To propozycja. Gospodarz zatwierdza na TV.</p>{GAMES.filter(g => !g.wip && g.id !== st.game).map(g => <button key={g.id} aria-pressed={suggestedGame === g.id} onClick={() => padClient.suggestGame(suggestedGame === g.id ? null : g.id)}><img src={`${import.meta.env.BASE_URL}${g.cover}`} alt="" /><span>{g.title}</span>{suggestedGame === g.id && <Check size={18} />}</button>)}</section>}
+            {st.screen === 'over' && <GameSuggestions st={st} />}
             {admin && <>
-              {st.screen !== 'over' && <RemoteNavigation admin accent={accent} />}
-              <button type="button" onClick={() => send('select')} className="pad-primary mt-4 w-full" style={{ background: accent }}>
+              <RemoteNavigation admin accent={accent} />
+              <button type="button" onClick={() => send(st.screen === 'over' ? 'restart' : 'select')} className="pad-primary mt-4 w-full" style={{ background: accent }}>
                 {st.screen === 'over' ? <><RotateCcw size={17} /> {actionText}</> : <><Play size={17} fill="currentColor" /> {actionText}</>}
               </button>
               {st.screen === 'over' && <button type="button" onClick={() => send('home')} className="pad-secondary mt-2 w-full"><Home size={14} /> WSZYSTKIE GRY</button>}
@@ -218,7 +208,7 @@ function RemoteController({ st, ...features }: { st: PadClientState } & Controll
           </>
         )}
       </div>
-      {deviceSettings && <Sheet title="Twój kontroler." onClose={() => setDeviceSettings(false)}><NickEditor st={st} compact /><DeviceFeatures wakeLockEnabled={wakeLockEnabled} onWakeLockChange={onWakeLockChange} wakeLockStatus={wakeLockStatus} fullscreenStatus={fullscreenStatus} onFullscreen={fullscreen} tiltEnabled={tiltEnabled} onTiltChange={onTiltChange} tiltStatus={tiltStatus} /></Sheet>}
+      {panels}
     </div>
   );
 }

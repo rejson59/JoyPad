@@ -44,6 +44,7 @@ export class NeonCircuitRound implements GameRound {
       playerColorIdx: this.humanPlayers.map((_, index) => index % KART_COLORS.length),
       playerSlots: this.humanPlayers.map(player => player.slot),
       displayMode: config.displayMode,
+      onFrame: config.onFrame,
       readInput: slot => this.readPadInput(slot),
       onFx: (slot, fx) => {
         // The host sends the final win/lose pulse from RoundResult; forwarding

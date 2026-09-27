@@ -1,4 +1,5 @@
 /** Wspólny protokół — ten sam JSON przez WebRTC albo awaryjny przekaźnik MQTT. */
+import type { PlayerProfile } from '../platform/profile';
 import type { GameId } from '../arcade/catalog';
 
 export const ROOM_PREFIX = 'stalowy-front-';
@@ -110,12 +111,17 @@ export interface SessionOptions {
   secondaryValue: string;
 }
 
+export interface RoomSettings { locked: boolean; suggestions: boolean; dimmed: boolean }
+export const DEFAULT_ROOM: RoomSettings = { locked: false, suggestions: true, dimmed: false };
+export type RoomAction = { kind: 'locked' | 'suggestions' | 'dimmed'; value: boolean } | { kind: 'kick' | 'transfer'; slot: number };
+
 export interface SessionState {
+  room?: RoomSettings;
   game: GameId | null;
   screen: HostScreen;
   selection: number;
   adminSlot: number | null;
-  roster: { slot: number; nick: string; ready?: boolean; rematch?: boolean; suggestedGame?: GameId }[];
+  roster: { slot: number; nick: string; ready?: boolean; rematch?: boolean; suggestedGame?: GameId; profile?: PlayerProfile }[];
   options?: SessionOptions;
 }
 
@@ -124,6 +130,8 @@ export type PadMessage =
   /** `pid` = stały identyfikator telefonu (localStorage) — zapobiega dwóm slotom na tym samym telefonie po zmianie transportu. */
   | { t: 'hello'; nick: string; ua: string; v: number; pid?: string; steer?: PadSteer }
   | { t: 'input'; fwd: number; turn: number; fire: boolean; steer?: PadSteer; dirX?: number; dirY?: number; aimX?: number; aimY?: number }
+  | { t: 'profile'; profile: PlayerProfile }
+  | { t: 'room'; action: RoomAction }
   | { t: 'suggest'; game: GameId | null }
   | { t: 'remind' }
   | { t: 'intent'; kind: 'ready' | 'rematch'; value: boolean }

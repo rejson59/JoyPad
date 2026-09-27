@@ -1,5 +1,15 @@
 # JoyPad 🎮
 
+## JoyPad OS 02 — duża aktualizacja platformy
+
+Nowy znak JoyPada, centrum pokoju, przekazywanie admina, ekran przerwy, propozycje w bibliotece, Player Pass, różne układy pilot/pad, szklane powiadomienia i **Moments Video: rzeczywiste powtórki obrazu rozgrywki** z odtwarzaniem, zwolnionym tempem i pobieraniem.
+
+- [Opis funkcji, ograniczenia i testy](docs/platform-update.md)
+- [Gotowe długie prompty dla czterech gier w budowie + import ZIP](docs/game-building-prompts.md)
+- [Moments Video — architektura, ograniczenia i testy nagrywania](docs/moments-video.md)
+- Test nowych mechanizmów: `npm run selftest:platform`.
+
+
 **JoyPad OS** — matowa konsola do wspólnej gry na jednym ekranie. Telefon jest bezprzewodowym kontrolerem, komputer lub TV wyświetla grę. **Trzy gry są dostępne: Stalowy Front, Neonowy Pęd i Orbitalna Fala.** Cztery kolejne są w przebudowie i widoczne wyłącznie w sekcji „Wkrótce”. Nie można ich obecnie uruchomić z biblioteki.
 
 ## System konsoli

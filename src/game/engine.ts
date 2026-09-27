@@ -30,6 +30,7 @@ interface EngineOpts {
   timeLimit: number;
   onHud: (h: HudState) => void;
   onKill: (k: KillEvent) => void;
+  onFrame?: (canvas: HTMLCanvasElement) => void;
   onGameOver: (winnerId: number | null, tanks: HudTank[]) => void;
   /** Analogowe wejście z telefonów-padów, indeks = id gracza (slot). */
   padInputs?: PadInput[];
@@ -98,6 +99,7 @@ export class TankGame {
   trauma = 0;
   killFeed: KillEvent[] = [];
   killId = 0;
+  private finishTimers: ReturnType<typeof setTimeout>[] = [];
   gameOver = false;
   paused = false;
   hudTimer = 0;
@@ -313,6 +315,7 @@ export class TankGame {
   }
 
   start() {
+    if (this.running) return;
     gameAudio.init();
     if (this.map.weather === 'rain') gameAudio.startRain();
     this.tanks.forEach(t => gameAudio.startEngine(t.id));
@@ -343,6 +346,7 @@ export class TankGame {
         }
       }
       this.render(dt);
+      this.opts.onFrame?.(this.canvas);
       // hud throttle
       this.hudTimer -= dt;
       if (this.hudTimer <= 0) { this.hudTimer = 0.08; this.emitHud(); }
@@ -352,6 +356,8 @@ export class TankGame {
   }
 
   destroy() {
+    this.finishTimers.forEach(clearTimeout);
+    this.finishTimers = [];
     this.running = false;
     cancelAnimationFrame(this.raf);
     window.removeEventListener('keydown', this.keyDown);
@@ -1114,14 +1120,14 @@ export class TankGame {
     if (winner !== null) {
       const w = this.tanks.find(t => t.id === winner);
       if (w) for (let i = 0; i < 5; i++) {
-        setTimeout(() => {
+        this.finishTimers.push(setTimeout(() => {
           this.addLight(w.x + rand(-100, 100), w.y + rand(-100, 100), 300, '255,220,150', 1, 0.4, true);
           this.sparks(w.x + rand(-120, 120), w.y + rand(-120, 120), 24);
           gameAudio.explosion(false);
-        }, i * 300);
+        }, i * 300));
       }
     }
-    setTimeout(() => this.opts.onGameOver(winner, tanks), 1600);
+    this.finishTimers.push(setTimeout(() => this.opts.onGameOver(winner, tanks), 1600));
   }
 
   spawnPowerup() {

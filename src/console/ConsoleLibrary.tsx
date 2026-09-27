@@ -1,3 +1,8 @@
+import { PlayerAvatar } from '../platform/PlayerAvatar';
+import { JoyPadLogo } from '../components/JoyPadLogo';
+import { normalizeProfile } from '../platform/profile';
+import { RoomControls } from '../platform/RoomControls';
+import { padHost } from '../net/padHost';
 import { GamePreview } from './GamePreview';
 import { hasHistory, lastGame } from './history';
 import { useViewport } from './useViewport';
@@ -23,7 +28,7 @@ export function ConsoleLibrary({ focus, onFocus, onOpen, onConnections, onLab, o
   const state = usePadHost();
   const viewport = useViewport();
   const game = GAMES[focus];
-  const [panel, setPanel] = useState<'settings' | 'soon' | 'help' | null>(null);
+  const [panel, setPanel] = useState<'settings' | 'soon' | 'help' | 'room' | null>(null);
   const [music, toggleMusic] = useMenuMusic();
   const [qr, setQr] = useState('');
   const [previewControls, setPreviewControls] = useState<HTMLSpanElement | null>(null);
@@ -45,12 +50,13 @@ export function ConsoleLibrary({ focus, onFocus, onOpen, onConnections, onLab, o
   return <div className="os-library" style={{ '--game-accent': game.accent } as CSSProperties}>
     <GamePreview key={game.id} game={game} suspended={suspended || panel !== null} controlsTarget={previewControls} />
     <header className="os-topbar">
-      <a className="os-wordmark" href="#" aria-label="JoyPad — biblioteka">JoyPad<span>.</span><small>PLAY SYSTEM</small></a>
+      <a className="os-wordmark" href="#" aria-label="JoyPad — biblioteka"><JoyPadLogo />JoyPad<span>.</span><small>PLAY SYSTEM</small></a>
       <nav aria-label="System konsoli">
         <span ref={setPreviewControls} className="os-preview-controls" />
-        <span className="os-network"><i className={ready ? 'is-ready' : ''} />{ready ? 'Pokój gotowy' : 'Łączenie pokoju'}</span>
+        <span className="os-network"><i className={ready ? 'is-ready' : ''} />{state.room.locked ? 'Pokój zamknięty' : ready ? 'Pokój gotowy' : 'Łączenie pokoju'}</span>
         <button className="os-icon" aria-label={music ? 'Wyłącz muzykę menu' : 'Włącz muzykę menu'} aria-pressed={music} onClick={() => toggleMusic(!music)}>{music ? <Volume2 size={19} /> : <VolumeX size={19} />}</button>
         <button className="os-icon" onClick={() => setPanel('settings')} aria-label="Ustawienia systemu"><Settings2 size={20} /></button>
+        <button className="os-room-button" onClick={() => setPanel('room')}>Pokój<span>{state.pads.length}/4</span></button>
         <button className="os-add" onClick={onConnections}><Plus size={18} /><span>Dodaj gracza</span></button>
       </nav>
     </header>
@@ -73,8 +79,9 @@ export function ConsoleLibrary({ focus, onFocus, onOpen, onConnections, onLab, o
         {!session.count && ready && <div className="os-pairing"><QrFrame src={qr} size={136} /><div><span>KOD POKOJU</span><strong>{state.code || '·····'}</strong><a href="#pad" target="_blank" rel="noopener noreferrer"><Smartphone size={14} /> Otwórz pada</a></div></div>}
         <div className="os-roster">{PLAYER_DEFS.map((p, slot) => {
           const pad = state.pads.find(p => p.slot === slot);
-          return <div key={slot} className={`os-player ${pad ? 'is-connected' : ''}`} style={{ '--player-color': p.color } as CSSProperties}><span><Gamepad2 size={18} /></span><div><b>{pad?.nick || `Miejsce ${slot + 1}`}</b><small>{pad ? 'Połączono' : 'Czeka na gracza'}</small></div>{pad && <i />}</div>;
+          return <div key={slot} className={`os-player ${pad ? 'is-connected' : ''}`} style={{ '--player-color': p.color } as CSSProperties}><span>{pad ? <PlayerAvatar avatar={normalizeProfile(pad.profile).avatar} size={20} /> : <Gamepad2 size={18} />}</span><div><b>{pad?.nick || `Miejsce ${slot + 1}`}</b><small>{pad ? state.adminSlot === slot ? 'Administrator' : 'Połączono' : 'Czeka na gracza'}</small></div>{pad && <i />}</div>;
         })}</div>
+        {state.pads.some(p => p.suggestedGame) && <div className="lobby-votes"><span className="os-eyebrow">EKIPA PROPONUJE</span>{GAMES.filter(g => state.pads.some(p => p.suggestedGame === g.id)).map(g => <button key={g.id} onClick={() => onOpen(g.id)}><span>{g.title}<small>{state.pads.filter(p => p.suggestedGame === g.id).map(p => p.nick).join(', ')}</small></span><ArrowRight size={16} /></button>)}</div>}
         <button className="os-session-invite" onClick={onConnections}><Plus size={15} />{session.invite}<ArrowRight size={15} /></button>
         <button className="os-lab-link" onClick={onLab}><Zap size={16} /><span>Sprawdź pad · ruch i akcja</span><ArrowRight size={16} /></button>
         {state.error && <details className="os-connection-detail"><summary>Problem z połączeniem · szczegóły</summary><p className="os-error">{state.error}</p></details>}
@@ -90,9 +97,9 @@ export function ConsoleLibrary({ focus, onFocus, onOpen, onConnections, onLab, o
         </button>;
       })}</div>
     </section>
-    <footer className="os-footer"><div><span><kbd>←</kbd><kbd>→</kbd> Wybierz</span><span><kbd>Enter</kbd> Uruchom</span><span className="os-muted">Pilot · klawiatura · gamepad</span></div><button onClick={() => setPanel('help')}>Jak zacząć?</button><span className="os-footer-brand">JOYPAD OS <i /> 01</span></footer>
-    {panel && <Sheet title={panel === 'settings' ? 'Po swojemu.' : panel === 'soon' ? 'Kolejne światy.' : 'Usiądź. Połącz. Graj.'} onClose={() => { systemSound('back'); setPanel(null); }}>
-      {panel === 'settings' ? <><ConsoleSettings /><button className="os-secondary" onClick={() => toggleMusic(!music)}>{music ? 'Wyłącz' : 'Włącz'} muzykę w bibliotece</button></> : panel === 'soon' ? <><p className="os-note">Te gry są w przebudowie. Pojawią się w bibliotece, kiedy będą gotowe — bez odliczania i obietnic dat.</p><div className="os-upcoming">{GAMES.filter(g => g.wip).map(g => <div key={g.id}><img src={`${import.meta.env.BASE_URL}${g.cover}`} alt="" /><div><h3>{g.title}</h3><span>{g.genre} · W przygotowaniu</span></div></div>)}</div></> : <ol className="os-help"><li><b>Duży ekran</b><p>Otwórz JoyPad na komputerze lub telewizorze. Bez telefonu możesz grać na klawiaturze.</p></li><li><b>Twój telefon, Twój pad</b><p>Zeskanuj QR. Pierwszy połączony telefon steruje menu. Kolejni gracze dołączają bez konta.</p></li><li><b>Wybierz swój świat</b><p>Strzałki zmieniają grę, OK ją otwiera. W grze telefon automatycznie zmienia się w kontroler. Fizyczny gamepad obsługuje bibliotekę: krzyżak lub gałka, A i B.</p></li></ol>}
+    <footer className="os-footer"><div><span><kbd>←</kbd><kbd>→</kbd> Wybierz</span><span><kbd>Enter</kbd> Uruchom</span><span className="os-muted">Pilot · klawiatura · gamepad</span></div><button onClick={() => setPanel('help')}>Jak zacząć?</button><span className="os-footer-brand">JOYPAD OS <i /> 02</span></footer>
+    {panel && <Sheet title={panel === 'room' ? 'Centrum pokoju.' : panel === 'settings' ? 'Po swojemu.' : panel === 'soon' ? 'Kolejne światy.' : 'Usiądź. Połącz. Graj.'} onClose={() => { systemSound('back'); setPanel(null); }}>
+      {panel === 'room' ? <RoomControls session={padHost.session()} onAction={action => padHost.manageRoom(action)} /> : panel === 'settings' ? <><ConsoleSettings /><button className="os-secondary" onClick={() => toggleMusic(!music)}>{music ? 'Wyłącz' : 'Włącz'} muzykę w bibliotece</button></> : panel === 'soon' ? <><p className="os-note">Te gry są w przebudowie. Pojawią się w bibliotece, kiedy będą gotowe — bez odliczania i obietnic dat.</p><div className="os-upcoming">{GAMES.filter(g => g.wip).map(g => <div key={g.id}><img src={`${import.meta.env.BASE_URL}${g.cover}`} alt="" /><div><h3>{g.title}</h3><span>{g.genre} · W przygotowaniu</span></div></div>)}</div></> : <ol className="os-help"><li><b>Duży ekran</b><p>Otwórz JoyPad na komputerze lub telewizorze. Bez telefonu możesz grać na klawiaturze.</p></li><li><b>Twój telefon, Twój pad</b><p>Zeskanuj QR. Pierwszy połączony telefon steruje menu. Kolejni gracze dołączają bez konta.</p></li><li><b>Wybierz swój świat</b><p>Strzałki zmieniają grę, OK ją otwiera. W grze telefon automatycznie zmienia się w kontroler. Fizyczny gamepad obsługuje bibliotekę: krzyżak lub gałka, A i B.</p></li></ol>}
     </Sheet>}
   </div>;
 }

@@ -940,6 +940,7 @@ export class Game {
     this.sun.position.copy(focus).addScaledVector(this.sunDir, 500); this.sun.target.position.copy(focus);
     if (this.lowFx) this.renderer.render(this.scene, this.camera); else this.composer.render();
     this.drawOverlay(dt);
+    this.onFrame?.(this.renderer.domElement, this.overlay);
     this.hudTimer -= dt;
     if (this.onHud && (this.hudTimer <= 0)) { this.hudTimer = 0.1; this.onHud(this.hudState()); }
   };

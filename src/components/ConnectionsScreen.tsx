@@ -1,3 +1,4 @@
+import { RoomControls } from '../platform/RoomControls';
 import { Sheet } from '../console/Sheet';
 import { useEffect, useState } from 'react';
 import { Antenna, Check, Copy, RefreshCw, Wifi, WifiOff } from 'lucide-react';
@@ -65,7 +66,7 @@ export function ConnectionsScreen({ onClose }: { onClose: () => void }) {
             <div className="mt-2 divide-y divide-white/[.06] rounded-2xl border border-white/10 bg-white/[.03]">
               {PLAYER_DEFS.map((player, index) => {
                 const pad = state.pads.find(p => p.slot === index);
-                const admin = pad && state.pads.reduce((first, p) => p.connectedAt < first.connectedAt ? p : first, state.pads[0]).connId === pad.connId;
+                const admin = pad && state.adminSlot === pad.slot;
                 return (
                   <div key={index} className="flex items-center gap-3 px-3 py-2.5">
                     <span className="h-8 w-8 shrink-0 rounded-lg text-center text-sm font-bold leading-8" style={{ color: player.color, background: `${player.color}22` }}>{index + 1}</span>
@@ -78,6 +79,7 @@ export function ConnectionsScreen({ onClose }: { onClose: () => void }) {
               })}
             </div>
 
+            <RoomControls session={padHost.session()} onAction={action => padHost.manageRoom(action)} />
             <div className="mt-4"><ConnectionCheck defaultOpen={false} /></div>
             {state.error && <p className="mt-2 text-xs text-amber-300">{state.error}</p>}
             {state.note && <p className="mt-2 text-xs text-orange-300">{state.note}</p>}

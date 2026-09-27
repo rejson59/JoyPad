@@ -11,7 +11,10 @@
     "preview": "vite preview",
     "selftest:relay": "esbuild scripts/relay-selftest.ts --bundle --format=esm --platform=node --outfile=.cache/relay-selftest.mjs --log-level=warning && node .cache/relay-selftest.mjs",
     "selftest:arcade": "esbuild scripts/arcade-selftest.ts --bundle --format=esm --platform=node --define:import.meta.env={} --outfile=.cache/arcade-selftest.mjs --log-level=warning && node .cache/arcade-selftest.mjs",
-    "selftest:console": "esbuild scripts/console-selftest.ts --bundle --format=esm --platform=node --define:import.meta.env={} --outfile=.cache/console-selftest.mjs --log-level=warning && node .cache/console-selftest.mjs"
+    "selftest:console": "esbuild scripts/console-selftest.ts --bundle --format=esm --platform=node --define:import.meta.env={} --outfile=.cache/console-selftest.mjs --log-level=warning && node .cache/console-selftest.mjs",
+    "selftest:platform": "esbuild scripts/platform-selftest.ts --bundle --format=esm --platform=node --define:import.meta.env={} --outfile=.cache/platform-selftest.mjs --log-level=warning && node .cache/platform-selftest.mjs",
+    "selftest:replay": "esbuild scripts/replay-selftest.ts --bundle --format=esm --platform=node --define:import.meta.env={} --outfile=.cache/replay-selftest.mjs --log-level=warning && node .cache/replay-selftest.mjs",
+    "test:replay": "playwright test"
   },
   "dependencies": {
     "@fontsource/black-ops-one": "^5.3.0",
@@ -20,6 +23,7 @@
     "@fontsource/outfit": "^5.3.0",
     "@fontsource/space-grotesk": "^5.3.0",
     "clsx": "2.1.1",
+    "fix-webm-duration": "^1.0.6",
     "lucide-react": "^1.47.0",
     "peerjs": "^1.5.5",
     "qrcode": "^1.5.4",
@@ -30,6 +34,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "4.1.17",
     "@types/node": "22.19.17",
     "@types/qrcode": "^1.5.6",

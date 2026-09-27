@@ -25,6 +25,14 @@ jobs:
         run: npm run selftest:console
       - name: Selftest — awaryjny przekaźnik MQTT
         run: npm run selftest:relay
+      - name: Selftest — platforma i cykl życia powtórek
+        run: |
+          npm run selftest:platform
+          npm run selftest:replay
+      - name: Chromium for video replay tests
+        run: npx playwright install --with-deps chromium
+      - name: Real video capture and playback (2D, WebGL, split-screen)
+        run: npm run test:replay
       - name: Build
         run: npm run build
         env:

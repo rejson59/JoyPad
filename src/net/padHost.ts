@@ -1,3 +1,5 @@
+import { normalizeProfile, type PlayerProfile } from '../platform/profile';
+import { DEFAULT_ROOM, type RoomAction, type RoomSettings } from './protocol';
 import Peer, { type DataConnection } from 'peerjs';
 import {
   PROTOCOL_VERSION, REMOTE_COMMANDS, ZERO_INPUT, normalizeNick, randomCode, roomIdFromCode,
@@ -11,6 +13,7 @@ import type { GameId } from '../arcade/catalog';
 import { GAMES } from '../arcade/catalog';
 
 export interface PadInfo {
+  profile?: PlayerProfile;
   lastInputAt?: number;
   inputStale?: boolean;
   suggestedGame?: GameId;
@@ -41,6 +44,8 @@ export type SignalState = 'offline' | 'connecting' | 'online' | 'lost';
 export type RelayState = 'off' | 'connecting' | 'online';
 
 export interface PadHostState {
+  room: RoomSettings;
+  adminSlot: number | null;
   screen: HostScreen;
   status: HostStatus;
   code: string;
@@ -91,6 +96,8 @@ function normSteer(v: unknown): PadSteer | undefined {
  */
 export class PadHost {
   private peer: Peer | null = null;
+  private room: RoomSettings = { ...DEFAULT_ROOM };
+  private adminId: string | null = null;
   private conns = new Map<string, PadLink>();
   private pads = new Map<string, PadInfo>();
   /** pid telefonu -> connId jego aktywnego pada (anti-duplicate slot). */
@@ -138,7 +145,7 @@ export class PadHost {
   /** Wywoływane, gdy zmienią się sloty albo nick jednego z telefonów. */
   onSlotsChanged: ((slots: (PadInfo | null)[]) => void) | null = null;
   onPauseRequest: (() => void) | null = null;
-  /** Komendy menu są wykonywane wyłącznie dla pierwszego aktywnego telefonu. */
+  /** Komendy menu wykonuje aktualny administrator; domyślnie najstarszy aktywny telefon. */
   onAdminCommand: ((command: RemoteCommand) => void) | null = null;
   onGameChoice: ((index: number) => void) | null = null;
 
@@ -150,11 +157,12 @@ export class PadHost {
 
   snapshot(): PadHostState {
     return {
+      room: { ...this.room }, adminSlot: this.admin()?.slot ?? null,
       screen: this.screen,
       status: this.status,
       code: this.code,
       error: this.error,
-      pads: [...this.pads.values()].sort((a, b) => a.slot - b.slot),
+      pads: [...this.pads.values()].sort((a, b) => a.slot - b.slot).map(p => ({ ...p })),
       signal: this.signal,
       relay: this.relay,
       attempts: this.attempts,
@@ -168,6 +176,7 @@ export class PadHost {
 
   /** Starszeństwo wynika z kolejności połączenia, a nie numeru zwolnionego slotu. */
   private admin(): PadInfo | null {
+    if (this.adminId && this.pads.has(this.adminId)) return this.pads.get(this.adminId)!;
     let first: PadInfo | null = null;
     for (const pad of this.pads.values()) if (!first || pad.connectedAt < first.connectedAt) first = pad;
     return first;
@@ -175,9 +184,10 @@ export class PadHost {
 
   session(): SessionState {
     return {
+      room: { ...this.room },
       game: this.game, screen: this.screen, selection: this.selection,
       adminSlot: this.admin()?.slot ?? null,
-      roster: [...this.pads.values()].sort((a, b) => a.slot - b.slot).map(p => ({ slot: p.slot, nick: p.nick, ready: !!p.ready, rematch: !!p.rematch, suggestedGame: p.suggestedGame })),
+      roster: [...this.pads.values()].sort((a, b) => a.slot - b.slot).map(p => ({ slot: p.slot, nick: p.nick, ready: !!p.ready, rematch: !!p.rematch, suggestedGame: p.suggestedGame, profile: p.profile })),
       options: this.menuOptions,
     };
   }
@@ -217,6 +227,7 @@ export class PadHost {
   setScreen(screen: HostScreen, extra?: { winnerSlot?: number | null; winnerName?: string; winnerColor?: string; allWon?: boolean }) {
     const changed = this.screen !== screen;
     this.screen = screen;
+    if (screen === 'game') this.room.dimmed = false;
     if (changed) this.clearIntent();
     for (const p of this.pads.values()) {
       this.send(p.connId, {
@@ -603,6 +614,7 @@ export class PadHost {
     this.padsByPid.clear();
     this.returningSlots.clear();
     this.pads.clear();
+    this.adminId = null;
     this.inputs.forEach((_, i) => { this.inputs[i] = { ...ZERO_INPUT }; });
     this.destroyPeer();
     this.status = 'idle';
@@ -623,10 +635,30 @@ export class PadHost {
     try { peer.destroy(); } catch { /* ignore */ }
   }
 
+  /** Host-authoritative: callers on the wire are checked before reaching this method. */
+  manageRoom(action: RoomAction) {
+    if (!action || typeof action !== 'object') return;
+    if (action.kind === 'kick' || action.kind === 'transfer') {
+      if (!Number.isInteger(action.slot)) return;
+      const target = this.padForSlot(action.slot);
+      if (!target) return;
+      if (action.kind === 'kick') { this.kick(target.connId); return; }
+      this.adminId = target.connId;
+    } else if (['locked', 'suggestions', 'dimmed'].includes(action.kind) && 'value' in action && typeof action.value === 'boolean') {
+      // Never hide a live round. The screen is automatically restored on start.
+      if (action.kind === 'dimmed' && this.screen === 'game') return;
+      this.room = { ...this.room, [action.kind]: action.value };
+      if (action.kind === 'suggestions' && !action.value) for (const p of this.pads.values()) p.suggestedGame = undefined;
+    } else return;
+    this.emit(); this.broadcastSession();
+  }
+
   kick(connId: string) {
     const c = this.conns.get(connId);
     if (c) { this.send(connId, { t: 'rejected', reason: 'Odłączono przez hosta.' }); setTimeout(() => c.close(), 150); }
+    const pid = this.pads.get(connId)?.pid;
     this.dropConn(connId);
+    if (pid) this.returningSlots.delete(pid);
   }
 
   private handleConn(conn: DataConnection) {
@@ -681,6 +713,11 @@ export class PadHost {
           }
         }
         const saved = pid ? this.returningSlots.get(pid) : undefined;
+        if (this.room.locked && !(saved && saved.until > Date.now())) {
+          this.send(id, { t: 'rejected', reason: 'Pokój jest zamknięty. Poproś administratora o otwarcie wejścia.' });
+          setTimeout(() => link.close(), 200);
+          return;
+        }
         const slot = saved && saved.until > Date.now() && ![...this.pads.values()].some(p => p.slot === saved.slot) ? saved.slot : this.freeSlot();
         if (pid) this.returningSlots.delete(pid);
         if (slot < 0) {
@@ -736,10 +773,21 @@ export class PadHost {
       }
       case 'suggest': {
         const p = this.pads.get(id);
-        if (!p || this.screen !== 'over') break;
+        if (!p || !this.room.suggestions || !['lobby', 'over'].includes(this.screen)) break;
         if (msg.game !== null && !GAMES.some(g => g.id === msg.game && !g.wip && g.id !== this.game)) break;
         p.suggestedGame = msg.game ?? undefined;
         this.emit(); this.broadcastSession();
+        break;
+      }
+      case 'profile': {
+        const p = this.pads.get(id);
+        if (!p) break;
+        p.profile = normalizeProfile(msg.profile);
+        this.emit(); this.broadcastSession();
+        break;
+      }
+      case 'room': {
+        if (this.admin()?.connId === id) this.manageRoom(msg.action);
         break;
       }
       case 'remind': {
@@ -788,6 +836,7 @@ export class PadHost {
     this.hudTimers.delete(connId);
     if (p) {
       this.pads.delete(connId);
+      if (this.adminId === connId) this.adminId = null;
       if (p.pid) this.returningSlots.set(p.pid, { slot: p.slot, until: Date.now() + 60_000 });
       if (p.pid) {
         const holder = this.padsByPid.get(p.pid);

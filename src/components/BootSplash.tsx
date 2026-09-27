@@ -1,3 +1,4 @@
+import { JoyPadLogo } from './JoyPadLogo';
 import { useEffect, useRef, useState } from 'react';
 import { useReducedMotion } from '../lib/useReducedMotion';
 
@@ -27,7 +28,7 @@ export function BootSplash({ onDone }: { onDone: () => void }) {
       aria-hidden="true"
     >
       <div className="pointer-events-none absolute inset-0 opacity-[.05]" style={{ backgroundImage: 'linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px)', backgroundSize: '44px 44px' }} />
-      <div className="relative overflow-hidden px-6 py-3">
+      <JoyPadLogo size={140} className="logo-pop" /><div className="relative overflow-hidden px-6 py-3">
         <div className="joy-brand text-[54px] font-extrabold leading-none tracking-[-.06em] text-white sm:text-[72px]" style={{ animation: reduced ? undefined : 'boot-glow 1s cubic-bezier(.2,.7,.2,1) both', textShadow: '0 0 42px rgba(145,213,255,.2)' }}>
           Joy<span className="text-orange-400">Pad</span><span className="text-orange-400">.</span>
         </div>

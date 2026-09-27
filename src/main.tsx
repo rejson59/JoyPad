@@ -1,9 +1,11 @@
+import { ToastViewport } from './platform/notifications';
 import { StrictMode, lazy, Suspense, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import "./console/palette.css";
 import "./console/console.css";
 import "./console/cinema.css";
+import "./platform/platform.css";
 import "./fonts";
 import JoypadApp from "./arcade/JoypadApp";
 import { isPadRoute } from "./net/protocol";
@@ -30,6 +32,6 @@ function Root() {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <Root />
+    <Root /><ToastViewport />
   </StrictMode>
 );

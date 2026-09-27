@@ -32,6 +32,7 @@ export interface NeonExternalInput {
 }
 
 export interface GameSettings {
+  onFrame?: (canvas: HTMLCanvasElement) => void;
   name: string;
   colorIdx: number;
   difficulty: number;
@@ -571,6 +572,7 @@ export class NeonRushScene {
     this.update(dt);
     if (this.settings.displayMode === 'split' && this.players.length > 1) this.renderSplit();
     else this.composer.render(dt);
+    this.settings.onFrame?.(this.renderer.domElement);
   };
 
   /** Shared world, multiple chase cameras. Bloom is intentionally reduced in split mode. */

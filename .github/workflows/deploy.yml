@@ -31,6 +31,8 @@ jobs:
           npm run selftest:arcade
           npm run selftest:console
           npm run selftest:relay
+          npm run selftest:platform
+          npm run selftest:replay
       # Strona projektu leży pod https://<user>.github.io/<repo>/ → base = /<repo>/
       # (dla repo <user>.github.io ustaw VITE_BASE=/)
       - name: Build

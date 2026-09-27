@@ -33,6 +33,9 @@ export function ConsoleSettings({ controller = false }: { controller?: boolean }
     {!controller && <SettingSection number="03" title="Podglądy gier" detail="Nagrania Full HD z silników, bez dźwięku i bez uruchamiania gry w tle." icon={<Sparkles size={19} />}>
       <button type="button" className="cine-sound-switch" role="switch" aria-label="Automatyczne podglądy gier" aria-checked={prefs.previews} onClick={() => setPreferences({ previews: !prefs.previews })}><span>{prefs.previews ? 'Automatycznie na dużym ekranie' : 'Tylko po naciśnięciu odtwarzania'}<small>Telefon, oszczędzanie danych i ograniczony ruch: start ręczny.</small></span><span className="cine-switch-track"><i /></span></button>
     </SettingSection>}
+    {!controller && <SettingSection number="04" title="Moments · powtórki wideo" detail="Obraz gry do 720p / 24 FPS. Bez dźwięku, kamery i mikrofonu. Nagrania nie opuszczają tego urządzenia." icon={<Sparkles size={19} />}>
+      <button className="cine-sound-switch" type="button" role="switch" aria-label="Nagrywanie Moments" aria-checked={prefs.replays} onClick={() => setPreferences({ replays: !prefs.replays })}><span>{prefs.replays ? 'Zapisuj najlepsze akcje' : 'Nagrywanie wyłączone'}<small>Od następnej rundy · wyłącz na słabszym sprzęcie. Klipy znikają po restarcie lub wyjściu z gry; możesz je pobrać.</small></span><span className="cine-switch-track"><i /></span></button>
+    </SettingSection>}
     {controller && <>
       <DeviceProfile />
       <SettingSection number="02" title="Poczuj reakcję" detail="Długość i rytm impulsów, nie siła silnika." icon={<Fingerprint size={19} />}>

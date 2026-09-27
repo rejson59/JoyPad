@@ -23,7 +23,7 @@ export function PadHostPanel({ players, compact, onClose, context = 'tanks' }: P
   const s = usePadHost();
   const [qr, setQr] = useState<string>('');
   const [copied, setCopied] = useState(false);
-  const url = s.code ? padUrlFor(s.code) : '';
+  const url = s.code ? padUrlFor(s.code, s.joinToken) : '';
   // Kod jest użyteczny, gdy zarejestruje się w serwerze sygnalizacji,
   // albo gdy działa awaryjny przekaźnik (telefony połączą się przez niego).
   const codeUsable = s.status === 'ready' || s.relay === 'online';

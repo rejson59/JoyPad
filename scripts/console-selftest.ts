@@ -85,7 +85,7 @@ Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
 } });
 assert.equal(hasHistory(), false);
 remember('game', 'race'); assert.equal(lastGame(), 'race'); assert.equal(hasHistory(), true);
-remember('game', 'snake'); assert.equal(lastGame(), 'orbit'); assert.equal(hasHistory(), false);
+remember('game', 'snake'); assert.equal(lastGame(), 'snake'); assert.equal(hasHistory(), true);
 remember('race.primary', 2); assert.equal(readChoice('race.primary', [0, 1, 2], 1), 2);
 remember('race.primary', 99); assert.equal(readChoice('race.primary', [0, 1, 2], 1), 1);
 historyStorage.set('joypad.evening.race.primary', '{broken'); assert.equal(readChoice('race.primary', [0, 1, 2], 1), 1);

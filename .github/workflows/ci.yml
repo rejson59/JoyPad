@@ -29,6 +29,7 @@ jobs:
         run: |
           npm run selftest:platform
           npm run selftest:replay
+          npm run selftest:v16
       - name: Chromium for video replay tests
         run: npx playwright install --with-deps chromium
       - name: Real video capture and playback (2D, WebGL, split-screen)

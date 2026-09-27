@@ -7,7 +7,7 @@ import { useViewport } from '../console/useViewport';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Gamepad2, Settings, Loader2, LogOut, Maximize2, Pause, Smartphone, Wifi, WifiOff, RotateCcw } from 'lucide-react';
 import { padClient, type PadClientState } from '../net/padClient';
-import { CODE_LENGTH, normalizeCode, normalizeNick, padCodeFromHash, type PadFx, type PadSteer } from '../net/protocol';
+import { CODE_LENGTH, normalizeCode, normalizeNick, padCodeFromHash, padTokenFromHash, type PadFx, type PadSteer } from '../net/protocol';
 import { Joystick } from './Joystick';
 import { ConnectionCheck } from './ConnectionCheck';
 import { JoypadController, NickEditor } from './JoypadController';
@@ -16,6 +16,7 @@ import { HapticsStatus } from './HapticsStatus';
 import { haptic, unlockHaptics } from './haptics';
 import { BootSplash } from '../components/BootSplash';
 import { JoyLabPad } from './JoyLabPad';
+import { SnakeController } from './SnakeController';
 
 const LS_NICK = 'sf_pad_nick';
 const LS_CODE = 'sf_pad_code';
@@ -140,7 +141,7 @@ function PadContent() {
     const c = padCodeFromHash();
     if (c && c.length === CODE_LENGTH && padClient.state.status === 'idle') {
       safeWrite(LS_CODE, c);
-      padClient.connect(c, safeRead(LS_NICK) || '');
+      padClient.connect(c, safeRead(LS_NICK) || '', padTokenFromHash());
     }
   }, []);
 
@@ -300,7 +301,7 @@ function PadContent() {
     safeWrite(LS_CODE, c);
     safeWrite(LS_NICK, n);
     unlockHaptics();
-    padClient.connect(c, n);
+    padClient.connect(c, n, padTokenFromHash());
   };
 
   const goFullscreen = async () => {
@@ -503,6 +504,7 @@ function PadContent() {
   if (st.status === 'connected' && st.screen === 'lab' && !labSkipped) {
     return <JoyLabPad nick={st.nick || st.name} color={st.color} onDone={() => { if (st.slot === st.adminSlot) padClient.sendCommand('back'); else setLabSkipped(true); }} />;
   }
+  if (st.screen === 'game' && st.game === 'snake') return <><SnakeController st={st} fullscreen={goFullscreen} fullscreenStatus={fullscreenStatus} wakeLockEnabled={wakeLockEnabled} onWakeLockChange={changeWakeLock} wakeLockStatus={wakeLockStatus} tiltEnabled={tiltEnabled} onTiltChange={changeTilt} tiltStatus={tiltStatus} />{flash && <div className="pointer-events-none fixed inset-0 z-[60]" style={{ boxShadow: `inset 0 0 65px -12px ${flash}`, border: `2px solid ${flash}` }} />}{joinFx && <PadJoinSplash color={st.color} slot={st.slot} key={joinFx.key} />}</>;
   if (st.screen !== 'game' || st.game !== 'tanks') return <><JoypadController st={st} fullscreen={goFullscreen} fullscreenStatus={fullscreenStatus} wakeLockEnabled={wakeLockEnabled} onWakeLockChange={changeWakeLock} wakeLockStatus={wakeLockStatus} tiltEnabled={tiltEnabled} onTiltChange={changeTilt} tiltStatus={tiltStatus} />{flash && <div className="pointer-events-none fixed inset-0 z-[60]" style={{ boxShadow: `inset 0 0 65px -12px ${flash}`, border: `2px solid ${flash}` }} />}{joinFx && <PadJoinSplash color={st.color} slot={st.slot} key={joinFx.key} />}</>;
 
   /* ---------- Controller screen ---------- */

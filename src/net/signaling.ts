@@ -164,8 +164,9 @@ function isValidTurnUrl(url: string): boolean {
  * Własny TURN podany adresem strony:
  * `?turn=turn:turn.example.com:3478,turns:turn.example.com:5349&turnUser=…&turnPass=…`
  *
- * Ustawienie (jak `?srv=`) zapamiętuje się na urządzeniu, a kod QR przenosi je
- * automatycznie na telefony (QR zawiera pełny adres z parametrami).
+ * Ustawienie zapamiętuje się lokalnie na urządzeniu. QR nie kopiuje `turnUser`
+ * ani `turnPass`; własny TURN można skonfigurować w buildzie obu stron. Dzięki
+ * temu zwykły link zaproszenia nie staje się nośnikiem credentiali.
  */
 export function turnOverrideFromLocation(): TurnOverride | null {
   try {

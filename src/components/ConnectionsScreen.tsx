@@ -18,7 +18,7 @@ export function ConnectionsScreen({ onClose }: { onClose: () => void }) {
   const [qr, setQr] = useState('');
   const [copied, setCopied] = useState(false);
   const usable = state.status === 'ready' || state.relay === 'online';
-  const url = state.code ? padUrlFor(state.code) : '';
+  const url = state.code ? padUrlFor(state.code, state.joinToken) : '';
 
   useEffect(() => {
     let live = true;

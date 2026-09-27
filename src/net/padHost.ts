@@ -2,7 +2,7 @@ import { normalizeProfile, type PlayerProfile } from '../platform/profile';
 import { DEFAULT_ROOM, type RoomAction, type RoomSettings } from './protocol';
 import Peer, { type DataConnection } from 'peerjs';
 import {
-  PROTOCOL_VERSION, REMOTE_COMMANDS, ZERO_INPUT, normalizeNick, randomCode, roomIdFromCode,
+  PROTOCOL_VERSION, REMOTE_COMMANDS, ZERO_INPUT, normalizeNick, randomCode, randomJoinToken, roomIdFromCode, isPadMessage,
   type ArcadeHud, type HostMessage, type HostScreen, type PadFx, type PadInput, type PadMessage,
   type PadSteer, type RemoteCommand, type SessionOptions, type SessionState,
 } from './protocol';
@@ -60,6 +60,8 @@ export interface PadHostState {
   /** Dodatkowa informacja dla graczy, np. że kod został odświeżony. */
   note: string | null;
   signaling: string;
+  /** Nie pokazujemy klucza w UI, ale używa go QR generowany przez hosta. */
+  joinToken: string;
 }
 
 type Listener = (s: PadHostState) => void;
@@ -108,6 +110,9 @@ export class PadHost {
   private slotMeta: SlotMeta[] = [];
   private screen: HostScreen = 'lobby';
   private game: GameId | null = null;
+  /** QR carries this one-time room capability; input packets never carry it. */
+  private joinToken = '';
+  private lastInputMessageAt = new Map<string, number>();
   private selection = 0;
   private menuOptions: SessionOptions | undefined;
   private hudTimers = new Map<string, number>();
@@ -169,6 +174,7 @@ export class PadHost {
       lastError: this.lastError,
       note: this.note,
       signaling: this.signaling.label,
+      joinToken: this.joinToken,
     };
   }
 
@@ -260,6 +266,16 @@ export class PadHost {
     if (p) this.send(p.connId, { t: 'fx', fx });
   }
 
+  sendAchievement(slot: number, id: import('../platform/profile').AchievementId) {
+    const p = this.padForSlot(slot);
+    if (p) this.send(p.connId, { t: 'achievement', id });
+  }
+
+  sendRoundResult(slot: number, game: GameId, won: boolean) {
+    const p = this.padForSlot(slot);
+    if (p) this.send(p.connId, { t: 'roundResult', game, won });
+  }
+
   sendArcadeHud(slot: number, hud: ArcadeHud) {
     const p = this.padForSlot(slot);
     if (!p) return;
@@ -282,7 +298,9 @@ export class PadHost {
     this.attempts = 0;
     this.conflictRetries = 0;
     this.code = preferredCode || randomCode();
+    this.joinToken = randomJoinToken();
     this.lastPadChangeAt = Date.now();
+    this.lastInputMessageAt.clear();
     this.startProbe();
     this.startSweep();
     this.startRelay();
@@ -624,6 +642,8 @@ export class PadHost {
     this.error = null;
     this.lastError = null;
     this.note = null;
+    this.joinToken = '';
+    this.lastInputMessageAt.clear();
     this.emit();
     this.onSlotsChanged?.(this.slots());
   }
@@ -677,12 +697,20 @@ export class PadHost {
   }
 
   private onMessage(link: PadLink, msg: PadMessage) {
-    if (!msg || typeof msg !== 'object') return;
+    if (!isPadMessage(msg)) return;
     const id = link.id;
     switch (msg.t) {
       case 'hello': {
         if (msg.v !== PROTOCOL_VERSION) {
           this.send(id, { t: 'rejected', reason: 'Niezgodna wersja gry — odśwież stronę na telefonie.' });
+          setTimeout(() => link.close(), 200);
+          return;
+        }
+        // QR przekazuje token tylko po to, aby awaryjny publiczny relay nie
+        // przyjmował przypadkowych hello. Bez tokenu nadal działa ręczne,
+        // bezpośrednie łączenie po kodzie pokoju.
+        if (link.kind === 'relay' && (!this.joinToken || msg.token !== this.joinToken)) {
+          this.send(id, { t: 'rejected', reason: 'Ten link pada jest nieaktualny. Zeskanuj aktualny QR z ekranu.' });
           setTimeout(() => link.close(), 200);
           return;
         }
@@ -741,7 +769,13 @@ export class PadHost {
       case 'input': {
         const p = this.pads.get(id);
         if (!p) return;
-        p.lastSeen = Date.now();
+        const now = Date.now();
+        // Normalny pad wysyła ~30 razy/s. Odrzucamy zalew wiadomości, ale nie
+        // dotykamy zwykłego czasu reakcji.
+        const previousInput = this.lastInputMessageAt.get(id) ?? 0;
+        if (now - previousInput < 8) return;
+        this.lastInputMessageAt.set(id, now);
+        p.lastSeen = now;
         p.lastInputAt = p.lastSeen;
         if (p.inputStale) { p.inputStale = false; this.emit(); }
         const clamp = (v: unknown) => Math.max(-1, Math.min(1, Number(v) || 0));
@@ -834,6 +868,7 @@ export class PadHost {
     this.conns.delete(connId);
     this.relayLinks.delete(connId);
     this.hudTimers.delete(connId);
+    this.lastInputMessageAt.delete(connId);
     if (p) {
       this.pads.delete(connId);
       if (this.adminId === connId) this.adminId = null;

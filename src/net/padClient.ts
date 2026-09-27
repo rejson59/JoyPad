@@ -1,8 +1,8 @@
-import { loadProfile, saveProfile, normalizeProfile, type PlayerProfile } from '../platform/profile';
+import { loadProfile, saveProfile, normalizeProfile, unlockAchievement, recordGamePlayed, recordWin, recordLoss, type PlayerProfile } from '../platform/profile';
 import { DEFAULT_ROOM, type RoomAction, type RoomSettings, type SessionState } from './protocol';
 import Peer, { type DataConnection } from 'peerjs';
 import {
-  DEFAULT_PAD_STEER, PROTOCOL_VERSION, normalizeNick, roomIdFromCode,
+  DEFAULT_PAD_STEER, PROTOCOL_VERSION, normalizeNick, roomIdFromCode, padTokenFromHash, isHostMessage,
   type ArcadeHud, type HostMessage, type HostScreen, type PadFx, type PadInput,
   type PadSteer, type RemoteCommand, type SessionOptions,
 } from './protocol';
@@ -127,6 +127,7 @@ export class PadClient {
 
   private signaling: SignalingConfig = signalingFromLocation();
   private code = '';
+  private joinToken: string | null = null;
   private nick = '';
   /** Trwa sesja łączenia (także automatyczne ponowienia). */
   private active = false;
@@ -186,9 +187,10 @@ export class PadClient {
 
   /* ----------------------------- łączenie ----------------------------- */
 
-  connect(code: string, nick: string) {
+  connect(code: string, nick: string, token = padTokenFromHash()) {
     this.teardown();
     this.code = code;
+    this.joinToken = token;
     this.nick = normalizeNick(nick);
     this.signaling = signalingFromLocation();
     this.active = true;
@@ -285,7 +287,7 @@ export class PadClient {
   }
 
   private sendHello(link: PadLink) {
-    link.send({ t: 'hello', nick: this.nick, ua: navigator.userAgent.slice(0, 80), v: PROTOCOL_VERSION, pid: this.devicePid(), steer: this.steerMode });
+    link.send({ t: 'hello', nick: this.nick, ua: navigator.userAgent.slice(0, 80), v: PROTOCOL_VERSION, pid: this.devicePid(), steer: this.steerMode, token: this.joinToken ?? undefined });
   }
 
   private startStreams() {
@@ -436,7 +438,7 @@ export class PadClient {
    * (oba mogą być w trakcie) — po `welcome` tylko ze zwycięskiego.
    */
   private onInbound(link: PadLink, msg: HostMessage) {
-    if (!msg || typeof msg !== 'object') return;
+    if (!isHostMessage(msg)) return;
     if (this.state.status === 'connected' && this.conn !== link) return;
     this.lastMsgAt = performance.now();
     this.onMessage(link, msg);
@@ -526,6 +528,17 @@ export class PadClient {
       case 'fx':
         this.onFx?.(msg.fx);
         break;
+      case 'achievement':
+        unlockAchievement(loadProfile(), msg.id);
+        window.dispatchEvent(new CustomEvent('joypad-achievement', { detail: msg.id }));
+        break;
+      case 'roundResult': {
+        const played = recordGamePlayed(loadProfile());
+        const next = msg.won ? recordWin(played, msg.game) : recordLoss(played);
+        this.setProfile(next);
+        window.dispatchEvent(new CustomEvent('joypad-profile-updated', { detail: next }));
+        break;
+      }
       case 'pong':
         this.set({ latency: Math.round(performance.now() - msg.at) });
         break;
@@ -674,6 +687,7 @@ export class PadClient {
   disconnect(silent = false) {
     this.active = false;
     this.teardown();
+    this.joinToken = null;
     this.pending = { fwd: 0, turn: 0, fire: false, dirX: 0, dirY: 0, aimX: 0, aimY: 0 };
     this.forceSend = true;
     if (!silent) this.set({ status: 'idle', game: null, adminSlot: null, roster: [], hud: null, arcadeHud: null, slot: -1, error: null, progress: '', phase: 'idle', attempt: 0, elapsed: 0, lastFailure: null, viaRelay: false });

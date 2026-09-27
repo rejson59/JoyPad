@@ -2,12 +2,14 @@ import { PlayerAvatar } from '../platform/PlayerAvatar';
 import { JoyPadLogo } from '../components/JoyPadLogo';
 import { normalizeProfile } from '../platform/profile';
 import { RoomControls } from '../platform/RoomControls';
+import { MomentsGallery } from '../platform/MomentsGallery';
+import { WhatsNew } from '../platform/WhatsNew';
 import { padHost } from '../net/padHost';
 import { GamePreview } from './GamePreview';
 import { hasHistory, lastGame } from './history';
 import { useViewport } from './useViewport';
 import { useEffect, useState, type CSSProperties } from 'react';
-import { ArrowRight, Gamepad2, Plus, Settings2, Smartphone, Volume2, VolumeX, Wifi, Zap } from 'lucide-react';
+import { Archive, ArrowRight, Gamepad2, Plus, Settings2, Smartphone, Volume2, VolumeX, Wifi, Zap } from 'lucide-react';
 import { GAMES, type GameId } from '../arcade/catalog';
 import { usePadHost } from '../pad/PadHostPanel';
 import { PLAYER_DEFS } from '../game/types';
@@ -28,11 +30,11 @@ export function ConsoleLibrary({ focus, onFocus, onOpen, onConnections, onLab, o
   const state = usePadHost();
   const viewport = useViewport();
   const game = GAMES[focus];
-  const [panel, setPanel] = useState<'settings' | 'soon' | 'help' | 'room' | null>(null);
+  const [panel, setPanel] = useState<'settings' | 'soon' | 'help' | 'room' | 'gallery' | 'news' | null>(null);
   const [music, toggleMusic] = useMenuMusic();
   const [qr, setQr] = useState('');
   const [previewControls, setPreviewControls] = useState<HTMLSpanElement | null>(null);
-  const url = state.code ? padUrlFor(state.code) : '';
+  const url = state.code ? padUrlFor(state.code, state.joinToken) : '';
   const ready = state.status === 'ready' || state.relay === 'online';
   const session = sessionSummary(state.pads.length, ready);
   useEffect(() => { onOverlayChange(panel !== null); return () => onOverlayChange(false); }, [panel, onOverlayChange]);
@@ -55,6 +57,7 @@ export function ConsoleLibrary({ focus, onFocus, onOpen, onConnections, onLab, o
         <span ref={setPreviewControls} className="os-preview-controls" />
         <span className="os-network"><i className={ready ? 'is-ready' : ''} />{state.room.locked ? 'Pokój zamknięty' : ready ? 'Pokój gotowy' : 'Łączenie pokoju'}</span>
         <button className="os-icon" aria-label={music ? 'Wyłącz muzykę menu' : 'Włącz muzykę menu'} aria-pressed={music} onClick={() => toggleMusic(!music)}>{music ? <Volume2 size={19} /> : <VolumeX size={19} />}</button>
+        <button className="os-icon" onClick={() => setPanel('gallery')} aria-label="Galeria Moments"><Archive size={19} /></button>
         <button className="os-icon" onClick={() => setPanel('settings')} aria-label="Ustawienia systemu"><Settings2 size={20} /></button>
         <button className="os-room-button" onClick={() => setPanel('room')}>Pokój<span>{state.pads.length}/4</span></button>
         <button className="os-add" onClick={onConnections}><Plus size={18} /><span>Dodaj gracza</span></button>
@@ -97,9 +100,10 @@ export function ConsoleLibrary({ focus, onFocus, onOpen, onConnections, onLab, o
         </button>;
       })}</div>
     </section>
-    <footer className="os-footer"><div><span><kbd>←</kbd><kbd>→</kbd> Wybierz</span><span><kbd>Enter</kbd> Uruchom</span><span className="os-muted">Pilot · klawiatura · gamepad</span></div><button onClick={() => setPanel('help')}>Jak zacząć?</button><span className="os-footer-brand">JOYPAD OS <i /> 02</span></footer>
-    {panel && <Sheet title={panel === 'room' ? 'Centrum pokoju.' : panel === 'settings' ? 'Po swojemu.' : panel === 'soon' ? 'Kolejne światy.' : 'Usiądź. Połącz. Graj.'} onClose={() => { systemSound('back'); setPanel(null); }}>
-      {panel === 'room' ? <RoomControls session={padHost.session()} onAction={action => padHost.manageRoom(action)} /> : panel === 'settings' ? <><ConsoleSettings /><button className="os-secondary" onClick={() => toggleMusic(!music)}>{music ? 'Wyłącz' : 'Włącz'} muzykę w bibliotece</button></> : panel === 'soon' ? <><p className="os-note">Te gry są w przebudowie. Pojawią się w bibliotece, kiedy będą gotowe — bez odliczania i obietnic dat.</p><div className="os-upcoming">{GAMES.filter(g => g.wip).map(g => <div key={g.id}><img src={`${import.meta.env.BASE_URL}${g.cover}`} alt="" /><div><h3>{g.title}</h3><span>{g.genre} · W przygotowaniu</span></div></div>)}</div></> : <ol className="os-help"><li><b>Duży ekran</b><p>Otwórz JoyPad na komputerze lub telewizorze. Bez telefonu możesz grać na klawiaturze.</p></li><li><b>Twój telefon, Twój pad</b><p>Zeskanuj QR. Pierwszy połączony telefon steruje menu. Kolejni gracze dołączają bez konta.</p></li><li><b>Wybierz swój świat</b><p>Strzałki zmieniają grę, OK ją otwiera. W grze telefon automatycznie zmienia się w kontroler. Fizyczny gamepad obsługuje bibliotekę: krzyżak lub gałka, A i B.</p></li></ol>}
+    <footer className="os-footer"><div><span><kbd>←</kbd><kbd>→</kbd> Wybierz</span><span><kbd>Enter</kbd> Uruchom</span><span className="os-muted">Pilot · klawiatura · gamepad</span></div><div className="flex items-center gap-4"><button onClick={() => setPanel('news')}>Co nowego?</button><button onClick={() => setPanel('help')}>Jak zacząć?</button><span className="os-footer-brand">JOYPAD OS <i /> 1.6.0</span></div></footer>
+    {panel && panel !== 'news' && <Sheet title={panel === 'room' ? 'Centrum pokoju.' : panel === 'settings' ? 'Po swojemu.' : panel === 'soon' ? 'Kolejne światy.' : panel === 'gallery' ? 'Moments Gallery.' : 'Usiądź. Połącz. Graj.'} wide={panel === 'gallery'} onClose={() => { systemSound('back'); setPanel(null); }}>
+      {panel === 'room' ? <RoomControls session={padHost.session()} onAction={action => padHost.manageRoom(action)} /> : panel === 'settings' ? <><ConsoleSettings /><button className="os-secondary" onClick={() => toggleMusic(!music)}>{music ? 'Wyłącz' : 'Włącz'} muzykę w bibliotece</button></> : panel === 'soon' ? <><p className="os-note">Te gry są w przebudowie. Pojawią się w bibliotece, kiedy będą gotowe — bez odliczania i obietnic dat.</p><div className="os-upcoming">{GAMES.filter(g => g.wip).map(g => <div key={g.id}><img src={`${import.meta.env.BASE_URL}${g.cover}`} alt="" /><div><h3>{g.title}</h3><span>{g.genre} · W przygotowaniu</span></div></div>)}</div></> : panel === 'gallery' ? <MomentsGallery /> : <ol className="os-help"><li><b>Duży ekran</b><p>Otwórz JoyPad na komputerze lub telewizorze. Bez telefonu możesz grać na klawiaturze.</p></li><li><b>Twój telefon, Twój pad</b><p>Zeskanuj QR. Pierwszy połączony telefon steruje menu. Kolejni gracze dołączają bez konta.</p></li><li><b>Wybierz swój świat</b><p>Strzałki zmieniają grę, OK ją otwiera. W grze telefon automatycznie zmienia się w kontroler. Fizyczny gamepad obsługuje bibliotekę: krzyżak lub gałka, A i B.</p></li></ol>}
     </Sheet>}
+    <WhatsNew open={panel === 'news'} onClose={() => setPanel(null)} />
   </div>;
 }

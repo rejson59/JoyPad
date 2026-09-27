@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { AudioLines, Check, Fingerprint, MoveHorizontal, ScanLine, SlidersHorizontal, Sparkles } from 'lucide-react';
 import { setPreferences, useConsolePreferences } from './preferences';
 import { systemSound } from './sound';
+import { LANGUAGES, setLanguage, useLanguage } from '../platform/i18n';
 
 export function ChoiceGroup<T extends string>({ label, value, options, onChange }: {
   label: string; value: T; options: { value: T; label: string; detail?: string }[]; onChange: (value: T) => void;
@@ -19,21 +20,23 @@ function SettingSection({ number, title, detail, icon, children }: { number: str
 }
 export function ConsoleSettings({ controller = false }: { controller?: boolean }) {
   const prefs = useConsolePreferences();
+  const language = useLanguage();
   return <div className="os-settings cine-settings">
     <div className="cine-settings-intro"><span className="cine-orbit-icon" aria-hidden="true"><SlidersHorizontal size={24} /></span><div><span className="os-eyebrow">{controller ? 'PROFIL KONTROLERA' : 'TWÓJ SYSTEM'}</span><p>Małe detale.<br /><strong>Twoje doświadczenie.</strong></p></div></div>
-    {!controller && <SettingSection number="01" title="Brzmienie systemu" detail="Subtelny dźwięk. Wyraźna odpowiedź." icon={<AudioLines size={19} />}>
+    {!controller && <SettingSection number="01" title={language === 'en' ? 'Language' : 'Język'} detail={language === 'en' ? 'Choose the language for new JoyPad screens.' : 'Wybierz język nowych ekranów JoyPada.'} icon={<Sparkles size={19} />}><div className="language-picker">{Object.entries(LANGUAGES).map(([id, label]) => <button type="button" key={id} aria-pressed={language === id} onClick={() => setLanguage(id as 'pl' | 'en')}>{label}</button>)}</div></SettingSection>}
+    {!controller && <SettingSection number="02" title="Brzmienie systemu" detail="Subtelny dźwięk. Wyraźna odpowiedź." icon={<AudioLines size={19} />}>
       <button className="cine-sound-switch" type="button" role="switch" aria-checked={prefs.sound} aria-label="Dźwięki systemu" onClick={() => { setPreferences({ sound: !prefs.sound }); systemSound('confirm'); }}>
         <span className={`cine-waveform ${prefs.sound ? 'is-on' : ''}`} aria-hidden="true">{[12,24,16,34,42,26,16,30,20,10].map((height, i) => <i key={i} style={{ height }} />)}</span>
         <span>{prefs.sound ? 'Dźwięk włączony' : 'Cisza'}<small>Tylko na dużym ekranie</small></span><span className="cine-switch-track"><i /></span>
       </button>
     </SettingSection>}
-    <SettingSection number={controller ? '01' : '02'} title="Ruch i przejścia" detail="Spokojne tempo, bez utraty responsywności." icon={<ScanLine size={19} />}>
+    <SettingSection number={controller ? '01' : '03'} title="Ruch i przejścia" detail="Spokojne tempo, bez utraty responsywności." icon={<ScanLine size={19} />}>
       <ChoiceGroup label="Ruch interfejsu" value={prefs.motion} options={[{ value: 'system', label: 'Systemowy', detail: 'Zgodnie z urządzeniem' }, { value: 'reduced', label: 'Ograniczony', detail: 'Bez animacji przejść' }]} onChange={motion => setPreferences({ motion })} />
     </SettingSection>
-    {!controller && <SettingSection number="03" title="Podglądy gier" detail="Nagrania Full HD z silników, bez dźwięku i bez uruchamiania gry w tle." icon={<Sparkles size={19} />}>
+    {!controller && <SettingSection number="04" title="Podglądy gier" detail="Nagrania Full HD z silników, bez dźwięku i bez uruchamiania gry w tle." icon={<Sparkles size={19} />}>
       <button type="button" className="cine-sound-switch" role="switch" aria-label="Automatyczne podglądy gier" aria-checked={prefs.previews} onClick={() => setPreferences({ previews: !prefs.previews })}><span>{prefs.previews ? 'Automatycznie na dużym ekranie' : 'Tylko po naciśnięciu odtwarzania'}<small>Telefon, oszczędzanie danych i ograniczony ruch: start ręczny.</small></span><span className="cine-switch-track"><i /></span></button>
     </SettingSection>}
-    {!controller && <SettingSection number="04" title="Moments · powtórki wideo" detail="Obraz gry do 720p / 24 FPS. Bez dźwięku, kamery i mikrofonu. Nagrania nie opuszczają tego urządzenia." icon={<Sparkles size={19} />}>
+    {!controller && <SettingSection number="05" title="Moments · powtórki wideo" detail="Obraz gry do 720p / 24 FPS. Bez dźwięku, kamery i mikrofonu. Nagrania nie opuszczają tego urządzenia." icon={<Sparkles size={19} />}>
       <button className="cine-sound-switch" type="button" role="switch" aria-label="Nagrywanie Moments" aria-checked={prefs.replays} onClick={() => setPreferences({ replays: !prefs.replays })}><span>{prefs.replays ? 'Zapisuj najlepsze akcje' : 'Nagrywanie wyłączone'}<small>Od następnej rundy · wyłącz na słabszym sprzęcie. Klipy znikają po restarcie lub wyjściu z gry; możesz je pobrać.</small></span><span className="cine-switch-track"><i /></span></button>
     </SettingSection>}
     {controller && <>

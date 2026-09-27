@@ -2,15 +2,16 @@
 
 ## JoyPad OS 02 — duża aktualizacja platformy
 
-Nowy znak JoyPada, centrum pokoju, przekazywanie admina, ekran przerwy, propozycje w bibliotece, Player Pass, różne układy pilot/pad, szklane powiadomienia i **Moments Video: rzeczywiste powtórki obrazu rozgrywki** z odtwarzaniem, zwolnionym tempem i pobieraniem.
+JoyPad v1.6: centrum pokoju, przekazywanie admina, profil lokalny z osiągnięciami, beta multiplayer **Wężowy Wir**, automatyczne **Moments Video** oraz lokalna **Moments Gallery** z zapisem tylko po decyzji użytkownika.
 
 - [Opis funkcji, ograniczenia i testy](docs/platform-update.md)
 - [Gotowe długie prompty dla czterech gier w budowie + import ZIP](docs/game-building-prompts.md)
 - [Moments Video — architektura, ograniczenia i testy nagrywania](docs/moments-video.md)
-- Test nowych mechanizmów: `npm run selftest:platform`.
+- [JoyPad v1.6 — zakres, bezpieczeństwo i ograniczenia beta](docs/v1.6.md)
+- Test nowych mechanizmów: `npm run selftest:platform` oraz `npm run selftest:v16`.
 
 
-**JoyPad OS** — matowa konsola do wspólnej gry na jednym ekranie. Telefon jest bezprzewodowym kontrolerem, komputer lub TV wyświetla grę. **Trzy gry są dostępne: Stalowy Front, Neonowy Pęd i Orbitalna Fala.** Cztery kolejne są w przebudowie i widoczne wyłącznie w sekcji „Wkrótce”. Nie można ich obecnie uruchomić z biblioteki.
+**JoyPad OS** — matowa konsola do wspólnej gry na jednym ekranie. Telefon jest bezprzewodowym kontrolerem, komputer lub TV wyświetla grę. **Cztery gry są dostępne: Stalowy Front, Neonowy Pęd, Orbitalna Fala i Wężowy Wir (beta).** Pozostałe światy są w przebudowie i widoczne wyłącznie w sekcji „Wkrótce”.
 
 ## System konsoli
 
@@ -35,7 +36,7 @@ To nadal aplikacja przeglądarkowa: Vibration API nie steruje amplitudą ani ada
 | **Stalowy Front** | Bitwy czołgów: 3 mapy, 2 tryby, rykoszety, niszczalne osłony, bonusy i boty | Joystick jazdy, joystick wieży, ogień |
 | **Neonowy Pęd** | Właściwy wyścig Three.js z miasta ZIP-a: mokry proceduralny tor, drifty, rampy, turbo, itemy i split-screen | Kierunek jazdy + akcja bonusu |
 | **Orbitalna Fala** | Kooperacyjna obrona przed kolejnymi falami dronów i asteroid; życia, osłony, naprawy i szybki ogień | Lot, celowanie i strzał |
-| **Wężowy Wir — wkrótce** | Rywalizacja w neonowej arenie: rosnące węże, złote impulsy, kolizje, sprint i boty | Skręt + sprint |
+| **Wężowy Wir — beta** | Rywalizacja w neonowej arenie: rosnące węże, złote impulsy, kolizje, sprint i boty | Cztery strzałki + sprint |
 | **Skarbiec Świątyni — wkrótce** | Wspólna wyprawa przez labirynt: relikty, skrzynie, pułapki, strażnicy i portal ucieczki | Ruch + sprint / otwieranie |
 | **Voxel Frontier — wkrótce** | Lekki świat klocków: zbieranie surowców, rozbudowa bazy, dzień/noc i nocne crawlery | Ruch + akcja |
 | **Turbo League — wkrótce** | Car soccer w perspektywie 3D-lite: auta, boost, odbicia i bramki | Kierunek + turbo |
@@ -83,7 +84,7 @@ Przełączenie układu wpływa tylko na telefon, nie na sesję ani split-screen 
 
 Zachowano dotychczasową ścieżkę połączenia: **PeerJS / WebRTC**, opcjonalny **TURN** oraz awaryjny przekaźnik przez publiczne brokery MQTT-over-WebSocket. Host i telefon ścigają WebRTC z przekaźnikiem; działa to także między Wi‑Fi a LTE, o ile urządzenia mają internet i przynajmniej jedna z tych zewnętrznych usług jest dostępna. **GitHub Pages nie udostępnia własnego serwera sygnalizacji ani gwarantowanego przekaźnika** — publiczne usługi mogą czasem zawodzić. W panelu hosta i telefonu dostępny jest test „Sprawdź połączenie”.
 
-Gdy chcesz używać własnego PeerServer, dodaj do adresu hosta `?srv=host:port/peerjs` (opcja zostanie przekazana przez QR i zapamiętana na telefonie). Własny TURN można skonfigurować parametrami `?turn=turn:twoj-host:3478,turns:twoj-host:5349` wraz z opcjonalnym `turnUser` i `turnPass`, albo przez zmienne buildu `VITE_TURN_URLS`, `VITE_TURN_USERNAME`, `VITE_TURN_CREDENTIAL`. Dane TURN są widoczne dla klientów WebRTC — używaj danych krótkotrwałych lub konta z limitem. Pokój jest zabezpieczony **kodem zaproszenia**, nie systemem logowania; nie udostępniaj kodu nieznajomym.
+Gdy chcesz używać własnego PeerServer, dodaj do adresu hosta `?srv=host:port/peerjs` (opcja zostanie przekazana przez QR i zapamiętana na telefonie). QR zawiera dodatkowo krótkotrwały klucz pokoju używany tylko podczas handshake; parametry TURN i credentiale nie są kopiowane do linku. WebRTC jest nadal ścieżką preferowaną, a relay pozostaje awaryjny — zabezpieczenia nie są wykonywane przy każdym pakiecie wejścia. Własny TURN można skonfigurować lokalnie na obu urządzeniach parametrami `?turn=turn:twoj-host:3478,turns:twoj-host:5349` wraz z opcjonalnym `turnUser` i `turnPass`, albo przez zmienne buildu `VITE_TURN_URLS`, `VITE_TURN_USERNAME`, `VITE_TURN_CREDENTIAL`. Dane TURN są widoczne dla klientów WebRTC — używaj danych krótkotrwałych lub konta z limitem. Pokój jest zabezpieczony **kodem zaproszenia**, nie systemem logowania; nie udostępniaj kodu nieznajomym.
 
 ## Publikacja na GitHub Pages i zmiana nazwy repozytorium
 
@@ -101,6 +102,7 @@ npm run lint                # ESLint (flat config) + reguły react-hooks
 npm run selftest:arcade     # role admina, protokół, 6 silników + macierze WebGL2
 npm run selftest:console    # preferencje, dostępna biblioteka, kolory, priorytety haptyki
 npm run selftest:relay      # warstwa MQTT / awaryjnego przekaźnika
+npm run selftest:v16        # turniej/2v2, galeria i kontrakt profilu v1.6
 ```
 
 Każdy push/PR przechodzi workflow `ci.yml` (lint, typecheck, selftesty, build), a `deploy.yml` powtarza selftesty (także `selftest:console`) przed publikacją na GitHub Pages. Fonty (Black Ops One, Chakra Petch, JetBrains Mono) są self-hostowane przez Fontsource — bez żądań do Google Fonts. Okładki gier to WebP, a `public/manifest.webmanifest` z ikonami pozwala „dodać JoyPad do ekranu głównego" na telefonie.

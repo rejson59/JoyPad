@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import type { PadLink } from '../src/net/links';
 import type { HostMessage, PadMessage } from '../src/net/protocol';
 import { MomentRecorder, momentTime } from '../src/platform/momentRecorder';
-import { loadProfile, normalizeProfile, saveProfile } from '../src/platform/profile';
+import { loadProfile, normalizeProfile, saveProfile, recordGamePlayed, recordWin } from '../src/platform/profile';
+import { isPadMessage, padCodeFromHash, padTokenFromHash, padUrlFor } from '../src/net/protocol';
 
 Object.defineProperty(globalThis, 'window', { value: globalThis, configurable: true });
 Object.defineProperty(globalThis, 'location', { value: { search: '', hash: '', origin: 'https://example.com', pathname: '/JoyPad/' }, configurable: true });
@@ -38,7 +39,7 @@ b.send({ t: 'suggest', game: 'tanks' });
 assert.equal(host.session().roster[1].suggestedGame, undefined, 'disabled suggestions enforced on host');
 a.send({ t: 'room', action: { kind: 'suggestions', value: true } });
 b.send({ t: 'suggest', game: 'snake' });
-assert.equal(host.session().roster[1].suggestedGame, undefined, 'WIP cannot be voted in');
+assert.equal(host.session().roster[1].suggestedGame, 'snake', 'beta games can be voted in after release');
 a.send({ t: 'room', action: { kind: 'locked', value: true } });
 const rejected = pair('Intruz');
 assert.equal(host.session().roster.length, 2);
@@ -57,7 +58,7 @@ assert.equal(host.session().room?.dimmed, false, 'starting round restores screen
 returned.send({ t: 'room', action: { kind: 'dimmed', value: true } });
 assert.equal(host.session().room?.dimmed, false, 'cannot hide active gameplay');
 returned.send({ t: 'profile', profile: { avatar: 'alien', theme: 'mint' } });
-assert.deepEqual(host.session().roster[1].profile, { avatar: 'alien', theme: 'mint' });
+assert.equal(host.session().roster[1].profile?.avatar, 'alien'); assert.equal(host.session().roster[1].profile?.theme, 'mint'); assert.ok(host.session().roster[1].profile?.id);
 returned.send({ t: 'room', action: { kind: 'kick', slot: 0 } });
 assert.equal(host.inputs[0].fire, false);
 assert.equal(host.session().roster.length, 1);
@@ -74,13 +75,22 @@ assert.equal(host.session().room?.locked, false);
 assert.equal(Object.getPrototypeOf(host.session().room!), Object.prototype);
 console.log('ROOM SELFTEST: OK (authority, transfer, lock, reconnection, kick, suggestions, dimming, malformed messages)');
 
-assert.deepEqual(normalizeProfile({ avatar: '__proto__', theme: 'red' }), { avatar: 'smile', theme: 'amber' });
-saveProfile({ avatar: 'rocket', theme: 'violet' });
-assert.deepEqual(loadProfile(), { avatar: 'rocket', theme: 'violet' });
+const safeProfile = normalizeProfile({ avatar: '__proto__', theme: 'red' });
+assert.equal(safeProfile.avatar, 'smile'); assert.equal(safeProfile.theme, 'amber'); assert.ok(safeProfile.id);
+saveProfile({ avatar: 'rocket', theme: 'violet', progress: { gamesPlayed: 0, wins: 0, streak: 0, bestStreak: 0, unlocked: [] } });
+const saved = loadProfile(); assert.equal(saved.avatar, 'rocket'); assert.equal(saved.theme, 'violet'); assert.ok(saved.id);
+const played = recordGamePlayed(saved); const won = recordWin(played, 'snake'); assert.equal(won.progress.gamesPlayed, 1); assert.equal(won.progress.wins, 1); assert.ok(won.progress.unlocked.includes('firstWin')); assert.ok(won.progress.unlocked.includes('snakeBeta'));
 storage.set('joypad.profile', 'malformed'); assert.equal(loadProfile().avatar, 'smile');
 Object.defineProperty(globalThis, 'localStorage', { configurable: true, get() { throw new Error('private mode'); } });
 assert.doesNotThrow(() => saveProfile({ avatar: 'smile', theme: 'amber' }));
 assert.equal(loadProfile().theme, 'amber');
+
+// QR exposes only room capability data; no TURN credentials leak into the link.
+Object.defineProperty(globalThis, 'location', { value: { search: '?srv=https%3A%2F%2Fsignal.example&turnSecret=secret', hash: '#pad=AB234&key=abcdef123456' , origin: 'https://example.com', pathname: '/JoyPad/' }, configurable: true });
+const qr = padUrlFor('ab234', 'abcdef123456'); assert.ok(qr.includes('srv=')); assert.ok(qr.includes('key=abcdef123456')); assert.ok(!qr.includes('turnSecret'));
+assert.equal(padCodeFromHash(), 'AB234'); assert.equal(padTokenFromHash(), 'abcdef123456');
+assert.equal(isPadMessage({ t: 'input', fwd: 0, turn: 0, fire: false }), true); assert.equal(isPadMessage({ t: 'input', fwd: 'oops' }), false);
+console.log('PROTOCOL SELFTEST: OK (QR capability filtering and message guard)');
 console.log('PROFILE SELFTEST: OK (allowlist, persistence, corrupt and blocked storage)');
 
 const players = [{ slot: 0, name: 'Ada', color: '#edbd78', score: 0 }, { slot: 1, name: 'Bartek', color: '#bbaaff', score: 0 }];

@@ -33,6 +33,7 @@ jobs:
           npm run selftest:relay
           npm run selftest:platform
           npm run selftest:replay
+          npm run selftest:v16
       # Strona projektu leży pod https://<user>.github.io/<repo>/ → base = /<repo>/
       # (dla repo <user>.github.io ustaw VITE_BASE=/)
       - name: Build

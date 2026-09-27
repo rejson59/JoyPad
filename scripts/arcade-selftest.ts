@@ -223,7 +223,7 @@ assert.equal(safetyHost.session().roster[1].suggestedGame, undefined);
 safetyHost.setScreen('over');
 safety.onMessage(safetyGuest, { t: 'suggest', game: 'snake' });
 safety.onMessage(safetyGuest, { t: 'suggest', game: 'race' });
-assert.equal(safetyHost.session().roster[1].suggestedGame, undefined);
+assert.equal(safetyHost.session().roster[1].suggestedGame, 'snake');
 safety.onMessage(safetyGuest, { t: 'suggest', game: 'tanks' });
 assert.equal(safetyHost.session().roster[1].suggestedGame, 'tanks');
 safety.onMessage(safetyGuest, { t: 'suggest', game: null });

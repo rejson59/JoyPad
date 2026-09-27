@@ -45,11 +45,11 @@ export const GAMES: GameInfo[] = [
     features: ['Bitwa 3D', 'Rakiety z namierzaniem', 'Sojusznicze boty'], renderTag: '3D',
   },
   {
-    id: 'snake', number: '04', title: 'Wężowy Wir', eyebrow: 'W BUDOWIE', genre: 'Arcade / versus', wip: true,
-    description: 'Zbieraj impulsy, rośnij i odcinaj rywalom drogę. Sprint daje przewagę, ale jeden zły skręt kończy się zderzeniem.',
-    teaser: 'Węże • Sprint • Arena', cover: 'images/serpent-arena.webp', accent: '#eab308', accentSoft: '#a16207',
-    controls: 'Joystick: skręt · SPRINT: przytrzymaj', players: '1–4 graczy + boty',
-    features: ['Arena versus', 'Sprint', 'Power-upy'], renderTag: '3D LITE',
+    id: 'snake', number: '04', title: 'Wężowy Wir', eyebrow: 'NOWOŚĆ · BETA', genre: 'Snake multiplayer',
+    description: 'Szybki neonowy Snake dla 1–4 graczy. Zbieraj impulsy, odcinaj rywalom drogę i używaj sprintu, ale nie zawracaj w siebie.',
+    teaser: 'Węże • Sprint • Arena', cover: 'images/serpent-arena.webp', accent: '#5eead4', accentSoft: '#166534',
+    controls: 'Strzałki: skręt · SPRINT: przytrzymaj', players: '1–4 graczy + boty',
+    features: ['Nowy tytuł', 'D-pad na telefonie', 'Sprint'], renderTag: '2D+',
   },
   {
     id: 'temple', number: '05', title: 'Skarbiec Świątyni', eyebrow: 'W BUDOWIE', genre: 'Przygodowa / co-op', wip: true,

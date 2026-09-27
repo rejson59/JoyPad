@@ -6,6 +6,15 @@ export const ROOM_PREFIX = 'stalowy-front-';
 export const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const CODE_LENGTH = 5;
 
+/** Jednorazowy klucz przekazywany tylko w QR/linku pada. Nie zmienia częstotliwości wejścia. */
+export const JOIN_TOKEN_LENGTH = 24;
+
+export function randomJoinToken(): string {
+  const bytes = new Uint8Array(JOIN_TOKEN_LENGTH);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+}
+
 export function randomCode(): string {
   let s = '';
   const arr = new Uint32Array(CODE_LENGTH);
@@ -28,10 +37,21 @@ export function roomIdFromCode(code: string): string {
   return ROOM_PREFIX + code.toUpperCase();
 }
 
-/** Adres, który otwiera telefon (hash routing => działa na GitHub Pages). */
-export function padUrlFor(code: string): string {
-  const base = `${location.origin}${location.pathname}${location.search}`;
-  return `${base}#pad=${code}`;
+/**
+ * Adres, który otwiera telefon (hash routing => działa na GitHub Pages).
+ *
+ * Do QR nie kopiujemy parametrów TURN ani haseł z adresu strony. Własny
+ * serwer sygnalizacji (`srv`) jest bezpieczny do przekazania, ale credentiale
+ * TURN muszą pozostać lokalne na urządzeniu hosta.
+ */
+export function padUrlFor(code: string, joinToken?: string): string {
+  const search = new URLSearchParams();
+  try {
+    const srv = new URLSearchParams(location.search).get('srv');
+    if (srv) search.set('srv', srv);
+  } catch { /* URL może być niedostępny w teście offline. */ }
+  const base = `${location.origin}${location.pathname}${search.toString() ? `?${search}` : ''}`;
+  return `${base}#pad=${code}${joinToken ? `&key=${encodeURIComponent(joinToken)}` : ''}`;
 }
 
 /** Czy adres wskazuje tryb pada (`#pad` lub `#pad=KOD`). */
@@ -43,6 +63,11 @@ export function padCodeFromHash(): string | null {
   const m = /(?:^#|&)pad=([A-Za-z0-9]*)/.exec(location.hash);
   if (!m) return null;
   return normalizeCode(m[1] ?? '');
+}
+
+export function padTokenFromHash(): string | null {
+  const m = /(?:^#|&)key=([A-Za-z0-9]+)/.exec(location.hash);
+  return m ? m[1].slice(0, JOIN_TOKEN_LENGTH * 2) : null;
 }
 
 /**
@@ -109,6 +134,8 @@ export interface SessionOptions {
   primaryValue: string;
   secondaryLabel: string;
   secondaryValue: string;
+  mode?: 'classic' | 'tournament' | '2v2';
+  tournamentRound?: number;
 }
 
 export interface RoomSettings { locked: boolean; suggestions: boolean; dimmed: boolean }
@@ -128,7 +155,7 @@ export interface SessionState {
 /** Telefon -> komputer */
 export type PadMessage =
   /** `pid` = stały identyfikator telefonu (localStorage) — zapobiega dwóm slotom na tym samym telefonie po zmianie transportu. */
-  | { t: 'hello'; nick: string; ua: string; v: number; pid?: string; steer?: PadSteer }
+  | { t: 'hello'; nick: string; ua: string; v: number; pid?: string; steer?: PadSteer; token?: string }
   | { t: 'input'; fwd: number; turn: number; fire: boolean; steer?: PadSteer; dirX?: number; dirY?: number; aimX?: number; aimY?: number }
   | { t: 'profile'; profile: PlayerProfile }
   | { t: 'room'; action: RoomAction }
@@ -153,9 +180,47 @@ export type HostMessage =
   | { t: 'arcadeHud'; hud: ArcadeHud }
   | { t: 'hud'; hp: number; maxHp: number; alive: boolean; kills: number; deaths: number; lives: number; respawn: number; countdown: number; paused: boolean; timeLeft: number; shield: boolean; rapid: boolean; big: boolean; speed: boolean; mode: 'deathmatch' | 'survival' }
   | { t: 'fx'; fx: PadFx }
-  | { t: 'pong'; at: number };
+  | { t: 'pong'; at: number }
+  | { t: 'achievement'; id: import('../platform/profile').AchievementId }
+  | { t: 'roundResult'; game: GameId; won: boolean };
 
 export const PROTOCOL_VERSION = 1;
+
+/** Minimalny runtime guard — sieć nie może wpuścić przypadkowego JSON-u do silnika. */
+export function isPadMessage(value: unknown): value is PadMessage {
+  if (!value || typeof value !== 'object') return false;
+  const msg = value as Record<string, unknown>;
+  if (typeof msg.t !== 'string') return false;
+  if (msg.t === 'input') {
+    return typeof msg.fwd === 'number' && Number.isFinite(msg.fwd)
+      && typeof msg.turn === 'number' && Number.isFinite(msg.turn)
+      && typeof msg.fire === 'boolean';
+  }
+  if (msg.t === 'hello') return typeof msg.nick === 'string' && msg.nick.length <= 64 && typeof msg.v === 'number';
+  if (msg.t === 'nick') return typeof msg.nick === 'string' && msg.nick.length <= 64;
+  if (msg.t === 'ping') return typeof msg.at === 'number' && Number.isFinite(msg.at);
+  if (msg.t === 'command') return typeof msg.command === 'string';
+  if (msg.t === 'choose') return typeof msg.index === 'number' && Number.isFinite(msg.index);
+  return ['profile', 'room', 'suggest', 'remind', 'intent', 'pause'].includes(msg.t);
+}
+
+export function isHostMessage(value: unknown): value is HostMessage {
+  if (!value || typeof value !== 'object') return false;
+  const msg = value as Record<string, unknown>;
+  if (typeof msg.t !== 'string') return false;
+  if (msg.t === 'rejected') return typeof msg.reason === 'string';
+  if (msg.t === 'welcome') return Number.isInteger(msg.slot) && typeof msg.name === 'string' && typeof msg.color === 'string' && typeof msg.darkColor === 'string';
+  if (msg.t === 'nick') return typeof msg.nick === 'string';
+  if (msg.t === 'screen') return ['lab', 'lobby', 'menu', 'setup', 'game', 'over'].includes(msg.screen as string);
+  if (msg.t === 'session') return Boolean(msg.session && typeof msg.session === 'object');
+  if (msg.t === 'arcadeHud') return Boolean(msg.hud && typeof msg.hud === 'object' && typeof (msg.hud as Record<string, unknown>).score === 'number' && typeof (msg.hud as Record<string, unknown>).timeLeft === 'number');
+  if (msg.t === 'hud') return typeof msg.hp === 'number' && typeof msg.maxHp === 'number' && typeof msg.alive === 'boolean';
+  if (msg.t === 'fx') return ['fire', 'hit', 'kill', 'dead', 'pickup', 'shield', 'respawn', 'win', 'lose'].includes(msg.fx as string);
+  if (msg.t === 'pong') return typeof msg.at === 'number' && Number.isFinite(msg.at);
+  if (msg.t === 'achievement') return typeof msg.id === 'string' && Object.prototype.hasOwnProperty.call({ firstWin: 1, fiveRounds: 1, winStreak: 1, snakeBeta: 1 }, msg.id as string);
+  if (msg.t === 'roundResult') return typeof msg.game === 'string' && typeof msg.won === 'boolean';
+  return msg.t === 'readyReminder' || msg.t === 'slot';
+}
 
 /**
  * Ustawienia sieciowe (serwer sygnalizacji + ICE) mieszkają w `./signaling` —

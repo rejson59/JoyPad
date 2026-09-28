@@ -504,7 +504,17 @@ export class Kart {
       const hiDamp = 1 - 0.32 * Math.min(1, Math.abs(vf) / this.maxSpeed);
       let steerEff = steer;
       if (this.drifting) steerEff = this.driftDir * (0.95 + 0.55 * steer * this.driftDir);
-      const targetYR = steerEff * (this.drifting ? 2.35 : 2.0) * speedF * hiDamp * Math.sign(vf || 1);
+      let targetYR = steerEff * (this.drifting ? 2.35 : 2.0) * speedF * hiDamp * Math.sign(vf || 1);
+      // Gentle edge assist: soften steering into a barrier and bias the kart
+      // back toward the road before the hard collision can drain its speed.
+      const edgeLimit = BARRIER - 1.6;
+      const edgeStart = edgeLimit - 3.2;
+      const edgePressure = Math.max(0, Math.min(1, (Math.abs(this.proj.lateral) - edgeStart) / 3.2));
+      if (edgePressure > 0.02) {
+        const edgeSide = Math.sign(this.proj.lateral);
+        if (steerEff * edgeSide > 0) targetYR *= 1 - edgePressure * 0.55;
+        targetYR -= edgeSide * edgePressure * 0.42;
+      }
       this.yawRate += (targetYR - this.yawRate) * (1 - Math.exp(-9 * dt));
 
       // przyczepność boczna
@@ -563,18 +573,20 @@ export class Kart {
 
     // bariery
     this.wallHit = 0;
-    const lim = BARRIER - 1.0;
+    const lim = BARRIER - 1.6;
     const lat = this.proj.lateral;
     if (Math.abs(lat) > lim) {
       const sgn = Math.sign(lat);
-      const pen = Math.abs(lat) - lim;
+      const pen = Math.abs(lat) - lim + 0.12;
       this.pos.x -= this.proj.nx * pen * sgn;
       this.pos.z -= this.proj.nz * pen * sgn;
       const vn = (this.vel.x * this.proj.nx + this.vel.z * this.proj.nz) * sgn;
       if (vn > 0) {
         this.vel.x -= this.proj.nx * sgn * vn * 1.3;
         this.vel.z -= this.proj.nz * sgn * vn * 1.3;
-        const fr = 1 - Math.min(0.45, vn * 0.025);
+        // Keep forward momentum on a glancing scrape; the old all-axis drag
+        // made sustained steering into a rail feel like the kart was glued to it.
+        const fr = 1 - Math.min(0.12, vn * 0.008);
         this.vel.x *= fr;
         this.vel.z *= fr;
         this.wallHit = vn;

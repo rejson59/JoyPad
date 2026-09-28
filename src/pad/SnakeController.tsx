@@ -6,6 +6,8 @@ import { Sheet } from '../console/Sheet';
 import { NickEditor } from './NickEditor';
 import { DeviceFeatures, type FullscreenStatus, type TiltStatus, type WakeLockStatus } from './DeviceFeatures';
 import { haptic, unlockHaptics } from './haptics';
+import { gameInfo, localizeGame } from '../arcade/catalog';
+import { useT } from '../platform/i18n';
 
 interface SnakeControllerProps {
   st: PadClientState;
@@ -28,6 +30,8 @@ const DIRECTIONS = [
 
 /** D-pad zamiast gałki: wężem steruje się tapnięciem kierunku. */
 export function SnakeController({ st, fullscreen, fullscreenStatus, wakeLockEnabled, onWakeLockChange, wakeLockStatus, tiltEnabled, onTiltChange, tiltStatus }: SnakeControllerProps) {
+  const { language, t } = useT();
+  const game = localizeGame(gameInfo('snake'), language);
   const [settings, setSettings] = useState(false);
   const firePointer = useRef<number | null>(null);
   const directionTimer = useRef<number | null>(null);
@@ -79,37 +83,37 @@ export function SnakeController({ st, fullscreen, fullscreenStatus, wakeLockEnab
   return <div className="snake-pad fixed inset-0 select-none overflow-hidden text-white" style={{ '--snake-pad-color': color } as React.CSSProperties}>
     <div className="snake-pad-glow" aria-hidden="true" />
     <header className="snake-pad-header" style={{ paddingTop: 'max(10px, env(safe-area-inset-top))' }}>
-      <div className="flex min-w-0 items-center gap-2"><span className="snake-pad-player" style={{ background: color, boxShadow: `0 0 12px ${color}` }} /><strong className="truncate">{st.nick || st.name}</strong><span className="snake-pad-beta">BETA</span></div>
+      <div className="flex min-w-0 items-center gap-2"><span className="snake-pad-player" style={{ background: color, boxShadow: `0 0 12px ${color}` }} /><strong className="truncate">{st.nick || st.name}</strong><span className="snake-pad-beta">{t('snake.beta')}</span></div>
       <div className="flex items-center gap-1.5">
-        {admin && <button type="button" onClick={() => padClient.requestPause()} aria-label="Pauza" className="snake-pad-icon"><Pause size={17} /></button>}
-        {admin && <button type="button" onClick={() => { if (window.confirm('Wrócić do biblioteki?')) padClient.sendCommand('home'); }} aria-label="Wróć do biblioteki" className="snake-pad-icon"><Gamepad2 size={17} /></button>}
-        <button type="button" onClick={() => setSettings(true)} aria-label="Ustawienia pada" className="snake-pad-icon"><Settings size={17} /></button>
-        <button type="button" onClick={fullscreen} aria-label="Pełny ekran" className="snake-pad-icon"><Maximize2 size={17} /></button>
-        <button type="button" onClick={() => padClient.disconnect()} aria-label="Odłącz telefon" className="snake-pad-icon danger"><LogOut size={17} /></button>
+        {admin && <button type="button" onClick={() => padClient.requestPause()} aria-label={t('snake.pause')} className="snake-pad-icon"><Pause size={17} /></button>}
+        {admin && <button type="button" onClick={() => { if (window.confirm(t('snake.backToLibrary'))) padClient.sendCommand('home'); }} aria-label={t('controller.backLibrary')} className="snake-pad-icon"><Gamepad2 size={17} /></button>}
+        <button type="button" onClick={() => setSettings(true)} aria-label={t('snake.settings')} className="snake-pad-icon"><Settings size={17} /></button>
+        <button type="button" onClick={fullscreen} aria-label={t('snake.fullscreen')} className="snake-pad-icon"><Maximize2 size={17} /></button>
+        <button type="button" onClick={() => padClient.disconnect()} aria-label={t('snake.disconnect')} className="snake-pad-icon danger"><LogOut size={17} /></button>
       </div>
     </header>
 
     <main className="snake-pad-main">
       <div className="snake-pad-status">
-        <span className="os-eyebrow">WĘŻOWY WIR · NOWA GRA</span>
-        <h1>{st.screen === 'game' ? 'Steruj kierunkiem.' : 'Za chwilę start.'}</h1>
-        <p>{hud?.detail || 'Tapnij strzałkę, aby zmienić kierunek. Nie zawracaj w siebie.'}</p>
-        <div className="snake-pad-hud"><span>{hud ? `${hud.score} pkt` : '—'}</span><span>{hud ? `${Math.ceil(hud.timeLeft)} s` : '—'}</span></div>
+        <span className="os-eyebrow">{game.title} · {t('snake.newGame')}</span>
+        <h1>{st.screen === 'game' ? t('snake.direction') : t('snake.starting')}</h1>
+        <p>{hud?.detail || t('snake.instruction')}</p>
+        <div className="snake-pad-hud"><span>{hud ? t('snake.points', { score: hud.score }) : '—'}</span><span>{hud ? `${Math.ceil(hud.timeLeft)} s` : '—'}</span></div>
       </div>
       <div className="snake-pad-controls">
-        <div className="snake-dpad" aria-label="Sterowanie kierunkiem węża">
-          <span className="snake-dpad-center">{hud?.paused ? 'PAUZA' : <Zap size={18} />}</span>
-          {DIRECTIONS.map(({ key, x, y, label, icon: Icon }) => <button key={key} type="button" aria-label={label} onPointerDown={event => { event.preventDefault(); direction(x, y); }}><Icon size={30} /></button>)}
+        <div className="snake-dpad" aria-label={t('snake.dpad')}>
+          <span className="snake-dpad-center">{hud?.paused ? t('snake.paused') : <Zap size={18} />}</span>
+          {DIRECTIONS.map(({ key, x, y, icon: Icon }) => <button key={key} type="button" aria-label={t(`remote.${key}`)} onPointerDown={event => { event.preventDefault(); direction(x, y); }}><Icon size={30} /></button>)}
         </div>
-        <button type="button" className="snake-sprint" aria-label="Sprint" onPointerDown={sprintDown} onPointerUp={sprintUp} onPointerCancel={() => sprintUp()} onLostPointerCapture={() => sprintUp()}>
-          <span><Zap size={27} /></span><b>SPRINT</b><small>{hud?.paused ? 'PAUZA' : 'PRZYTRZYMAJ'}</small>
+        <button type="button" className="snake-sprint" aria-label={t('snake.sprint')} onPointerDown={sprintDown} onPointerUp={sprintUp} onPointerCancel={() => sprintUp()} onLostPointerCapture={() => sprintUp()}>
+          <span><Zap size={27} /></span><b>{t('snake.sprint')}</b><small>{hud?.paused ? t('snake.paused') : t('snake.hold')}</small>
         </button>
       </div>
     </main>
 
-    {settings && <Sheet title="Twój kontroler." onClose={() => setSettings(false)}>
+    {settings && <Sheet title={t('controller.title')} onClose={() => setSettings(false)}>
       <NickEditor st={st} compact />
-      <p className="mt-3 text-xs leading-relaxed text-slate-400">Wężowy Wir używa czterech przycisków kierunkowych. Tapnięcie wystarcza — nie musisz prowadzić gałki.</p>
+      <p className="mt-3 text-xs leading-relaxed text-slate-400">{t('snake.settingsInfo')}</p>
       <DeviceFeatures wakeLockEnabled={wakeLockEnabled} onWakeLockChange={onWakeLockChange} wakeLockStatus={wakeLockStatus} fullscreenStatus={fullscreenStatus} onFullscreen={fullscreen} tiltEnabled={tiltEnabled} onTiltChange={onTiltChange} tiltStatus={tiltStatus} />
     </Sheet>}
   </div>;

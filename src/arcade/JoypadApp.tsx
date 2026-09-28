@@ -17,8 +17,9 @@ import { JoyLab } from '../components/JoyLab';
 import { ScreenCurtain, useCurtain } from '../components/motion';
 import { GAMES, gameInfo, type GameId } from './catalog';
 import { ArcadeGameView } from './ArcadeGameView';
+import { useT, type Language } from '../platform/i18n';
 
-interface GameErrorBoundaryProps { children: ReactNode; onExit: () => void }
+interface GameErrorBoundaryProps { children: ReactNode; onExit: () => void; language: Language }
 interface GameErrorBoundaryState { error: Error | null }
 
 /** Awaria pojedynczej gry nie może wywrócić całej biblioteki ani sesji padów. */
@@ -37,16 +38,17 @@ class GameErrorBoundary extends Component<GameErrorBoundaryProps, GameErrorBound
     if (!this.state.error) return this.props.children;
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-[#0a0c0d] px-6 text-center text-white">
-        <div className="joy-kicker text-red-300">GRA ZATRZYMANA</div>
-        <h1 className="joy-heading mt-3 text-3xl font-bold">Coś poszło nie tak</h1>
-        <p className="mt-3 max-w-md text-sm leading-relaxed text-zinc-400">Sesja telefonów nadal działa. Wróć do biblioteki i uruchom tę grę ponownie albo wybierz inny tytuł.</p>
-        <button type="button" onClick={this.props.onExit} className="mt-6 rounded-xl bg-orange-500 px-6 py-3 text-sm font-black text-[#17120d] hover:bg-orange-400">WRÓĆ DO BIBLIOTEKI</button>
+        <div className="joy-kicker text-red-300">{this.props.language === 'en' ? 'GAME PAUSED' : 'GRA ZATRZYMANA'}</div>
+        <h1 className="joy-heading mt-3 text-3xl font-bold">{this.props.language === 'en' ? 'Something went wrong' : 'Coś poszło nie tak'}</h1>
+        <p className="mt-3 max-w-md text-sm leading-relaxed text-zinc-400">{this.props.language === 'en' ? 'Your phone session is still active. Return to the library and try this game again, or choose another one.' : 'Sesja telefonów nadal działa. Wróć do biblioteki i uruchom tę grę ponownie albo wybierz inny tytuł.'}</p>
+        <button type="button" onClick={this.props.onExit} className="mt-6 rounded-xl bg-orange-500 px-6 py-3 text-sm font-black text-[#17120d] hover:bg-orange-400">{this.props.language === 'en' ? 'BACK TO LIBRARY' : 'WRÓĆ DO BIBLIOTEKI'}</button>
       </div>
     );
   }
 }
 
 export default function JoypadApp() {
+  const { language } = useT();
   const [selected, setSelected] = useState<GameId | null>(null);
   const [booted, setBooted] = useState(false);
   const [showConnections, setShowConnections] = useState(false);
@@ -187,10 +189,12 @@ export default function JoypadApp() {
     content = <BootSplash onDone={() => setBooted(true)} />;
   } else if (selected) {
     content = (
-      <GameErrorBoundary key={selected} onExit={exit}>
+      <GameErrorBoundary key={selected} onExit={exit} language={language}>
         {selected === 'tanks'
-          ? <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-[#0a0c0d] text-orange-300">Ładowanie Stalowego Frontu…</div>}><TankApp onExit={exit} remote={remote} /></Suspense>
-          : <ArcadeGameView key={selected} id={selected} onExit={exit} remote={remote} />}
+          ? <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-[#0a0c0d] text-orange-300">{language === 'en' ? 'Loading Steel Front…' : 'Ładowanie Stalowego Frontu…'}</div>}><TankApp onExit={exit} remote={remote} /></Suspense>
+          : selected === 'blockcraft'
+            ? <div className="flex min-h-screen flex-col items-center justify-center bg-[#090d12] px-6 text-center text-white"><div className="joy-kicker text-emerald-300">{language === 'en' ? 'COMING SOON' : 'ZAPOWIEDŹ'}</div><h1 className="joy-heading mt-3 text-4xl font-bold">BlockCraft</h1><p className="mt-3 max-w-lg text-sm text-slate-300">{language === 'en' ? 'A block-building sandbox is in the works. This preview is not playable yet.' : 'Sandbox z budowaniem z bloków jest w przygotowaniu. Ta zapowiedź nie jest jeszcze grywalna.'}</p><button type="button" onClick={exit} className="mt-6 rounded-xl bg-orange-400 px-5 py-3 font-bold text-black">{language === 'en' ? 'Back to library' : 'Wróć do biblioteki'}</button></div>
+            : <ArcadeGameView key={selected} id={selected} onExit={exit} remote={remote} />}
       </GameErrorBoundary>
     );
   } else {
@@ -206,8 +210,8 @@ export default function JoypadApp() {
       {content}
       <ScreenCurtain state={curtain.state} />
       <SessionNotifications session={padHost.session()} />
-      {state.room.dimmed && <div className="joy-screen-rest"><JoyPadLogo size={150} /><span className="os-eyebrow">JOYPAD / CHWILA PRZERWY</span><h1>Dobry wieczór trwa.</h1><p>Ekipa nadal jest połączona. Wróćcie, kiedy chcecie.</p><button onClick={() => padHost.manageRoom({ kind: 'dimmed', value: false })}>Wróć do ekranu</button><small>Administrator może też odsłonić ekran z telefonu.</small></div>}
-      {state.screen === 'game' && state.pads.some(p => p.inputStale) && <div className="os-link-state" role="status">Brak sygnału: {state.pads.filter(p => p.inputStale).map(p => p.nick).join(', ')} · Sterowanie zatrzymane. Czekamy na powrót.</div>}
+      {state.room.dimmed && <div className="joy-screen-rest"><JoyPadLogo size={150} /><span className="os-eyebrow">JOYPAD / {language === 'en' ? 'BREAK TIME' : 'CHWILA PRZERWY'}</span><h1>{language === 'en' ? 'The evening is still yours.' : 'Dobry wieczór trwa.'}</h1><p>{language === 'en' ? 'The crew is still connected. Come back whenever you like.' : 'Ekipa nadal jest połączona. Wróćcie, kiedy chcecie.'}</p><button onClick={() => padHost.manageRoom({ kind: 'dimmed', value: false })}>{language === 'en' ? 'Back to screen' : 'Wróć do ekranu'}</button><small>{language === 'en' ? 'The admin can also wake the screen from a phone.' : 'Administrator może też odsłonić ekran z telefonu.'}</small></div>}
+      {state.screen === 'game' && state.pads.some(p => p.inputStale) && <div className="os-link-state" role="status">{language === 'en' ? 'No signal' : 'Brak sygnału'}: {state.pads.filter(p => p.inputStale).map(p => p.nick).join(', ')} · {language === 'en' ? 'Controls stopped. Waiting for the connection to return.' : 'Sterowanie zatrzymane. Czekamy na powrót.'}</div>}
     </>
   );
 }

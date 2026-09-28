@@ -44,7 +44,7 @@ export class StarClashRound implements GameRound {
     this.humans = config.players.filter(player => !player.isBot);
     if (!this.humans.length) this.humans = [config.players[0] || { slot: 0, name: 'GRACZ 1', color: '#fbbf24', isBot: false }];
 
-    this.game = new Game(container, { lowFx: config.quality === 'performance' });
+    this.game = new Game(container, { lowFx: config.quality === 'performance', language: config.language });
     this.game.padMode = true;
     this.game.onFrame = config.onFrame;
     this.game.readCtrl = (i: number) => this.readCtrl(i);
@@ -133,7 +133,7 @@ export class StarClashRound implements GameRound {
       const kills = s?.kills ?? 0;
       return {
         slot: h.slot, name: h.name, color: h.color, score: kills,
-        detail: s ? (s.dead ? 'STATEK STRACONY' : `${hp} HP · ${kills}✕`) : '—',
+        detail: s ? (s.dead ? (this.config.language === 'en' ? 'SHIP LOST' : 'STATEK STRACONY') : `${hp} HP · ${kills}✕`) : '—',
         value: s ? Math.max(0, s.hp) + Math.max(0, s.sh) : 0,
         maxValue: s ? s.maxHp + s.maxSh : 1,
         isBot: false,
@@ -146,10 +146,10 @@ export class StarClashRound implements GameRound {
       timeLeft,
       countdown: 0,
       paused: !!this.game.paused,
-      objective: 'ZNISZCZ ESKADRĘ WROGA',
-      status: `Pozostało wrogów: ${enemiesLeft}`,
+      objective: this.config.language === 'en' ? 'DEFEAT THE ENEMY SQUADRON' : 'ZNISZCZ ESKADRĘ WROGA',
+      status: this.config.language === 'en' ? `Enemies remaining: ${enemiesLeft}` : `Pozostało wrogów: ${enemiesLeft}`,
       players,
-      powerUp: lead ? { label: 'RAKIETY', count: lead.missiles, color: '#fbbf24', hint: 'ODPALANE AUTOMATYCZNIE', rolling: false } : null,
+      powerUp: lead ? { label: this.config.language === 'en' ? 'MISSILES' : 'RAKIETY', count: lead.missiles, color: '#fbbf24', hint: this.config.language === 'en' ? 'AUTO-LAUNCH ON LOCK' : 'ODPALANE AUTOMATYCZNIE', rolling: false } : null,
     };
     this.config.onHud(hud);
   }
@@ -163,13 +163,13 @@ export class StarClashRound implements GameRound {
       const s = res.ships?.[i];
       return {
         slot: h.slot, name: h.name, color: h.color, score: s?.kills ?? 0,
-        detail: s ? (s.alive ? `Przetrwał · ${s.kills}✕` : `Zestrzelony · ${s.kills}✕`) : '—',
+        detail: s ? (this.config.language === 'en' ? (s.alive ? `Survived · ${s.kills}✕` : `Shot down · ${s.kills}✕`) : (s.alive ? `Przetrwał · ${s.kills}✕` : `Zestrzelony · ${s.kills}✕`)) : '—',
         isBot: false,
       };
     });
     this.config.onFinish({
-      title: res.win ? 'ZWYCIĘSTWO' : 'ESKADRA POKONANA',
-      subtitle: res.win ? 'Wroga eskadra rozbita — sektor bezpieczny' : 'Statek flagowy stracony. Odpocznij i spróbujcie ponownie',
+      title: this.config.language === 'en' ? (res.win ? 'VICTORY' : 'SQUADRON DEFEATED') : (res.win ? 'ZWYCIĘSTWO' : 'ESKADRA POKONANA'),
+      subtitle: this.config.language === 'en' ? (res.win ? 'Enemy squadron defeated — sector secure.' : 'Flagship lost. Take a breath and try again.') : (res.win ? 'Wroga eskadra rozbita — sektor bezpieczny' : 'Statek flagowy stracony. Odpocznij i spróbujcie ponownie'),
       winnerSlot: res.win ? null : best ? this.humans[best.slot]?.slot ?? null : null,
       allWon: res.win,
       players,

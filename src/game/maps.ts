@@ -1,4 +1,5 @@
 import type { MapId, WallState } from './types';
+import type { Language } from '../platform/i18n';
 
 export const WORLD_W = 1600;
 export const WORLD_H = 1000;
@@ -134,3 +135,13 @@ export const MAPS: Record<MapId, MapDef> = {
     ],
   },
 };
+
+const EN_MAPS: Record<MapId, Pick<MapDef, 'name' | 'desc'>> = {
+  desert: { name: 'DESERT STORM', desc: 'Scorching sun, shifting sand and an abandoned base. Slippery dunes and fast shells.' },
+  nightcity: { name: 'NIGHT CITY', desc: 'Neon streets, wet asphalt and tank headlights. Fight in the dark — visibility changes everything.' },
+  forest: { name: 'MUDDY FOREST', desc: 'A dense forest after the rain. Mud slows you down; trees and crates provide cover.' },
+};
+
+export function localizedMap(id: MapId, language: Language): Pick<MapDef, 'name' | 'desc'> {
+  return language === 'en' ? EN_MAPS[id] : MAPS[id];
+}

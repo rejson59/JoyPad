@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Gamepad2, Sparkles, Zap } from 'lucide-react';
 import { padClient } from '../net/padClient';
 import { getHapticStatus, haptic, unlockHaptics } from './haptics';
+import { t as translateMessage, useT } from '../platform/i18n';
 
 /**
  * LAB KONTROLERA na telefonie — „Astro's Playroom” dla JoyPad.
@@ -17,14 +18,14 @@ import { getHapticStatus, haptic, unlockHaptics } from './haptics';
  */
 
 const ZONES = [
-  { name: 'KLIK', color: '#fbbf24', pattern: [12] },
-  { name: 'DUBLET', color: '#fb923c', pattern: [18, 30, 18] },
-  { name: 'BUZZ', color: '#f472b6', pattern: [70] },
-  { name: 'SERCE', color: '#ef4444', pattern: [40, 60, 80] },
-  { name: 'TRZEPOT', color: '#a78bfa', pattern: [8, 14, 8, 14, 8, 14, 8] },
-  { name: 'SERIA', color: '#38bdf8', pattern: [8, 12, 8, 12, 8, 12] },
-  { name: 'FALA', color: '#2dd4bf', pattern: [140, 50, 140] },
-  { name: 'BĘBEN', color: '#a3e635', pattern: [6, 22, 45] },
+  { key: 'click', color: '#fbbf24', pattern: [12] },
+  { key: 'double', color: '#fb923c', pattern: [18, 30, 18] },
+  { key: 'buzz', color: '#f472b6', pattern: [70] },
+  { key: 'heart', color: '#ef4444', pattern: [40, 60, 80] },
+  { key: 'flutter', color: '#a78bfa', pattern: [8, 14, 8, 14, 8, 14, 8] },
+  { key: 'burst', color: '#38bdf8', pattern: [8, 12, 8, 12, 8, 12] },
+  { key: 'wave', color: '#2dd4bf', pattern: [140, 50, 140] },
+  { key: 'drum', color: '#a3e635', pattern: [6, 22, 45] },
 ];
 
 interface Ball { x: number; y: number; vx: number; vy: number; r: number; color: string }
@@ -32,6 +33,7 @@ interface Ball { x: number; y: number; vx: number; vy: number; r: number; color:
 const clamp1 = (v: number) => Math.max(-1, Math.min(1, v));
 
 function SensorLabPad({ nick, color, onDone }: { nick: string; color: string; onDone: () => void }) {
+  const { language, t } = useT();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [pressed, setPressed] = useState<number[]>([]);
   const maskRef = useRef(0);
@@ -191,10 +193,10 @@ function SensorLabPad({ nick, color, onDone }: { nick: string; color: string; on
 
       // mierniki
       const meters: [string, number, string][] = [
-        ['GRAW-X', clamp1(grav.current.x), '#38bdf8'],
-        ['GRAW-Y', clamp1(grav.current.y), '#2dd4bf'],
-        ['WSTRZĄS', Math.max(shakeRef.current, fakeShake.current), '#f97316'],
-        ['ŻYRO', clamp1(rot.current.beta), '#a78bfa'],
+        [translateMessage(language, 'joylab.meter.gravityX'), clamp1(grav.current.x), '#38bdf8'],
+        [translateMessage(language, 'joylab.meter.gravityY'), clamp1(grav.current.y), '#2dd4bf'],
+        [translateMessage(language, 'joylab.meter.shake'), Math.max(shakeRef.current, fakeShake.current), '#f97316'],
+        [translateMessage(language, 'joylab.meter.gyro'), clamp1(rot.current.beta), '#a78bfa'],
       ];
       const mw = W - 24, my0 = boxH + 10;
       ctx.font = '700 9px ui-monospace, monospace';
@@ -213,7 +215,7 @@ function SensorLabPad({ nick, color, onDone }: { nick: string; color: string; on
     };
     raf = requestAnimationFrame(frame);
     return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', layout); };
-  }, [color, buzz]);
+  }, [color, buzz, language]);
 
   /* ---- strefy haptyczne ---- */
   const zoneDown = (i: number) => {
@@ -234,20 +236,20 @@ function SensorLabPad({ nick, color, onDone }: { nick: string; color: string; on
           <div className="flex items-center gap-2">
             <span className="joy-logo flex h-9 w-9 items-center justify-center rounded-xl"><Gamepad2 size={19} /></span>
             <div>
-              <div className="joy-brand text-lg font-extrabold leading-none">LAB KONTROLERA</div>
-              <div className="joy-kicker mt-1 text-[8px] text-slate-500">{nick} · POKÓJ ZABAW</div>
+              <div className="joy-brand text-lg font-extrabold leading-none">{t('joylab.title')}</div>
+              <div className="joy-kicker mt-1 text-[8px] text-slate-500">{nick} · {t('joylab.playroom')}</div>
             </div>
           </div>
-          <button onClick={onDone} className="rounded-xl bg-orange-500 px-4 py-2.5 text-xs font-black text-[#16110c] active:scale-95">WRÓĆ / POMIŃ →</button>
+          <button onClick={onDone} className="rounded-xl bg-orange-500 px-4 py-2.5 text-xs font-black text-[#16110c] active:scale-95">{t('joylab.skip')}</button>
         </header>
 
         <p className="joy-enter mt-4 text-xs leading-relaxed text-slate-400">
-          Poznaj reakcje kontrolera. Dotyk działa zawsze; czujniki i wibracje zależą od urządzenia. Możesz pominąć test w każdej chwili.
+          {t('joylab.intro')}
         </p>
 
         {(needsPermission || !sensorsReady) && (
           <button onClick={enableSensors} className="joy-enter joy-enter-1 mt-3 flex items-center justify-center gap-2 rounded-xl border border-cyan-400/40 bg-cyan-500/10 px-4 py-3 text-xs font-black text-cyan-200">
-            <Zap size={15} /> WŁĄCZ SENSORY (akcelerometr + żyroskop)
+            <Zap size={15} /> {t('joylab.enableSensors')}
           </button>
         )}
 
@@ -255,10 +257,10 @@ function SensorLabPad({ nick, color, onDone }: { nick: string; color: string; on
           <canvas ref={canvasRef} className="block h-[46vh] max-h-[380px] w-full" />
         </div>
         <div className="joy-enter joy-enter-2 mt-2 flex flex-wrap items-center gap-2 text-[10px] font-bold tracking-wider text-slate-400">
-          <span className="rounded-full border border-white/15 px-2.5 py-1">① POTRZĄŚNIJ = GRZECHOTKA</span>
-          <span className="rounded-full border border-white/15 px-2.5 py-1">② PRZECHYL = GRAWITACJA</span>
-          <span className="rounded-full border border-white/15 px-2.5 py-1">③ DOTKNIJ STREF</span>
-          <button onClick={() => { fakeShake.current = 1; buzz([30, 20, 30]); }} className="ml-auto rounded-full border border-orange-400/40 bg-orange-500/10 px-2.5 py-1 text-orange-200"><Sparkles size={11} className="inline" /> SYMULUJ WSTRZĄS</button>
+          <span className="rounded-full border border-white/15 px-2.5 py-1">① {t('joylab.shake')}</span>
+          <span className="rounded-full border border-white/15 px-2.5 py-1">② {t('joylab.tilt')}</span>
+          <span className="rounded-full border border-white/15 px-2.5 py-1">③ {t('joylab.touchZones')}</span>
+          <button onClick={() => { fakeShake.current = 1; buzz([30, 20, 30]); }} className="ml-auto rounded-full border border-orange-400/40 bg-orange-500/10 px-2.5 py-1 text-orange-200"><Sparkles size={11} className="inline" /> {t('joylab.simulateShake')}</button>
         </div>
 
         <div className="joy-enter joy-enter-3 mt-4 grid grid-cols-4 gap-2">
@@ -266,7 +268,7 @@ function SensorLabPad({ nick, color, onDone }: { nick: string; color: string; on
             const on = pressed.includes(i);
             return (
               <button
-                key={z.name}
+                key={z.key}
                 onPointerDown={e => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); zoneDown(i); }}
                 onPointerUp={() => zoneUp(i)}
                 onPointerCancel={() => zoneUp(i)}
@@ -281,12 +283,12 @@ function SensorLabPad({ nick, color, onDone }: { nick: string; color: string; on
                   touchAction: 'none',
                 }}
               >
-                {z.name}
+                {t(`joylab.zone.${z.key}`)}
               </button>
             );
           })}
         </div>
-        <p className="mt-3 text-center text-[10px] tracking-wider text-slate-500">KAŻDA STREFA MA INNĄ WIBRACJĘ · SPRÓBUJ WSZYSTKICH 8</p>
+        <p className="mt-3 text-center text-[10px] tracking-wider text-slate-500">{t('joylab.zonesInfo')}</p>
       </div>
     </div>
   );

@@ -11,6 +11,9 @@ import { WebrtcLink, type PadLink } from './links';
 import { HostRelayLink, RELAY_BROKERS, RelayChannel, relayTopicFor, type RelayItem } from './relay';
 import type { GameId } from '../arcade/catalog';
 import { GAMES } from '../arcade/catalog';
+import { loadLanguage, t as translateMessage } from '../platform/i18n';
+
+const message = (key: string, values: Record<string, string | number> = {}) => translateMessage(loadLanguage(), key, values);
 
 export interface PadInfo {
   profile?: PlayerProfile;
@@ -333,7 +336,7 @@ export class PadHost {
       // Sygnalizacja padła (np. uśpienie komputera). Połączenia WebRTC z telefonami żyją dalej.
       this.signal = 'lost';
       this.emit();
-      this.scheduleRetry('Utracono łączność z serwerem sygnalizacji.');
+      this.scheduleRetry(message('host.error.signalLost'));
     });
 
     peer.on('error', (err) => {
@@ -348,7 +351,7 @@ export class PadHost {
     const wait = Math.min(REGISTER_TIMEOUT + this.attempts * 5000, 35_000);
     this.registerTimer = window.setTimeout(() => {
       if (this.peer !== peer || peer.destroyed) return;
-      this.scheduleRetry('Serwer sygnalizacji nie odpowiedział w czasie rejestracji pokoju.');
+      this.scheduleRetry(message('host.error.registerTimeout'));
     }, wait);
   }
 
@@ -360,7 +363,7 @@ export class PadHost {
       this.running = false;
       this.status = 'error';
       this.signal = 'offline';
-      this.error = 'Ta przeglądarka nie obsługuje WebRTC — tryb „telefon jako pad” nie zadziała.';
+      this.error = message('host.error.browserUnsupported');
       this.emit();
       this.destroyPeer();
       return;
@@ -370,24 +373,24 @@ export class PadHost {
       // Ten kod jest już zarejestrowany — najczęściej przez nasze własne, „martwe” połączenie.
       if (this.conflictRetries < MAX_CONFLICT_RETRIES) {
         this.conflictRetries++;
-        this.scheduleRetry(`Kod ${this.code} jest chwilowo zajęty — próbuję ponownie.`, 2500);
+        this.scheduleRetry(message('host.error.codeBusy', { code: this.code }), 2500);
         return;
       }
       // Po kilku próbach zmieniamy kod (QR odświeży się automatycznie).
       this.conflictRetries = 0;
       this.code = randomCode();
-      this.note = 'Kod pokoju został odświeżony — na telefonach zeskanuj nowy QR.';
+      this.note = message('host.note.codeRefreshed');
       // Temat przekaźnika zależy od kodu — przełączamy go razem z pokojem.
       this.startRelay();
-      this.scheduleRetry('Kod pokoju był zajęty na serwerze.', 1200);
+      this.scheduleRetry(message('host.error.codeTaken'), 1200);
       return;
     }
 
     const permanent = type === 'invalid-id' || type === 'invalid-key';
     this.scheduleRetry(
       type === 'network' || type === 'server-error' || type === 'socket-error' || type === 'socket-closed' || type === 'ssl-unavailable'
-        ? 'Brak łączności z serwerem sygnalizacji.'
-        : `Błąd serwera sygnalizacji${type ? ` (${type})` : ''}.`,
+        ? message('host.error.signalOffline')
+        : message('host.error.server', { type: type ? ` (${type})` : '' }),
       undefined,
       permanent,
     );
@@ -401,8 +404,8 @@ export class PadHost {
     this.signal = this.attempts === 1 ? 'connecting' : 'lost';
     if (this.attempts >= MAX_ATTEMPTS_BEFORE_NOTICE) {
       this.error = this.relay === 'online'
-        ? 'Serwer sygnalizacji nie odpowiada — bezpośrednie łączenie z telefonami nie zadziała, ALE awaryjny przekaźnik jest aktywny: telefony będą łączyć się przez niego (Wi‑Fi ↔ LTE).'
-        : 'Serwer sygnalizacji (broker) nie odpowiada — telefony nie zobaczą pokoju, dopóki połączenie nie wróci. Łącze też awaryjny przekaźnik… Ponawiam automatycznie co kilka sekund.';
+        ? message('host.error.signalLostRelay')
+        : message('host.error.signalLostNoRelay');
     }
     this.emit();
 
@@ -461,10 +464,10 @@ export class PadHost {
       clearTimeout(timer);
       try { peer.destroy(); } catch { /* ignore */ }
       if (verdict === 'dead' && this.running && this.status === 'ready') {
-        this.lastError = 'Pokój zniknął z serwera sygnalizacji — odświeżam rejestrację.';
+        this.lastError = message('host.error.roomDisappeared');
         this.signal = 'lost';
         this.emit();
-        this.scheduleRetry('Pokój zniknął z serwera sygnalizacji.', 800);
+        this.scheduleRetry(message('host.error.roomDisappeared'), 800);
       }
     };
 
@@ -569,7 +572,7 @@ export class PadHost {
       return;
     }
     this.relay = 'connecting';
-    if (wasOnline) this.lastError = 'Awaryjny przekaźnik rozłączony — łączę ponownie…';
+    if (wasOnline) this.lastError = message('host.error.relayLost');
     this.emit();
     this.relayCursor = (this.relayCursor + 1) % RELAY_BROKERS.length;
     this.relayTimer = window.setTimeout(() => this.tryRelayBroker(), 4_000);
@@ -719,7 +722,7 @@ export class PadHost {
           // na brokerze MQTT. Ponowne hello nie tworzy drugiego slotu.
           const existing = this.pads.get(id)!;
           existing.lastSeen = Date.now();
-          const m = this.slotMeta[existing.slot] ?? { name: `GRACZ ${existing.slot + 1}`, color: '#fbbf24', darkColor: '#78350f' };
+          const m = this.slotMeta[existing.slot] ?? { name: message('host.slotName', { n: existing.slot + 1 }), color: '#fbbf24', darkColor: '#78350f' };
           this.send(id, { t: 'welcome', slot: existing.slot, nick: existing.nick, ...m, screen: this.screen });
           this.send(id, { t: 'session', session: this.session() });
           return;
@@ -753,12 +756,12 @@ export class PadHost {
           setTimeout(() => link.close(), 200);
           return;
         }
-        const nick = normalizeNick(typeof msg.nick === 'string' ? msg.nick : '', `Telefon ${slot + 1}`);
+        const nick = normalizeNick(typeof msg.nick === 'string' ? msg.nick : '', message('host.defaultNick', { n: slot + 1 }));
         const info: PadInfo = { connId: id, slot, nick, connectedAt: Date.now(), lastSeen: Date.now(), latency: 0, via: link.kind, pid, steer: normSteer(msg.steer) };
         this.pads.set(id, info);
         if (pid) this.padsByPid.set(pid, id);
         this.inputs[slot] = { ...ZERO_INPUT };
-        const meta = this.slotMeta[slot] ?? { name: `GRACZ ${slot + 1}`, color: '#fbbf24', darkColor: '#78350f' };
+        const meta = this.slotMeta[slot] ?? { name: message('host.slotName', { n: slot + 1 }), color: '#fbbf24', darkColor: '#78350f' };
         this.send(id, { t: 'welcome', slot, ...meta, screen: this.screen });
         this.lastPadChangeAt = Date.now();
         this.emit();
@@ -798,7 +801,7 @@ export class PadHost {
         const p = this.pads.get(id);
         if (!p) return;
         p.lastSeen = Date.now();
-        p.nick = normalizeNick(typeof msg.nick === 'string' ? msg.nick : '', `Telefon ${p.slot + 1}`);
+        p.nick = normalizeNick(typeof msg.nick === 'string' ? msg.nick : '', message('host.defaultNick', { n: p.slot + 1 }));
         this.send(id, { t: 'nick', nick: p.nick });
         this.emit();
         this.broadcastSession();

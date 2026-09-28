@@ -2,7 +2,7 @@ import { CanvasRound, HEIGHT, WIDTH, clamp, glow, rand, roundRect, type Racer, t
 import { gameAudio } from '../../game/audio';
 
 type Cell = { x: number; y: number };
-interface Serpent extends Racer { body: Cell[]; dir: Cell; next: Cell; score: number; hearts: number; energy: number; timer: number; respawn: number; shield: number }
+interface Serpent extends Racer { body: Cell[]; prevBody: Cell[]; dir: Cell; next: Cell; score: number; hearts: number; energy: number; timer: number; stepDuration: number; respawn: number; shield: number }
 interface Food extends Cell { gold: boolean; phase: number }
 const COLS = 38, ROWS = 21, TILE = 28, LEFT = 68, TOP = 66;
 const SPAWNS: { head: Cell; dir: Cell }[] = [
@@ -24,7 +24,7 @@ export class SnakeRound extends CanvasRound {
     for (let x = 10; x <= 13; x++) { this.walls.add(this.key(x, 9)); this.walls.add(this.key(x + 14, 11)); }
     for (let y = 3; y <= 6; y++) { this.walls.add(this.key(18, y)); this.walls.add(this.key(19, 20 - y)); }
     for (let y = 13; y <= 15; y++) { this.walls.add(this.key(9, y)); this.walls.add(this.key(28, 20 - y)); }
-    this.serpents = config.players.map(p => ({ ...p, body: [], dir: { x: 1, y: 0 }, next: { x: 1, y: 0 }, score: 0, hearts: 3, energy: 100, timer: 0, respawn: 0, shield: 0 }));
+    this.serpents = config.players.map(p => ({ ...p, body: [], prevBody: [], dir: { x: 1, y: 0 }, next: { x: 1, y: 0 }, score: 0, hearts: 3, energy: 100, timer: 0, stepDuration: .145, respawn: 0, shield: 0 }));
     for (const s of this.serpents) this.reset(s);
     for (let i = 0; i < 6; i++) this.food.push(this.makeFood(i === 0));
   }
@@ -37,7 +37,9 @@ export class SnakeRound extends CanvasRound {
       ? this.freeCell() : initial.head;
     s.dir = { ...initial.dir }; s.next = { ...s.dir };
     s.body = Array.from({ length: 4 }, (_, i) => ({ x: clamp(start.x - s.dir.x * i, 0, COLS - 1), y: clamp(start.y - s.dir.y * i, 0, ROWS - 1) }));
+    s.prevBody = s.body.map(cell => ({ ...cell }));
     s.timer = 0;
+    s.stepDuration = .145;
     s.energy = Math.max(35, s.energy);
     s.shield = 2; // krótka ochrona po odrodzeniu
   }
@@ -78,6 +80,7 @@ export class SnakeRound extends CanvasRound {
     }
     s.hearts--;
     s.body = [];
+    s.prevBody = [];
     s.respawn = s.hearts > 0 ? 1.7 : 0;
     if (!s.isBot) this.config.onFx(s.slot, 'dead');
     gameAudio.hitMetal();
@@ -94,6 +97,7 @@ export class SnakeRound extends CanvasRound {
       s.energy = clamp(s.energy + dt * (boost ? -42 : 13), 0, 100);
       s.timer += dt;
       const interval = boost ? .077 : s.isBot ? .17 : .145;
+      s.stepDuration = interval;
       if (s.timer < interval) continue;
       s.timer = Math.max(0, s.timer - interval);
       if (s.next.x !== -s.dir.x || s.next.y !== -s.dir.y) s.dir = { ...s.next };
@@ -103,6 +107,7 @@ export class SnakeRound extends CanvasRound {
       const ownTail = s.body[s.body.length - 1];
       const hitsTail = !hit && ownTail.x === head.x && ownTail.y === head.y;
       if (this.blocked(head.x, head.y) && !hitsTail) { this.crash(s); continue; }
+      s.prevBody = s.body.map(cell => ({ ...cell }));
       s.body.unshift(head);
       if (hit) {
         s.score += hit.gold ? 3 : 1;
@@ -114,7 +119,7 @@ export class SnakeRound extends CanvasRound {
         if (!s.isBot) this.config.onFx(s.slot, 'pickup');
         gameAudio.pickup();
         if (s.score >= this.target) {
-          this.finish({ title: `${s.name} wygrywa!`, subtitle: `Pierwszy zdobył ${this.target} punktów na neonowej arenie.`, winnerSlot: s.isBot ? null : s.slot, players: this.ranking() });
+          this.finish({ title: this.isEnglish ? `${s.name} wins!` : `${s.name} wygrywa!`, subtitle: this.isEnglish ? `First to ${this.target} points on the steel arena.` : `Pierwszy zdobył ${this.target} punktów na stalowej arenie.`, winnerSlot: s.isBot ? null : s.slot, players: this.ranking() });
         }
       } else s.body.pop();
     }
@@ -122,41 +127,55 @@ export class SnakeRound extends CanvasRound {
   }
 
   private ranking(): RoundPlayer[] {
-    return [...this.serpents].sort((a, b) => b.score - a.score || b.hearts - a.hearts).map(s => ({ slot: s.slot, name: s.name, color: s.color, score: s.score, detail: s.hearts ? `${s.hearts} życia · ${s.body.length} pól` : 'Eliminacja', value: Math.round(s.energy), maxValue: 100, isBot: s.isBot }));
+    return [...this.serpents].sort((a, b) => b.score - a.score || b.hearts - a.hearts).map(s => ({ slot: s.slot, name: s.name, color: s.color, score: s.score, detail: s.hearts ? (this.isEnglish ? `${s.hearts} lives · ${s.body.length} cells` : `${s.hearts} życia · ${s.body.length} pól`) : (this.isEnglish ? 'Eliminated' : 'Eliminacja'), value: Math.round(s.energy), maxValue: 100, isBot: s.isBot }));
   }
   protected hud(): RoundHud {
-    return { timeLeft: this.timeLeft, countdown: this.countdown, paused: this.paused, objective: `Pierwszy do ${this.target} punktów`, status: 'ZBIERAJ IMPULSY · UNIKAJ KOLIZJI', players: this.ranking() };
+    return { timeLeft: this.timeLeft, countdown: this.countdown, paused: this.paused, objective: this.isEnglish ? `First to ${this.target} points` : `Pierwszy do ${this.target} punktów`, status: this.isEnglish ? 'COLLECT ENERGY · AVOID CRASHES' : 'ZBIERAJ IMPULSY · UNIKAJ KOLIZJI', players: this.ranking() };
   }
   protected timeout(): void {
     const rank = this.ranking();
-    this.finish({ title: `${rank[0].name} wygrywa!`, subtitle: `Najwięcej impulsów: ${rank[0].score}. Spróbuj ponownie i pobij rekord!`, winnerSlot: rank[0].isBot ? null : rank[0].slot, players: rank });
+    this.finish({ title: this.isEnglish ? `${rank[0].name} wins!` : `${rank[0].name} wygrywa!`, subtitle: this.isEnglish ? `Most energy collected: ${rank[0].score}. Play again and beat the record!` : `Najwięcej impulsów: ${rank[0].score}. Spróbuj ponownie i pobij rekord!`, winnerSlot: rank[0].isBot ? null : rank[0].slot, players: rank });
   }
 
   protected render(ctx: CanvasRenderingContext2D): void {
-    ctx.fillStyle = '#080f19'; ctx.fillRect(0, 0, WIDTH, HEIGHT);
-    glow(ctx, WIDTH / 2, HEIGHT / 2, 520, 'rgba(48,112,60,.08)');
-    roundRect(ctx, LEFT - 13, TOP - 13, COLS * TILE + 26, ROWS * TILE + 26, 20, '#13232b', '#427457');
-    ctx.fillStyle = '#0a1820'; ctx.fillRect(LEFT, TOP, COLS * TILE, ROWS * TILE);
-    ctx.strokeStyle = 'rgba(90,221,152,.10)'; ctx.lineWidth = 1;
+    ctx.fillStyle = '#090b0e'; ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    glow(ctx, WIDTH * .5, HEIGHT * .35, 520, 'rgba(226,146,64,.09)');
+    glow(ctx, WIDTH * .5, HEIGHT * .95, 440, 'rgba(52,111,91,.06)');
+    roundRect(ctx, LEFT - 16, TOP - 16, COLS * TILE + 32, ROWS * TILE + 32, 18, '#1b1d1f', '#877355');
+    ctx.fillStyle = '#111416'; ctx.fillRect(LEFT, TOP, COLS * TILE, ROWS * TILE);
+    ctx.strokeStyle = 'rgba(197,166,117,.075)'; ctx.lineWidth = 1;
     for (let x = 0; x <= COLS; x++) { ctx.beginPath(); ctx.moveTo(LEFT + x * TILE, TOP); ctx.lineTo(LEFT + x * TILE, TOP + ROWS * TILE); ctx.stroke(); }
     for (let y = 0; y <= ROWS; y++) { ctx.beginPath(); ctx.moveTo(LEFT, TOP + y * TILE); ctx.lineTo(LEFT + COLS * TILE, TOP + y * TILE); ctx.stroke(); }
+    // Heavy steel cover, riveted corners and warm tactical edge lights echo Steel Front.
     for (const wall of this.walls) {
-      const [x, y] = wall.split(':').map(Number);
-      roundRect(ctx, LEFT + x * TILE + 2, TOP + y * TILE + 2, TILE - 4, TILE - 4, 4, '#28404a', '#61aa86');
-      ctx.fillStyle = 'rgba(190,248,217,.18)'; ctx.fillRect(LEFT + x * TILE + 6, TOP + y * TILE + 6, TILE - 12, 2);
+      const [x, y] = wall.split(':').map(Number), wx = LEFT + x * TILE, wy = TOP + y * TILE;
+      roundRect(ctx, wx + 2, wy + 2, TILE - 4, TILE - 4, 3, '#34383a', '#8a7960');
+      ctx.fillStyle = 'rgba(227,211,181,.18)'; ctx.fillRect(wx + 5, wy + 5, TILE - 10, 2);
+      ctx.fillStyle = '#c29a5c'; ctx.fillRect(wx + 5, wy + TILE - 7, 4, 2);
     }
     for (const food of this.food) {
       const x = LEFT + (food.x + .5) * TILE, y = TOP + (food.y + .5) * TILE;
-      glow(ctx, x, y, food.gold ? 28 : 19, food.gold ? 'rgba(251,191,36,.45)' : 'rgba(52,211,153,.35)');
-      ctx.fillStyle = food.gold ? '#fbbf24' : '#5eead4'; ctx.beginPath(); ctx.arc(x, y, food.gold ? 10 + Math.sin(this.clock * 5 + food.phase) * 2 : 7, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#eafff4'; ctx.beginPath(); ctx.arc(x - 2, y - 3, 2, 0, Math.PI * 2); ctx.fill();
+      const pulse = Math.sin(this.clock * 5 + food.phase);
+      const glowColor = food.gold ? 'rgba(255,196,83,.45)' : 'rgba(240,137,54,.34)';
+      glow(ctx, x, y, food.gold ? 30 : 21, glowColor);
+      ctx.save(); ctx.translate(x, y); ctx.rotate(this.clock * .7 + food.phase);
+      const size = food.gold ? 10 + pulse * 2 : 7;
+      roundRect(ctx, -size, -size, size * 2, size * 2, 3, food.gold ? '#ffd36a' : '#ec8840', '#fff0cf');
+      ctx.fillStyle = '#fff8e6'; ctx.fillRect(-2, -2, 4, 4);
+      ctx.restore();
     }
     for (const s of this.serpents) {
       for (let i = s.body.length - 1; i >= 0; i--) {
-        const part = s.body[i], x = LEFT + part.x * TILE, y = TOP + part.y * TILE;
-        ctx.globalAlpha = i === 0 ? 1 : Math.max(.5, 1 - i / Math.max(10, s.body.length * 1.5));
-        ctx.shadowColor = s.color; ctx.shadowBlur = i === 0 ? 18 : 7;
-        roundRect(ctx, x + 2, y + 2, TILE - 4, TILE - 4, i === 0 ? 9 : 6, s.color);
+        const part = s.body[i];
+        const previous = s.prevBody[i] ?? part;
+        const progress = clamp(s.timer / Math.max(.001, s.stepDuration), 0, 1);
+        const cellX = previous.x + (part.x - previous.x) * progress;
+        const cellY = previous.y + (part.y - previous.y) * progress;
+        const x = LEFT + cellX * TILE, y = TOP + cellY * TILE;
+        ctx.globalAlpha = i === 0 ? 1 : Math.max(.55, 1 - i / Math.max(10, s.body.length * 1.5));
+        ctx.shadowColor = s.color;
+        ctx.shadowBlur = this.config.quality === 'performance' ? 0 : i === 0 ? 11 : 3;
+        roundRect(ctx, x + 2, y + 2, TILE - 4, TILE - 4, i === 0 ? 9 : 6, s.color, 'rgba(10,12,14,.62)');
         ctx.shadowBlur = 0;
         if (i === 0) {
           ctx.fillStyle = '#071219';
@@ -169,6 +188,6 @@ export class SnakeRound extends CanvasRound {
       }
       ctx.globalAlpha = 1;
     }
-    ctx.fillStyle = '#83ae9a'; ctx.textAlign = 'left'; ctx.font = 'bold 12px monospace'; ctx.fillText('WĘŻOWY WIR  /  ARENA 01', 25, HEIGHT - 18);
+    ctx.fillStyle = '#b8a27d'; ctx.textAlign = 'left'; ctx.font = 'bold 12px monospace'; ctx.fillText(this.isEnglish ? 'SNAKE VORTEX  /  STEEL ARENA' : 'WĘŻOWY WIR  /  STALOWA ARENA', 25, HEIGHT - 18);
   }
 }

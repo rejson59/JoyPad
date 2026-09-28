@@ -11,6 +11,7 @@ import { Kart, ItemType } from './kart';
 import { Particles } from './particles';
 import { ItemManager } from './items';
 import { driveAI, aiUseItem } from './ai';
+import type { Language } from '../../platform/i18n';
 import { AudioFX } from './audio';
 
 export const KART_COLORS = [
@@ -32,6 +33,7 @@ export interface NeonExternalInput {
 }
 
 export interface GameSettings {
+  language?: Language;
   onFrame?: (canvas: HTMLCanvasElement) => void;
   name: string;
   colorIdx: number;
@@ -244,7 +246,7 @@ export class NeonRushScene {
     this.renderer.domElement.style.inset = '0';
     this.renderer.domElement.style.width = '100%';
     this.renderer.domElement.style.height = '100%';
-    this.renderer.domElement.setAttribute('aria-label', 'Neonowy Pęd 3D');
+    this.renderer.domElement.setAttribute('aria-label', settings.language === 'en' ? 'Neon Rush 3D' : 'Neonowy Pęd 3D');
 
     this.camera = new PerspectiveCamera(70, width / height, 0.25, 6000);
     this.scene.fog = new FogExp2(new Color(0.11, 0.04, 0.1), 0.0017);
@@ -270,7 +272,7 @@ export class NeonRushScene {
     this.scene.add(this.moon.target);
 
     this.track = new Track();
-    this.city = new City(this.track, { rain: settings.rain });
+    this.city = new City(this.track, { rain: settings.rain, language: settings.language });
     this.scene.add(this.city.group);
 
     this.sparks = new Particles(q === 0 ? 2500 : 5000, true, pr);
@@ -299,7 +301,7 @@ export class NeonRushScene {
       const c = isPlayer ? playerColor : aiColors[Math.max(0, aiIdx) % aiColors.length];
       const skillBase = [0.96, 1.0, 1.03][settings.difficulty];
       const k = new Kart({
-        name: isPlayer ? settings.playerNames?.[playerIndex] || (playerIndex === 0 ? settings.name || 'Ty' : `Gracz ${playerIndex + 1}`) : AI_NAMES[Math.max(0, aiIdx) % AI_NAMES.length],
+        name: isPlayer ? settings.playerNames?.[playerIndex] || (playerIndex === 0 ? settings.name || (settings.language === 'en' ? 'You' : 'Ty') : `${settings.language === 'en' ? 'Player' : 'Gracz'} ${playerIndex + 1}`) : AI_NAMES[Math.max(0, aiIdx) % AI_NAMES.length],
         color: c.color,
         accent: c.accent,
         isPlayer,
@@ -351,7 +353,7 @@ export class NeonRushScene {
         if (victim === this.player) {
           this.hitFx = 1;
           this.audio.play('hit');
-          this.flash('TRAFIONY!');
+          this.flash(this.settings.language === 'en' ? 'HIT!' : 'TRAFIONY!');
         }
       },
       onUse: (k, item) => {
@@ -646,7 +648,7 @@ export class NeonRushScene {
         if (this.startPress > 2.2 && c.throttle > 0) {
           this.player.startBoost(1.3, 4);
           this.audio.play('boost');
-          this.flash('RAKIETOWY START!');
+          this.flash(this.settings.language === 'en' ? 'ROCKET START!' : 'RAKIETOWY START!');
         }
         this.karts.forEach((k) => {
           if (!k.cfg.isPlayer && Math.random() < 0.5 * k.cfg.skill) k.startBoost(0.8 + Math.random() * 0.5, 4);
@@ -736,7 +738,7 @@ export class NeonRushScene {
             this.settings.onFx?.(this.settings.playerSlots?.[this.players.indexOf(k)] ?? this.players.indexOf(k), 'win');
             if (k === this.player) {
               this.audio.play('finish');
-              this.flash(`META! MIEJSCE ${k.place}`);
+              this.flash(this.settings.language === 'en' ? `FINISH! PLACE ${k.place}` : `META! MIEJSCE ${k.place}`);
             }
             if (this.players.every((player) => player.finished)) {
               this.phase = 'finished';
@@ -746,8 +748,8 @@ export class NeonRushScene {
           }
         } else if (k.cfg.isPlayer && k === this.player && k.lap > 1) {
           this.audio.play('lap');
-          if (k.lap === this.settings.laps) this.flash('OSTATNIE OKRĄŻENIE!');
-          else this.flash(`OKRĄŻENIE ${k.lap}/${this.settings.laps}`);
+          if (k.lap === this.settings.laps) this.flash(this.settings.language === 'en' ? 'FINAL LAP!' : 'OSTATNIE OKRĄŻENIE!');
+          else this.flash(this.settings.language === 'en' ? `LAP ${k.lap}/${this.settings.laps}` : `OKRĄŻENIE ${k.lap}/${this.settings.laps}`);
         }
       }
       // utknięcie AI

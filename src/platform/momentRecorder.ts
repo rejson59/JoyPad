@@ -1,6 +1,7 @@
 import type { ReplayClip } from './replayRecorder';
 import type { GameId } from '../arcade/catalog';
 import type { PadFx } from '../net/protocol';
+import type { Language } from './i18n';
 
 export interface MomentEvent { kind: 'kill' | 'streak' | 'lead' | 'lap' | 'score' | 'pickup' | 'objective'; slot: number; title: string; detail: string; at?: number; weight?: number }
 export interface Moment extends MomentEvent { replay?: ReplayClip; id: number; at: number; weight: number; name: string; color: string }
@@ -17,7 +18,7 @@ export class MomentRecorder {
   private elapsed = 0;
   private serial = 0;
   private leader: number | null = null;
-  constructor(private game: GameId, private onEvent?: (moment: Moment, highlights: Moment[]) => void) {}
+  constructor(private game: GameId, private onEvent?: (moment: Moment, highlights: Moment[]) => void, private language: Language = 'pl') {}
 
   observe(hud: Snapshot) {
     if (!Number.isFinite(hud.timeLeft)) return;
@@ -27,8 +28,8 @@ export class MomentRecorder {
       this.players.set(p.slot, { ...p });
       const previous = this.scores.get(p.slot);
       if (previous !== undefined && p.score > previous && hud.countdown <= 0 && !hud.paused) {
-        if (this.game === 'race') this.record({ kind: 'lap', slot: p.slot, title: 'Kolejne okrążenie', detail: p.detail || `Postęp wyścigu: ${p.score}`, weight: 65 });
-        else if (!['tanks', 'orbit'].includes(this.game)) this.record({ kind: 'score', slot: p.slot, title: 'Punkt zwrotny', detail: `+${p.score - previous} · wynik ${p.score}`, weight: 45 });
+        if (this.game === 'race') this.record({ kind: 'lap', slot: p.slot, title: this.language === 'en' ? 'Another lap' : 'Kolejne okrążenie', detail: p.detail || (this.language === 'en' ? `Race progress: ${p.score}` : `Postęp wyścigu: ${p.score}`), weight: 65 });
+        else if (!['tanks', 'orbit'].includes(this.game)) this.record({ kind: 'score', slot: p.slot, title: this.language === 'en' ? 'Turning point' : 'Punkt zwrotny', detail: `+${p.score - previous} · ${this.language === 'en' ? 'score' : 'wynik'} ${p.score}`, weight: 45 });
       }
       this.scores.set(p.slot, p.score);
     }
@@ -37,7 +38,7 @@ export class MomentRecorder {
       const sorted = [...hud.players].sort((a, b) => b.score - a.score);
       const top = sorted[0];
       if (top && top.score > 0 && (!sorted[1] || top.score > sorted[1].score)) {
-        if (this.leader !== null && this.leader !== top.slot) this.record({ kind: 'lead', slot: top.slot, title: 'Zmiana lidera', detail: `${top.name} przejmuje prowadzenie z wynikiem ${top.score}.`, weight: 90 });
+        if (this.leader !== null && this.leader !== top.slot) this.record({ kind: 'lead', slot: top.slot, title: this.language === 'en' ? 'Lead change' : 'Zmiana lidera', detail: this.language === 'en' ? `${top.name} takes the lead with ${top.score} points.` : `${top.name} przejmuje prowadzenie z wynikiem ${top.score}.`, weight: 90 });
         this.leader = top.slot;
       }
     }
@@ -50,9 +51,9 @@ export class MomentRecorder {
       // A growing combo is one story, not three cards showing the same streak.
       if (old && count > 1) this.events = this.events.filter(e => !(e.slot === slot && (e.kind === 'kill' || e.kind === 'streak') && Math.abs(e.at - old.at) < .5));
       this.lastKill.set(slot, { at: this.elapsed, count });
-      this.record({ kind: count > 1 ? 'streak' : 'kill', slot, title: count > 1 ? `Seria ×${count}` : this.game === 'orbit' ? 'Cel zestrzelony' : 'Cel wyeliminowany', detail: count > 1 ? `${count} eliminacje w serii, z przerwami do 12 sekund.` : 'Skuteczna akcja potwierdzona przez silnik gry.', weight: count > 1 ? 100 + count : 55 });
+      this.record({ kind: count > 1 ? 'streak' : 'kill', slot, title: count > 1 ? (this.language === 'en' ? `Streak ×${count}` : `Seria ×${count}`) : this.game === 'orbit' ? (this.language === 'en' ? 'Target down' : 'Cel zestrzelony') : (this.language === 'en' ? 'Target eliminated' : 'Cel wyeliminowany'), detail: count > 1 ? (this.language === 'en' ? `${count} eliminations in a streak, with gaps up to 12 seconds.` : `${count} eliminacje w serii, z przerwami do 12 sekund.`) : (this.language === 'en' ? 'Successful action confirmed by the game engine.' : 'Skuteczna akcja potwierdzona przez silnik gry.'), weight: count > 1 ? 100 + count : 55 });
     }
-    if (fx === 'pickup') this.record({ kind: 'pickup', slot, title: 'Bonus przejęty', detail: 'Zebrany przedmiot daje nowe możliwości.', weight: 20 });
+    if (fx === 'pickup') this.record({ kind: 'pickup', slot, title: this.language === 'en' ? 'Power-up collected' : 'Bonus przejęty', detail: this.language === 'en' ? 'This pickup opens up new possibilities.' : 'Zebrany przedmiot daje nowe możliwości.', weight: 20 });
   }
 
   record(event: MomentEvent) {

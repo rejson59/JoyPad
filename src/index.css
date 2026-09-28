@@ -163,8 +163,6 @@ canvas {
 .arcade-race { background: radial-gradient(ellipse at 20% 0%,#3a1c0d,#090e12 63%); }
 .arcade-orbit { background: radial-gradient(ellipse at 80% 5%,#24200f,#070b0d 68%); }
 .arcade-snake { background: radial-gradient(ellipse at 15% 0%,#263319,#091211 65%); }
-.arcade-temple { background: radial-gradient(ellipse at 80% 5%,#3f2816,#101715 67%); }
-.arcade-voxel { background: radial-gradient(ellipse at 30% 0%,#3a2014,#0a0e0d 68%); }
 .arcade-league { background: radial-gradient(ellipse at 78% 0%,#352116,#090d10 68%); }
 .arcade-texture { background-image: linear-gradient(rgba(255,218,170,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,218,170,.025) 1px,transparent 1px); background-size: 50px 50px; }
 .arcade-hero { box-shadow: 0 26px 65px rgba(0,0,0,.42); }

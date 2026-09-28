@@ -2,6 +2,7 @@ import type { MomentEvent } from '../platform/momentRecorder';
 import type { PadFx, PadInput } from '../net/protocol';
 import { PLAYER_DEFS } from '../game/types';
 import { gameAudio } from '../game/audio';
+import type { Language } from '../platform/i18n';
 
 export const WIDTH = 1200;
 export const HEIGHT = 720;
@@ -71,6 +72,7 @@ export interface RoundConfig {
   displayMode?: DisplayMode;
   /** The 2D+ renderer can stay crisp without pushing small devices too hard. */
   quality?: RenderQuality;
+  language?: Language;
   /** Optional semantic highlights for JoyPad Moments. Timestamp is active round seconds. */
   onMoment?: (event: MomentEvent) => void;
   /** Called synchronously after rendering, while WebGL pixels are still valid. */
@@ -114,6 +116,7 @@ export abstract class CanvasRound implements GameRound {
   protected countdown = 3;
   paused = false;
   protected finished = false;
+  protected get isEnglish() { return this.config.language === 'en'; }
   private active = false;
   private raf = 0;
   private lastFrame = 0;

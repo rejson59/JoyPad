@@ -44,6 +44,13 @@ export async function listGalleryMoments(): Promise<GalleryMoment[]> {
   });
 }
 
+export function selectGalleryMoments(items: readonly GalleryMoment[], gameFilter: string, sortOrder: 'newest' | 'oldest'): GalleryMoment[] {
+  return items
+    .filter(item => gameFilter === 'all' || item.game === gameFilter)
+    .slice()
+    .sort((a, b) => sortOrder === 'newest' ? b.createdAt - a.createdAt : a.createdAt - b.createdAt);
+}
+
 export function galleryFileExtension(mime: string): 'mp4' | 'webm' { return mime.includes('mp4') ? 'mp4' : 'webm'; }
 
 export function galleryItemFromBlob(moment: Moment, game: GameId, blob: Blob, createdAt = Date.now()): GalleryMoment {

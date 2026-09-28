@@ -174,6 +174,7 @@ export abstract class WebGLRound3D implements GameRound {
   protected countdown = 3;
   protected paused = false;
   protected finished = false;
+  protected get isEnglish() { return this.config.language === 'en'; }
   protected readonly meshes: { cube: Mesh; sphere: Mesh; cylinder: Mesh };
   private active = false;
   private raf = 0;

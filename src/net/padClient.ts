@@ -10,6 +10,21 @@ import { buildPeerOptions, signalingFromLocation, type SignalingConfig } from '.
 import { WebrtcLink, type PadLink } from './links';
 import { ClientRelayLink, RELAY_BROKERS, RelayChannel, newRelaySessionId, relayTopicFor } from './relay';
 import { isGameId, type GameId } from '../arcade/catalog';
+import { loadLanguage, t as translateMessage } from '../platform/i18n';
+
+const message = (key: string, values: Record<string, string | number> = {}) => translateMessage(loadLanguage(), key, values);
+
+function localizeHostRejection(reason: string) {
+  const known: Record<string, string> = {
+    'Odłączono przez hosta.': 'connection.reject.disconnected',
+    'Niezgodna wersja gry — odśwież stronę na telefonie.': 'connection.reject.version',
+    'Ten link pada jest nieaktualny. Zeskanuj aktualny QR z ekranu.': 'connection.reject.token',
+    'Pokój jest zamknięty. Poproś administratora o otwarcie wejścia.': 'connection.reject.locked',
+    'Wszystkie 4 miejsca są zajęte.': 'connection.reject.full',
+  };
+  const key = known[reason];
+  return key ? message(key) : reason;
+}
 
 export type PadStatus = 'idle' | 'connecting' | 'connected' | 'rejected' | 'lost' | 'error';
 
@@ -205,7 +220,7 @@ export class PadClient {
       game: null, roster: [], adminSlot: null, options: undefined, slot: -1, nick: this.nick,
       phase: 'signal', attempt: 1, maxAttempts: this.maxAttempts, elapsed: 0,
       lastFailure: null, signaling: this.signaling.label, viaRelay: false,
-      progress: 'Łączę z serwerem sygnalizacji…',
+      progress: message('connection.progress.signal'),
     });
     this.attemptStartedAt = performance.now();
     this.startTicker();
@@ -219,29 +234,29 @@ export class PadClient {
     this.cleanupAttempt();
     this.attempt++;
     this.attemptStartedAt = performance.now();
-    const via = this.signaling.host ? ` (${this.signaling.label})` : '';
+    const server = this.signaling.host ? ` (${this.signaling.label})` : '';
     this.set({
       phase: 'signal',
       attempt: this.attempt,
       elapsed: 0,
       progress: this.attempt === 1
-        ? `Łączę z serwerem sygnalizacji${via}…`
-        : `Próba ${this.attempt}/${this.maxAttempts} — łączę z serwerem sygnalizacji${via}…`,
+        ? message('connection.progress.signalServer', { server })
+        : message('connection.progress.signalAttempt', { current: this.attempt, total: this.maxAttempts, server }),
     });
 
     let peer: Peer;
     try {
       peer = new Peer(buildPeerOptions(this.signaling));
-    } catch (err) {
+    } catch {
       this.p2pSettled = true;
-      this.settleIfBothDone(`Nie udało się uruchomić WebRTC: ${describeError(err)}`);
+      this.settleIfBothDone(message('connection.error.webrtcStart'));
       return;
     }
     this.peer = peer;
 
     peer.on('open', () => {
       if (this.peer !== peer || !this.active) return;
-      this.set({ phase: 'link', progress: 'Szukam komputera o tym kodzie…' });
+      this.set({ phase: 'link', progress: message('connection.progress.findComputer') });
       const raw: DataConnection = peer.connect(roomIdFromCode(this.code), {
         reliable: true, serialization: 'json', metadata: { nick: this.nick },
       });
@@ -253,7 +268,7 @@ export class PadClient {
         if (this.p2pLink === link && this.state.status !== 'connected') this.onP2pConnected(link);
       });
       this.armTimeout(LINK_TIMEOUT, () => this.failAttempt(
-        'Komputer nie odpowiedział w czasie negocjacji P2P.', false,
+        message('connection.error.linkTimeout'), false,
       ));
     });
 
@@ -267,7 +282,7 @@ export class PadClient {
     peer.on('error', (err) => { if (this.peer === peer) this.onPeerError(err); });
 
     this.armTimeout(Math.min(SIGNAL_TIMEOUT + (this.attempt - 1) * 5000, SIGNAL_TIMEOUT_MAX), () => this.failAttempt(
-      'Serwer sygnalizacji nie odpowiedział (rejestracja telefonu).', false,
+      message('connection.error.signalTimeout'), false,
     ));
   }
 
@@ -276,14 +291,14 @@ export class PadClient {
     if (this.state.status === 'connected') return;
     this.clearAttemptTimers();
     this.attemptStartedAt = performance.now();
-    this.set({ phase: 'handshake', progress: 'Witam się z komputerem…' });
+    this.set({ phase: 'handshake', progress: message('connection.progress.handshake') });
     this.sendHello(link);
     // Na niektórych przeglądarkach kanał może zgłosić 'open' zanim host
     // zainstaluje listener wiadomości. Powtarzaj hello do otrzymania welcome.
     this.helloTimer = window.setInterval(() => {
       if (this.active && this.state.status === 'connecting' && this.p2pLink === link && link.open) this.sendHello(link);
     }, 850);
-    this.armTimeout(WELCOME_TIMEOUT, () => this.failAttempt('Komputer nie przydzielił miejsca dla tego telefonu.', false));
+    this.armTimeout(WELCOME_TIMEOUT, () => this.failAttempt(message('connection.error.handshake'), false));
   }
 
   private sendHello(link: PadLink) {
@@ -346,7 +361,7 @@ export class PadClient {
         link.onMessage((raw) => this.onInbound(link, raw as HostMessage));
         link.onClosed(() => this.onLinkClosed(link));
         if (this.state.status === 'connecting') {
-          this.set({ phase: 'link', progress: 'Łączę przez awaryjny przekaźnik (Internet)…' });
+          this.set({ phase: 'link', progress: message('connection.progress.relay') });
         }
         this.sendHello(link);
         // MQTT QoS 0 nie gwarantuje dostarczenia pierwszej wiadomości,
@@ -476,7 +491,7 @@ export class PadClient {
         this.p2pSettled = true;
         this.resolveRelayWait('rejected');
         this.teardown();
-        this.set({ status: 'rejected', error: msg.reason, progress: '', phase: 'idle', lastFailure: 'rejected' });
+        this.set({ status: 'rejected', error: localizeHostRejection(msg.reason), progress: '', phase: 'idle', lastFailure: 'rejected' });
         break;
       case 'slot':
         this.set({ slot: msg.slot, name: msg.name, color: msg.color, darkColor: msg.darkColor });
@@ -564,8 +579,8 @@ export class PadClient {
       this.stopStreams();
       this.set({
         status: 'lost', hud: null,
-        error: 'Utracono połączenie z komputerem — próbuję połączyć ponownie…',
-        progress: 'Łączę ponownie…', phase: 'signal', attempt: 0, maxAttempts: RECONNECT_ATTEMPTS,
+        error: message('connection.error.lost'),
+        progress: message('connection.progress.reconnect'), phase: 'signal', attempt: 0, maxAttempts: RECONNECT_ATTEMPTS,
       });
       this.attempt = 0;
       this.maxAttempts = RECONNECT_ATTEMPTS;
@@ -583,7 +598,7 @@ export class PadClient {
     if (this.state.status === 'connecting' && this.active && link.kind === 'webrtc') {
       // Połączenie P2P przerwane podczas łączenia — liczymy nieudaną próbę
       // (wyścig przekaźnika trwa niezależnie).
-      this.failAttempt('Komputer zamknął połączenie.', false);
+      this.failAttempt(message('connection.error.hostClosed'), false);
     }
   }
 
@@ -603,7 +618,7 @@ export class PadClient {
       this.set({
         phase: 'signal',
         lastFailure: reason,
-        progress: `${reason} Ponawiam za ${Math.round(wait / 1000)} s (próba ${this.attempt + 1}/${this.maxAttempts})…`,
+        progress: message('connection.progress.retry', { reason, seconds: Math.round(wait / 1000), current: this.attempt + 1, total: this.maxAttempts }),
       });
       this.retryTimer = window.setTimeout(() => { if (this.active) this.beginAttempt(); }, wait);
       return;
@@ -625,14 +640,21 @@ export class PadClient {
     this.teardown();
     const seconds = Math.round((performance.now() - this.attemptStartedAt) / 1000);
     const detail = reason === 'peer-unavailable'
-      ? 'Nie znalazłem pokoju o tym kodzie — ani bezpośrednio, ani przez awaryjny przekaźnik. Najczęściej kod jest nieaktualny (zmienia się po odświeżeniu strony komputera). Zeskanuj QR jeszcze raz albo przepisz kod z ekranu komputera.'
-      : reason ?? 'Nie udało się połączyć bezpośrednio (WebRTC) ani przez awaryjny przekaźnik (Internet).';
+      ? message('connection.error.peerUnavailable')
+      : reason ?? message('connection.error.fallback');
+    const attemptWord = message(this.attempt === 1 ? 'connection.attempt.one' : 'connection.attempt.many');
+    const elapsed = seconds > 0 ? message('connection.error.elapsed', { seconds }) : '';
     this.set({
       status: 'error',
       phase: 'idle',
       lastFailure: reason,
       progress: '',
-      error: `Nie udało się połączyć z komputerem (${this.attempt} ${this.attempt === 1 ? 'próba' : 'próby'}${seconds > 0 ? `, ${seconds} s` : ''}).\n${detail}\n\nSprawdź kod na ekranie komputera i upewnij się, że oba urządzenia mają internet. Szczegóły możesz sprawdzić przyciskiem „Sprawdź połączenie”.`,
+      error: [
+        message('connection.error.summary', { attempts: this.attempt, attemptWord, elapsed }),
+        detail,
+        '',
+        message('connection.error.tip'),
+      ].join('\n'),
     });
   }
 
@@ -642,7 +664,7 @@ export class PadClient {
       case 'peer-unavailable':
         if (this.roomRetries < ROOM_RETRIES) {
           this.roomRetries++;
-          this.failAttempt('Komputer nie jest jeszcze widoczny na serwerze.', false);
+          this.failAttempt(message('connection.error.peerNotReady'), false);
         } else {
           this.p2pSettled = true;
           this.settleIfBothDone('peer-unavailable');
@@ -650,12 +672,12 @@ export class PadClient {
         return;
       case 'browser-incompatible':
         this.p2pSettled = true;
-        this.settleIfBothDone('Ta przeglądarka nie obsługuje WebRTC — łączenie bezpośrednie niedostępne (awaryjny przekaźnik jest sprawdzany równolegle).');
+        this.settleIfBothDone(message('connection.error.browserUnsupported'));
         return;
       case 'invalid-id':
       case 'invalid-key':
         this.p2pSettled = true;
-        this.settleIfBothDone(`Serwer sygnalizacji odrzucił połączenie (${type}).`);
+        this.settleIfBothDone(message('connection.error.signalingRejected', { type }));
         return;
       case 'network':
       case 'server-error':
@@ -670,17 +692,17 @@ export class PadClient {
           if (peer && !peer.destroyed && peer.disconnected) {
             try { peer.reconnect(); } catch { /* ignore */ }
           }
-          this.set({ lastFailure: 'Chwilowy brak łączności z serwerem sygnalizacji (gra działa dalej).' });
+          this.set({ lastFailure: message('connection.error.signalInterrupted') });
           return;
         }
         const label = type === 'ssl-unavailable'
-          ? 'Serwer sygnalizacji nie obsługuje szyfrowanego połączenia.'
-          : 'Brak łączności z serwerem sygnalizacji.';
+          ? message('connection.error.signalSsl')
+          : message('connection.error.signalOffline');
         this.failAttempt(label, false);
         return;
       }
       default:
-        this.failAttempt(`Błąd połączenia: ${type ?? describeError(err)}.`, false);
+        this.failAttempt(message('connection.error.generic', { type: type ?? describeError(err) }), false);
     }
   }
 

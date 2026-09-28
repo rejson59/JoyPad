@@ -1,7 +1,8 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, Stethoscope, XCircle } from 'lucide-react';
 import { runDiagnostics, type DiagStatus, type DiagStep } from '../net/diagnostics';
 import { signalingFromLocation } from '../net/signaling';
+import { useT } from '../platform/i18n';
 
 const ICONS: Record<DiagStatus, React.ReactNode> = {
   running: <Loader2 className="h-4 w-4 animate-spin text-amber-300" />,
@@ -23,6 +24,8 @@ const COLORS: Record<DiagStatus, string> = {
  * faktycznie działa. Działa i na komputerze, i na telefonie.
  */
 export function ConnectionCheck({ defaultOpen = false, compact = false }: { defaultOpen?: boolean; compact?: boolean }) {
+  const { language, t } = useT();
+  const previousLanguage = useRef(language);
   const [open, setOpen] = useState(defaultOpen);
   const [steps, setSteps] = useState<DiagStep[]>([]);
   const [running, setRunning] = useState(false);
@@ -37,15 +40,21 @@ export function ConnectionCheck({ defaultOpen = false, compact = false }: { defa
     });
   }, []);
 
-  const start = async () => {
+  const start = useCallback(async () => {
     setSteps([]);
     setRunning(true);
     try {
-      await runDiagnostics(signalingFromLocation(), onStep);
+      await runDiagnostics(signalingFromLocation(), onStep, language);
     } finally {
       setRunning(false);
     }
-  };
+  }, [language, onStep]);
+
+  useEffect(() => {
+    if (previousLanguage.current === language) return;
+    previousLanguage.current = language;
+    if (open && !running) void start();
+  }, [language, open, running, start]);
 
   const toggle = () => {
     const next = !open;
@@ -62,13 +71,9 @@ export function ConnectionCheck({ defaultOpen = false, compact = false }: { defa
 
   const relayOk = steps.some(s => s.id === 'relay' && s.status === 'ok');
   const summary = worst === null ? null
-    : worst === 'fail' ? (relayOk
-        ? 'Łączenie bezpośrednie jest zablokowane, ALE awaryjny przekaźnik łączy urządzenia — gra powinna działać.'
-        : 'Coś blokuje połączenie — szczegóły niżej.')
-      : worst === 'warn' ? (relayOk
-        ? 'Różne sieci (Wi‑Fi ↔ LTE) połączą się przez awaryjny przekaźnik — bez konfiguracji.'
-        : 'Połączenie zadziała, ale najlepiej w tej samej sieci Wi‑Fi.')
-        : 'Wszystkie ogniwa łączności działają.';
+    : worst === 'fail' ? t(relayOk ? 'diagnostics.summary.directBlocked' : 'diagnostics.summary.fail')
+      : worst === 'warn' ? t(relayOk ? 'diagnostics.summary.relayNetworks' : 'diagnostics.summary.warn')
+        : t('diagnostics.summary.ok');
 
   return (
     <div className="w-full">
@@ -76,13 +81,13 @@ export function ConnectionCheck({ defaultOpen = false, compact = false }: { defa
         onClick={toggle}
         className={`flex w-full items-center justify-between gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-left text-xs font-bold tracking-widest text-zinc-300 hover:bg-white/10 ${compact ? '' : 'mt-1'}`}
       >
-        <span className="flex items-center gap-2"><Stethoscope className="h-4 w-4 text-sky-400" /> SPRAWDŹ POŁĄCZENIE</span>
+        <span className="flex items-center gap-2"><Stethoscope className="h-4 w-4 text-sky-400" /> {t('diagnostics.title')}</span>
         <ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
         <div className="mt-2 rounded-xl border border-white/10 bg-black/40 p-3">
-          {steps.length === 0 && running && <div className="text-xs text-zinc-400">Sprawdzam…</div>}
+          {steps.length === 0 && running && <div className="text-xs text-zinc-400">{t('diagnostics.checking')}</div>}
           <div className="space-y-2">
             {steps.map(s => (
               <div key={s.id} className="flex gap-2">
@@ -107,7 +112,7 @@ export function ConnectionCheck({ defaultOpen = false, compact = false }: { defa
             disabled={running}
             className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/5 py-1.5 text-[11px] font-bold tracking-widest text-zinc-300 hover:bg-white/10 disabled:opacity-50"
           >
-            {running ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> SPRAWDZAM…</> : 'SPRAWDŹ JESZCZE RAZ'}
+            {running ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> {t('diagnostics.checkingAgain')}</> : t('diagnostics.retry')}
           </button>
         </div>
       )}

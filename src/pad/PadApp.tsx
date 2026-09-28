@@ -17,6 +17,7 @@ import { haptic, unlockHaptics } from './haptics';
 import { BootSplash } from '../components/BootSplash';
 import { JoyLabPad } from './JoyLabPad';
 import { SnakeController } from './SnakeController';
+import { useT } from '../platform/i18n';
 
 const LS_NICK = 'sf_pad_nick';
 const LS_CODE = 'sf_pad_code';
@@ -72,20 +73,22 @@ const FX_VIBE: Record<PadFx, number | number[]> = {
 
 /** Witamy kolejne telefony w pokoju — pierwszy ma swoją chwilę (Lab kontrolera). */
 function PadJoinSplash({ color, slot }: { color: string; slot: number }) {
+  const { t } = useT();
   return (
     <div className="pad-joined" aria-live="polite">
       <div className="join-splash-card" style={{ '--pc': color, padding: '26px 42px' } as React.CSSProperties}>
         <div className="joy-kicker flex items-center justify-center gap-2 text-white/60">
-          <Smartphone size={12} /> DOŁĄCZONO DO POKOJU
+          <Smartphone size={12} /> {t('pad.joined')}
         </div>
         <div className="join-splash-num mt-2" style={{ fontSize: 64 }}>{String(slot + 1).padStart(2, '0')}</div>
-        <div className="joy-heading mt-1 text-lg font-extrabold text-white">JESTEŚ GRACZEM</div>
+        <div className="joy-heading mt-1 text-lg font-extrabold text-white">{t('pad.youArePlayer')}</div>
       </div>
     </div>
   );
 }
 
 function PadContent() {
+  const { t } = useT();
   const viewport = useViewport();
   const prefs = useConsolePreferences();
   const [labSkipped, setLabSkipped] = useState(false);
@@ -411,13 +414,13 @@ function PadContent() {
       <div className="pad-joy flex min-h-[100dvh] flex-col items-center justify-center px-5 py-8 text-white" style={{ background: 'radial-gradient(ellipse at 50% 4%,rgba(145,213,255,.07),transparent 52%),#070a10' }}>
         <div className="fixed left-0 right-0 top-0 h-1 bg-gradient-to-r from-orange-600 via-amber-300 to-orange-700" />
         <div className="joy-enter mb-3 flex items-center gap-2 rounded-full border border-orange-400/30 bg-orange-500/10 px-4 py-1.5 text-[11px] font-bold tracking-[0.2em] text-orange-300">
-          <Smartphone className="h-3.5 w-3.5" /> TELEFON JAKO PAD
+          <Smartphone className="h-3.5 w-3.5" /> {t('pad.phoneController')}
         </div>
         <JoyPadLogo size={90} className="mx-auto mb-4" /><h1 className="joy-brand joy-enter joy-enter-1 text-center text-5xl font-extrabold tracking-[-.06em]">Joy<span className="text-orange-400">Pad.</span></h1>
-        <p className="joy-enter joy-enter-2 mt-2 max-w-sm text-center text-sm text-slate-400">Wspólny ekran. Twój telefon. Jeden system gry.</p>
+        <p className="joy-enter joy-enter-2 mt-2 max-w-sm text-center text-sm text-slate-400">{t('pad.sharedScreen')}</p>
 
         <div className="joy-room joy-enter joy-enter-3 mt-6 w-full max-w-sm rounded-2xl p-5">
-          <label htmlFor="pad-room-code" className="block text-[11px] font-bold tracking-widest text-zinc-400">KOD Z EKRANU KOMPUTERA</label>
+          <label htmlFor="pad-room-code" className="block text-[11px] font-bold tracking-widest text-zinc-400">{t('pad.roomCode')}</label>
           <input
             id="pad-room-code"
             value={code}
@@ -431,13 +434,13 @@ function PadContent() {
             maxLength={CODE_LENGTH}
             className="font-mono2 mt-1.5 w-full rounded-xl border border-white/15 bg-black/60 px-4 py-3 text-center text-3xl font-extrabold tracking-[0.4em] text-orange-300 outline-none focus:border-orange-400"
           />
-          <label htmlFor="pad-nickname" className="mt-4 block text-[11px] font-bold tracking-widest text-zinc-400">TWÓJ NICK</label>
+          <label htmlFor="pad-nickname" className="mt-4 block text-[11px] font-bold tracking-widest text-zinc-400">{t('pad.yourNick')}</label>
           <input
             id="pad-nickname"
             value={nick}
             onChange={e => setNick(e.target.value.slice(0, 14))}
             onKeyDown={e => { if (e.key === 'Enter') connect(); }}
-            placeholder="np. Alex"
+            placeholder={t('pad.nicknameExample')}
             maxLength={14}
             className="mt-1.5 w-full rounded-xl border border-white/15 bg-black/60 px-4 py-2.5 text-base font-bold text-white outline-none focus:border-orange-400"
           />
@@ -446,21 +449,21 @@ function PadContent() {
             disabled={busy || normalizeCode(code).length !== CODE_LENGTH}
             className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-400 to-amber-200 py-3.5 text-lg font-black tracking-widest text-[#070a10] shadow-[0_0_30px_rgba(249,115,22,0.24)] disabled:opacity-40 disabled:shadow-none"
           >
-            {busy ? <><Loader2 className="h-5 w-5 animate-spin" /> ŁĄCZENIE…</> : <><Wifi className="h-5 w-5" /> POŁĄCZ</>}
+            {busy ? <><Loader2 className="h-5 w-5 animate-spin" /> {t('pad.connecting')}</> : <><Wifi className="h-5 w-5" /> {t('pad.connect')}</>}
           </button>
 
           {busy && (
             <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100">
-              <div className="font-bold leading-snug">{st.status === 'lost' ? 'Łączymy ponownie. Sterowanie jest bezpiecznie zatrzymane.' : 'Łączymy Twój pad…'}</div>
+              <div className="font-bold leading-snug">{st.status === 'lost' ? t('pad.connectAgain') : t('pad.connectingPad')}</div>
               <div className="mt-1 text-[11px] text-amber-200/70">
-                {st.elapsed > 0 && <>Czas: {st.elapsed} s • </>}
-                <details><summary>Szczegóły połączenia</summary>{st.progress}<br />Serwer: {st.signaling}</details>
+                {st.elapsed > 0 && <>{t('pad.elapsed')} {st.elapsed} s • </>}
+                <details><summary>{t('pad.connectionDetails')}</summary>{st.progress}<br />{t('pad.server')} {st.signaling}</details>
               </div>
               <button
                 onClick={() => padClient.disconnect()}
                 className="mt-2 rounded-lg border border-white/20 bg-black/30 px-2.5 py-1 text-[11px] font-bold text-zinc-200 hover:bg-black/50"
               >
-                PRZERWIJ
+                {t('pad.stop')}
               </button>
             </div>
           )}
@@ -471,7 +474,7 @@ function PadContent() {
               <div className="min-w-0">
                 <div className="whitespace-pre-line leading-snug">{st.error}</div>
                 {st.lastFailure && st.lastFailure !== st.error && (
-                  <div className="mt-1 text-[10px] text-red-300/70">Szczegóły: {st.lastFailure}</div>
+                  <div className="mt-1 text-[10px] text-red-300/70">{t('pad.details')} {st.lastFailure}</div>
                 )}
               </div>
             </div>
@@ -479,15 +482,11 @@ function PadContent() {
         </div>
 
         <div className="mt-5 max-w-sm space-y-1.5 text-center text-[11px] leading-relaxed text-zinc-500">
-          <p>1. Otwórz <b className="text-zinc-300">JoyPad na komputerze lub TV</b>.</p>
-          <p>2. Zeskanuj kod QR z ekranu albo wpisz tutaj 5‑znakowy kod.</p>
-          <p>3. Pierwszy telefon zostanie administratorem i wybierze grę. Pozostałe dostaną własne pady.</p>
-          <p className="pt-1 text-zinc-400">
-            Łączenie idzie przez internet, a potem bezpośrednio między urządzeniami.
-            Gdy połączenie bezpośrednie nie przechodzi (np. telefon na LTE), gra automatycznie
-            używa awaryjnego przekaźnika — <b className="text-zinc-300">różne sieci (Wi‑Fi ↔ LTE) też działają</b>.
-          </p>
-          <a href="#" onClick={() => { location.hash = ''; }} className="mt-2 inline-block text-zinc-400 underline">← Otwórz JoyPad na tym urządzeniu</a>
+          <p>1. {t('pad.instructions.open')}</p>
+          <p>2. {t('pad.instructions.scan')}</p>
+          <p>3. {t('pad.instructions.admin')}</p>
+          <p className="pt-1 text-zinc-400">{t('pad.instructions.connection')}</p>
+          <a href="#" onClick={() => { location.hash = ''; }} className="mt-2 inline-block text-zinc-400 underline">{t('pad.openHere')}</a>
         </div>
 
         <div className="mt-4 w-full max-w-sm">
@@ -527,27 +526,28 @@ function PadContent() {
           <span className="max-w-[38vw] truncate text-sm font-bold tracking-wide" style={{ color }}>{st.nick || st.name}</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <button onClick={() => setShowSettings(v => !v)} className={`rounded-lg border p-1.5 ${showSettings ? 'border-amber-400/60 bg-amber-400/20 text-amber-200' : 'border-white/15 bg-white/5 text-zinc-300'}`} title="Ustawienia sterowania"><Settings className="h-4 w-4" /></button>
-          <button onClick={goFullscreen} className="rounded-lg border border-white/15 bg-white/5 p-1.5 text-zinc-300"><Maximize2 className="h-4 w-4" /></button>
+          <button onClick={() => setShowSettings(v => !v)} className={`rounded-lg border p-1.5 ${showSettings ? 'border-amber-400/60 bg-amber-400/20 text-amber-200' : 'border-white/15 bg-white/5 text-zinc-300'}`} title={t('pad.controlSettings')}><Settings className="h-4 w-4" /></button>
+          <button onClick={goFullscreen} title={t('pad.fullscreen')} className="rounded-lg border border-white/15 bg-white/5 p-1.5 text-zinc-300"><Maximize2 className="h-4 w-4" /></button>
           {st.slot === st.adminSlot && <>
-            <button onClick={() => { padClient.requestPause(); vibrate(15); }} title="Pauza" className="rounded-lg border border-white/15 bg-white/5 p-1.5 text-zinc-300"><Pause className="h-4 w-4" /></button>
-            <button onClick={() => { if (window.confirm('Zakończyć bitwę i wrócić do JoyPad?')) padClient.sendCommand('home'); }} title="Wróć do JoyPad" className="rounded-lg border border-orange-400/30 bg-orange-500/10 p-1.5 text-orange-200"><Gamepad2 className="h-4 w-4" /></button>
+            <button onClick={() => { padClient.requestPause(); vibrate(15); }} title={t('pad.pauseTitle')} className="rounded-lg border border-white/15 bg-white/5 p-1.5 text-zinc-300"><Pause className="h-4 w-4" /></button>
+            <button onClick={() => { if (window.confirm(t('controller.confirmExit'))) padClient.sendCommand('home'); }} title={t('pad.returnTitle')} className="rounded-lg border border-orange-400/30 bg-orange-500/10 p-1.5 text-orange-200"><Gamepad2 className="h-4 w-4" /></button>
           </>}
-          <button onClick={() => { padClient.disconnect(); }} title="Odłącz telefon" className="rounded-lg border border-red-500/40 bg-red-500/10 p-1.5 text-red-300"><LogOut className="h-4 w-4" /></button>
+          <button onClick={() => { padClient.disconnect(); }} title={t('pad.disconnectTitle')} className="rounded-lg border border-red-500/40 bg-red-500/10 p-1.5 text-red-300"><LogOut className="h-4 w-4" /></button>
         </div>
       </div>
 
       {/* tylko niezbędne komunikaty sterowania */}
       <div className="pointer-events-none absolute inset-x-0 top-1/2 z-10 flex -translate-y-1/2 justify-center px-6 text-center">
         {hud?.paused && (
-          <div className="rounded-xl bg-black/70 px-5 py-2 font-display text-3xl text-amber-300">PAUZA</div>
+          <div className="rounded-xl bg-black/70 px-5 py-2 font-display text-3xl text-amber-300">{t('pad.pauseOverlay')}</div>
         )}
         {hud && !hud.alive && hud.countdown <= 0 && !hud.paused && (
-          <div className="rounded-xl bg-black/70 px-5 py-2 font-display text-2xl text-red-300">{hud.respawn > 0 ? `ODRODZENIE ZA ${hud.respawn.toFixed(0)}s` : 'ZNISZCZONY'}</div>
+          <div className="rounded-xl bg-black/70 px-5 py-2 font-display text-2xl text-red-300">{hud.respawn > 0 ? t('pad.respawn', { seconds: hud.respawn.toFixed(0) }) : t('pad.destroyed')}</div>
         )}
         {noTank && (
           <div className="rounded-xl border border-amber-500/40 bg-black/70 px-5 py-3 text-xs text-amber-200">
-            Bitwa już trwa, a Twój slot <b style={{ color }}>{st.nick || st.name}</b> nie bierze w niej udziału.<br />Dołączysz automatycznie w następnej rundzie.
+            <b className="mb-1 block">{t('pad.noTankHeading')}</b>
+            {t('pad.noTankLead')} <b style={{ color }}>{st.nick || st.name}</b> {t('pad.noTankTail')}
           </div>
         )}
       </div>
@@ -586,11 +586,11 @@ function PadContent() {
               onTick={onStickTick}
               mode={steer}
               zoneWidthPct={twin ? 50 : 55}
-              caption={layout.mode === 'minimal' ? 'RUCH' : steer === 'direct' ? 'JAZDA • TAM, GDZIE PCHASZ' : 'JAZDA • GÓRA = PRZÓD'}
+              caption={layout.mode === 'minimal' ? t('pad.move') : steer === 'direct' ? t('pad.driveDirection') : t('pad.driveForward')}
             >
               {!tiltEnabled && layout.mode === 'twin' && (
                 <div className="flex overflow-hidden rounded-full border border-white/15 bg-black/60 text-[10px] font-black tracking-wider backdrop-blur-sm">
-                  {([['direct', 'KIERUNEK'], ['tank', 'CZOŁG']] as const).map(([m, label]) => (
+                  {([['direct', t('pad.directionMode')], ['tank', t('pad.tankMode')]] as const).map(([m, label]) => (
                     <button
                       key={m}
                       onClick={() => changeSteer(m)}
@@ -615,12 +615,12 @@ function PadContent() {
                 zoneWidthPct={50}
                 hotRing={layout.autoFire ? AUTO_FIRE_RING : undefined}
                 onHotChange={onAimHot}
-                label="WIEŻA"
-                caption={layout.autoFire ? 'CELOWANIE • DO KOŃCA = OGIEŃ' : 'CELOWANIE WIEŻĄ'}
+                label={t('pad.turret')}
+                caption={layout.autoFire ? t('pad.aimAutoFire') : t('pad.aimTurret')}
                 sideSlot={
                   <div className="flex flex-col items-center gap-1">
                     <button {...fireHandlers} disabled={showSettings || !hud?.alive || Boolean(hud?.paused)} className="pad-action flex items-center justify-center rounded-full border-4 border-red-900 font-display tracking-widest text-white active:scale-95" style={fireStyle(smallFire, '15px')}>
-                      OGIEŃ
+                      {t('pad.fire')}
                     </button>
                   </div>
                 }
@@ -631,9 +631,9 @@ function PadContent() {
                 style={{ paddingBottom: `max(${18 + prefs.controlHeight}px, env(safe-area-inset-bottom))` }}
               >
                 <button {...fireHandlers} disabled={showSettings || !hud?.alive || Boolean(hud?.paused)} className="pad-action flex items-center justify-center rounded-full border-4 border-red-900 font-display tracking-widest text-white active:scale-95" style={fireStyle(bigFire, '24px')}>
-                  OGIEŃ
+                  {t('pad.fire')}
                 </button>
-                {layout.mode !== 'minimal' && <span className="text-[10px] font-bold tracking-widest text-zinc-500">PRZYTRZYMAJ = SERIA</span>}
+                {layout.mode !== 'minimal' && <span className="text-[10px] font-bold tracking-widest text-zinc-500">{t('pad.holdBurst')}</span>}
               </div>
             )}
           </>
@@ -641,12 +641,12 @@ function PadContent() {
       })()}
 
       {/* ustawienia sterowania */}
-{showSettings && <Sheet title="Twój kontroler." onClose={() => setShowSettings(false)}>
+{showSettings && <Sheet title={t('controller.title')} onClose={() => setShowSettings(false)}>
             <NickEditor st={st} compact />
             <div className="mb-3 mt-3">
-              <div className="mb-1 text-[10px] font-bold tracking-widest text-zinc-500">UKŁAD PADA</div>
+              <div className="mb-1 text-[10px] font-bold tracking-widest text-zinc-500">{t('pad.layoutTitle')}</div>
               <div className="grid grid-cols-2 gap-1.5">
-                {([['minimal', 'MINIMALNY', '1 gałka + 1 akcja'], ['twin', 'TWIN-STICK', 'jazda + niezależne celowanie']] as const).map(([mode, label, desc]) => (
+                {([['minimal', t('pad.layoutMinimal'), t('pad.layoutMinimalDesc')], ['twin', t('pad.layoutTwin'), t('pad.layoutTwinDesc')]] as const).map(([mode, label, desc]) => (
                   <button key={mode} type="button" onClick={() => chooseLayout(mode)} className={`rounded-xl border px-2 py-2 text-left ${layout.mode === mode ? 'border-amber-400/70 bg-amber-400/15' : 'border-white/10 bg-black/30'}`}>
                     <div className="text-xs font-black" style={{ color: layout.mode === mode ? color : '#e4e4e7' }}>{label}</div>
                     <div className="text-[10px] leading-tight text-zinc-400">{desc}</div>
@@ -655,9 +655,9 @@ function PadContent() {
               </div>
             </div>
             <div className="mb-3">
-              <div className="mb-1 text-[10px] font-bold tracking-widest text-zinc-500">JAZDA</div>
+              <div className="mb-1 text-[10px] font-bold tracking-widest text-zinc-500">{t('pad.drive')}</div>
               <div className="grid grid-cols-2 gap-1.5">
-                {([['direct', 'KIERUNEK', 'Jedziesz tam, gdzie pchasz'], ['tank', 'CZOŁG', 'Góra = przód, boki = obrót']] as const).map(([m, label, desc]) => (
+                {([['direct', t('pad.directionMode'), t('pad.directionDesc')], ['tank', t('pad.tankMode'), t('pad.tankDesc')]] as const).map(([m, label, desc]) => (
                   <button key={m} onClick={() => changeSteer(m)}
                     className={`rounded-xl border px-2 py-2 text-left ${steer === m ? 'border-amber-400/70 bg-amber-400/15' : 'border-white/10 bg-black/30'}`}>
                     <div className="text-xs font-black" style={{ color: steer === m ? color : '#e4e4e7' }}>{label}</div>
@@ -667,8 +667,8 @@ function PadContent() {
               </div>
             </div>
             {([
-              ['autoFire', 'Auto-ogień przy celowaniu', 'W Twin-stick wychyl gałkę celowania do końca (czerwony pierścień), a czołg strzela sam.'],
-              ['swap', 'Zamień strony', 'Jazda po prawej, celowanie i ogień po lewej (dla leworęcznych).'],
+              ['autoFire', t('pad.autoFire'), t('pad.autoFireDesc')],
+              ['swap', t('pad.swapSides'), t('pad.swapDesc')],
             ] as const).map(([key, label, desc]) => {
               const on = layout[key];
               const disabled = key === 'autoFire' && !layout.aimStick;
@@ -699,7 +699,7 @@ function PadContent() {
 
       {landscapeHint && (
         <button onClick={goFullscreen} className="absolute left-1/2 top-[30%] z-30 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/15 px-3 py-2 text-[11px] font-bold text-amber-200">
-          <RotateCcw className="h-4 w-4" /> Obróć telefon poziomo i dotknij, by przejść na pełny ekran
+          <RotateCcw className="h-4 w-4" /> {t('pad.rotate')}
         </button>
       )}
     </div>

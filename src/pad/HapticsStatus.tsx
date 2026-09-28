@@ -1,24 +1,28 @@
 import { useConsolePreferences } from '../console/preferences';
 import { useState } from 'react';
 import { Check, Smartphone, VolumeX, Zap } from 'lucide-react';
+import { useT } from '../platform/i18n';
 import { getHapticStatus, haptic, unlockHaptics, type HapticStatus } from './haptics';
 
 const COPY: Record<HapticStatus, { title: string; detail: string }> = {
-  ready: { title: 'Wibracje gotowe', detail: 'API przyjęło test; tryb cichy, DND lub ustawienia systemu mogą nadal wyciszyć impuls.' },
-  'needs-tap': { title: 'Dotknij, aby odblokować', detail: 'Przeglądarka nie pokazuje okna zgody. Pierwsze tapnięcie odblokowuje API.' },
-  unsupported: { title: 'Brak wibracji', detail: 'Ta przeglądarka lub urządzenie nie obsługuje Vibration API (np. iOS Safari).' },
-  blocked: { title: 'Wibracje zablokowane', detail: 'System, tryb cichy albo brak aktywacji blokuje impuls. Spróbuj TEST ponownie po tapnięciu.' },
+  ready: { title: 'haptics.status.ready', detail: 'haptics.status.readyDetail' },
+  'needs-tap': { title: 'haptics.status.tap', detail: 'haptics.status.tapDetail' },
+  unsupported: { title: 'haptics.status.unsupported', detail: 'haptics.status.unsupportedDetail' },
+  blocked: { title: 'haptics.status.blocked', detail: 'haptics.status.blockedDetail' },
 };
 
 export function HapticsStatus({ compact = false }: { compact?: boolean }) {
   const prefs = useConsolePreferences();
+  const { t } = useT();
   const [status, setStatus] = useState<HapticStatus>(() => getHapticStatus());
   const test = () => {
     const next = unlockHaptics();
     setStatus(next);
     if (next === 'ready') window.setTimeout(() => haptic([35, 28, 35]), 55);
   };
-  const copy = prefs.haptics === 'off' ? { title: 'Wibracje wyłączone', detail: 'Wybierz subtelne lub wyraźne w ustawieniach, aby przetestować.' } : COPY[status];
+  const copy = prefs.haptics === 'off'
+    ? { title: t('haptics.status.off'), detail: t('haptics.status.offDetail') }
+    : { title: t(COPY[status].title), detail: t(COPY[status].detail) };
   const good = status === 'ready';
   const unsupported = status === 'unsupported';
   return (
@@ -31,7 +35,7 @@ export function HapticsStatus({ compact = false }: { compact?: boolean }) {
           <div className="text-xs font-black text-zinc-100">{copy.title}</div>
           {!compact && <div className="mt-1 text-[10px] leading-snug text-zinc-400">{copy.detail}</div>}
         </div>
-        {!unsupported && <button type="button" onClick={test} className="flex shrink-0 items-center gap-1 rounded-lg border border-white/15 bg-black/25 px-2 py-1.5 text-[9px] font-black tracking-wide text-zinc-200 active:scale-95"><Zap size={12} /> TEST</button>}
+        {!unsupported && <button type="button" onClick={test} className="flex shrink-0 items-center gap-1 rounded-lg border border-white/15 bg-black/25 px-2 py-1.5 text-[9px] font-black tracking-wide text-zinc-200 active:scale-95"><Zap size={12} /> {t('device.test')}</button>}
       </div>
     </div>
   );

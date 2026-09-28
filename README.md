@@ -2,22 +2,23 @@
 
 ## JoyPad OS 02 — duża aktualizacja platformy
 
-JoyPad v1.6: centrum pokoju, przekazywanie admina, profil lokalny z osiągnięciami, beta multiplayer **Wężowy Wir**, automatyczne **Moments Video** oraz lokalna **Moments Gallery** z zapisem tylko po decyzji użytkownika.
+JoyPad v1.7 rozwija wspólną konsolę: rozbudowana **Moments Gallery**, pełne interfejsy **PL/EN**, pewniejsze prowadzenie w **Neonowym Pędzie**, nowa stalowa arena 2D **Wężowego Wiru**, płynniejsze przejścia oraz lżejsze sterowanie na telefonach. W bibliotece pojawia się też wyłącznie zapowiedź **BlockCraft** — bez grywalnego silnika.
 
-- [Opis funkcji, ograniczenia i testy](docs/platform-update.md)
-- [Gotowe długie prompty dla czterech gier w budowie + import ZIP](docs/game-building-prompts.md)
+- [Opis funkcji, ograniczenia i testy platformy](docs/platform-update.md)
+- [Prompt dla Turbo League i bezpieczna integracja ZIP](docs/game-building-prompts.md)
 - [Moments Video — architektura, ograniczenia i testy nagrywania](docs/moments-video.md)
-- [JoyPad v1.6 — zakres, bezpieczeństwo i ograniczenia beta](docs/v1.6.md)
-- Test nowych mechanizmów: `npm run selftest:platform` oraz `npm run selftest:v16`.
+- [JoyPad v1.6 — archiwalny zakres i ograniczenia beta](docs/v1.6.md)
+- Testy platformy: `npm run selftest:platform`, `npm run selftest:replay` oraz `npm run selftest:v16`.
 
 
-**JoyPad OS** — matowa konsola do wspólnej gry na jednym ekranie. Telefon jest bezprzewodowym kontrolerem, komputer lub TV wyświetla grę. **Cztery gry są dostępne: Stalowy Front, Neonowy Pęd, Orbitalna Fala i Wężowy Wir (beta).** Pozostałe światy są w przebudowie i widoczne wyłącznie w sekcji „Wkrótce”.
+**JoyPad OS** — matowa konsola do wspólnej gry na jednym ekranie. Telefon jest bezprzewodowym kontrolerem, komputer lub TV wyświetla grę. **Cztery gry są dostępne: Stalowy Front, Neonowy Pęd, Orbitalna Fala i Wężowy Wir (beta).** Turbo League i BlockCraft pozostają zapowiedziami; BlockCraft to teaser, niegrywalna gra.
 
 ## System konsoli
 
 Paleta **Obsidian / Ember**: neutralne obsydianowe tła, jasna biel i pomarańczowy akcent głównych akcji. Wspólne kolory są zdefiniowane w `src/console/palette.css`; barwy graczy oraz sygnały ostrzeżeń pozostają niezależne od motywu.
 
-- **Biblioteka:** panoramiczne tło wybranej gry, trzy duże okładki, status pokoju i cztery miejsca graczy. QR jest widoczny przed dołączeniem pierwszego pada; później dostępny przez „Dodaj gracza”.
+- **Biblioteka:** panoramiczne tło wybranej gry, czytelne karty czterech grywalnych tytułów, status pokoju i cztery miejsca graczy. QR jest widoczny przed dołączeniem pierwszego pada; później dostępny przez „Dodaj gracza”.
+- **Języki:** polski i angielski obejmują bibliotekę, ustawienia, pokoje, kontrolery, powiadomienia, Moments i HUD-y wszystkich rund.
 - **Nawigacja:** lewo/prawo wybiera grę, góra przenosi do paska systemowego, dół do okładek. Enter/OK zatwierdza. Tab obsługuje wszystkie przyciski. Fizyczny gamepad ze standardowym mapowaniem obsługuje **bibliotekę** (krzyżak/gałka, A/B), nie zastępuje sterowania w silnikach gier.
 - **Ruch:** krótkie przejścia View Transitions API ze wspólną okładką i tytułem tam, gdzie przeglądarka je obsługuje; 280 ms fallback przyciemnienia na pozostałych urządzeniach. Bez dodatkowego opóźniania wejść. Opcjonalne ograniczenie ruchu respektuje także preferencje systemu.
 - **Panele:** wspólne wysuwane ustawienia, pomoc, połączenia, ustawienia pada i pauza. Natywny dialog utrzymuje fokus, obsługuje Escape i przywraca fokus po zamknięciu. Powrót z panelu pauzy wymaga potwierdzenia zakończenia rundy.
@@ -33,19 +34,18 @@ To nadal aplikacja przeglądarkowa: Vibration API nie steruje amplitudą ani ada
 
 | Gra | Co się dzieje | Telefon |
 | --- | --- | --- |
-| **Stalowy Front** | Bitwy czołgów: 3 mapy, 2 tryby, rykoszety, niszczalne osłony, bonusy i boty | Joystick jazdy, joystick wieży, ogień |
+| **Stalowy Front** | Bitwy czołgów: 3 mapy, rykoszety, niszczalne osłony, bonusy i boty | Joystick jazdy, joystick wieży, ogień |
 | **Neonowy Pęd** | Właściwy wyścig Three.js z miasta ZIP-a: mokry proceduralny tor, drifty, rampy, turbo, itemy i split-screen | Kierunek jazdy + akcja bonusu |
 | **Orbitalna Fala** | Kooperacyjna obrona przed kolejnymi falami dronów i asteroid; życia, osłony, naprawy i szybki ogień | Lot, celowanie i strzał |
-| **Wężowy Wir — beta** | Rywalizacja w neonowej arenie: rosnące węże, złote impulsy, kolizje, sprint i boty | Cztery strzałki + sprint |
-| **Skarbiec Świątyni — wkrótce** | Wspólna wyprawa przez labirynt: relikty, skrzynie, pułapki, strażnicy i portal ucieczki | Ruch + sprint / otwieranie |
-| **Voxel Frontier — wkrótce** | Lekki świat klocków: zbieranie surowców, rozbudowa bazy, dzień/noc i nocne crawlery | Ruch + akcja |
-| **Turbo League — wkrótce** | Car soccer w perspektywie 3D-lite: auta, boost, odbicia i bramki | Kierunek + turbo |
+| **Wężowy Wir — beta** | Taktyczna arena 2D w stalowo-bursztynowej oprawie: impulsy, przeszkody, boty i sprint | Cztery kierunki + sprint |
+| **BlockCraft — zapowiedź** | Planowany sandbox z budowaniem z bloków. To zapowiedź, niegrywalna gra nie jest jeszcze dostępna. | Szczegóły wkrótce |
+| **Turbo League — zapowiedź** | Planowany car soccer w perspektywie 3D-lite: auta, boost, odbicia i bramki | Szczegóły wkrótce |
 
 Dostępne gry mają własny ekran wejściowy, zasady, ustawienia rundy, HUD i ekran wyników. Gry arcade obsługują 1–4 graczy (plus opcjonalne boty tam, gdzie pasują). W ustawieniach można przełączyć **wspólną arenę / split-screen**, a profil sprzętu ogranicza DPR canvasa do płynnego trybu, balansu albo ostrego trybu jakości. Stalowy Front zachowuje swoje zasady 2–4 uczestników; możesz dobrać boty, gdy grasz sam.
 
 ### Grafika i wydajność
 
-Nowe światy korzystają z proceduralnych tekstur, świateł, cieni i geometrii perspektywicznej. `Neonowy Pęd` ma silnik Three.js w `src/arcade/neon/` (miasto, tor, karty, AI, itemy, cząsteczki i audio) — ładowany leniwie dopiero po wybraniu gry, podobnie jak pozostałe silniki. Pozostałe światy 3D próbują najpierw surowego WebGL2 z małymi low-poly siatkami; jeśli urządzenie nie ma WebGL2, automatycznie przechodzą na sprawdzony renderer Canvas2D. Canvas i WebGL mają stałą scenę, adaptacyjny limit DPR, zatrzymują się po ukryciu karty i ładują silniki dopiero po wybraniu gry. Dzięki temu oprawa wygląda bogaciej, ale nie tworzy niepotrzebnego obciążenia urządzenia.
+`Neonowy Pęd` korzysta z Three.js, a `Orbitalna Fala` próbuje lekkiego WebGL2 z fallbackiem Canvas2D. Silniki ładują się leniwie po wybraniu gry; `Wężowy Wir` i `Stalowy Front` używają lekkiego Canvas 2D. Profile jakości ograniczają DPR i koszt efektów, animacja joysticka jest aktualizowana najwyżej raz na klatkę, a renderowanie zatrzymuje się po ukryciu karty. Wężowy Wir dodatkowo interpoluje ruch segmentów, zachowując niskie obciążenie.
 
 ## Jak zagrać
 
@@ -99,7 +99,7 @@ npm ci
 npm run dev                 # lokalnie http://localhost:5173/  |  pad: /#pad
 npm run build               # TypeScript + produkcyjny build
 npm run lint                # ESLint (flat config) + reguły react-hooks
-npm run selftest:arcade     # role admina, protokół, 6 silników + macierze WebGL2
+npm run selftest:arcade     # role admina, protokół, aktywne silniki + macierze WebGL2
 npm run selftest:console    # preferencje, dostępna biblioteka, kolory, priorytety haptyki
 npm run selftest:relay      # warstwa MQTT / awaryjnego przekaźnika
 npm run selftest:v16        # turniej/2v2, galeria i kontrakt profilu v1.6
@@ -107,7 +107,7 @@ npm run selftest:v16        # turniej/2v2, galeria i kontrakt profilu v1.6
 
 Każdy push/PR przechodzi workflow `ci.yml` (lint, typecheck, selftesty, build), a `deploy.yml` powtarza selftesty (także `selftest:console`) przed publikacją na GitHub Pages. Fonty (Black Ops One, Chakra Petch, JetBrains Mono) są self-hostowane przez Fontsource — bez żądań do Google Fonts. Okładki gier to WebP, a `public/manifest.webmanifest` z ikonami pozwala „dodać JoyPad do ekranu głównego" na telefonie.
 
-Stack: Vite, React, TypeScript, Canvas 2D, Three.js, raw WebGL2, PeerJS, QRCode. `src/arcade/catalog.ts` to biblioteka; `src/arcade/neon/` zawiera silnik Neonowy Pęd i adapter JoyPad, a `src/arcade/games/` sześć niezależnych silników z jedną warstwą obsługi klawiatury/pada (`src/arcade/runtime.ts`). `src/arcade/webgl/runtime3d.ts` dostarcza mały renderer WebGL2, macierze kamery, low-poly geometrię i profile DPR, a `Arcade3D.ts`, `League3D.ts` oraz `Voxel3D.ts` są używane przed fallbackiem Canvas2D. Wersje Canvas (`Voxel.ts`, `League.ts`) nadal służą jako bezpieczny fallback. `src/App.tsx` i `src/game/` zawierają Stalowy Front. `src/net/` zachowuje istniejący transport, poszerzony o stan sesji i komendy admina. Używany jest hash `#pad`, więc GitHub Pages nie potrzebuje routingu serwerowego.
+Stack: Vite, React, TypeScript, Canvas 2D, Three.js, raw WebGL2, PeerJS, QRCode. `src/arcade/catalog.ts` to biblioteka; `src/arcade/neon/` zawiera silnik Neonowy Pęd i adapter JoyPad, a `src/arcade/games/` cztery aktywne silniki z jedną warstwą obsługi klawiatury/pada (`src/arcade/runtime.ts`). `src/arcade/webgl/runtime3d.ts` dostarcza mały renderer WebGL2, macierze kamery, low-poly geometrię i profile DPR, a `League3D.ts` jest używany przed fallbackiem Canvas2D. Wersja Canvas (`League.ts`) pozostaje bezpiecznym fallbackiem. `src/App.tsx` i `src/game/` zawierają Stalowy Front. `src/net/` zachowuje istniejący transport, poszerzony o stan sesji i komendy admina. Używany jest hash `#pad`, więc GitHub Pages nie potrzebuje routingu serwerowego.
 
 ### Warstwa JoyPad OS
 

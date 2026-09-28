@@ -176,23 +176,36 @@ export class OrbitRound extends CanvasRound {
     this.bonuses = this.bonuses.filter(b => (b.life -= dt) > 0);
     this.sparks = this.sparks.filter(s => { s.life -= dt; s.x += s.vx * dt; s.y += s.vy * dt; return s.life > 0; });
 
-    if (this.ships.every(s => s.lives <= 0)) { this.finish({ title: 'Flota została pokonana', subtitle: `Dotarliście do fali ${this.wave} z ${this.targetWaves}. Spróbujcie jeszcze raz!`, winnerSlot: null, players: this.ranking() }); return; }
+    if (this.ships.every(s => s.lives <= 0)) { this.finish({ title: this.isEnglish ? 'Squadron defeated' : 'Flota została pokonana', subtitle: this.isEnglish ? `You reached wave ${this.wave} of ${this.targetWaves}. Try again!` : `Dotarliście do fali ${this.wave} z ${this.targetWaves}. Spróbujcie jeszcze raz!`, winnerSlot: null, players: this.ranking() }); return; }
     if (!this.drones.length) {
       if (this.nextWave < 0) this.nextWave = this.clock + 2.5;
       if (this.clock >= this.nextWave) {
-        if (this.wave >= this.targetWaves) this.finish({ title: 'Galaktyka ocalona!', subtitle: `Odpieraliście wszystkie ${this.targetWaves} fale. Świetna robota, załogo!`, winnerSlot: null, allWon: true, players: this.ranking() });
+        if (this.wave >= this.targetWaves) this.finish({ title: this.isEnglish ? 'Galaxy saved!' : 'Galaktyka ocalona!', subtitle: this.isEnglish ? `You fought off all ${this.targetWaves} waves. Great work, crew!` : `Odpieraliście wszystkie ${this.targetWaves} fale. Świetna robota, załogo!`, winnerSlot: null, allWon: true, players: this.ranking() });
         else { this.wave++; this.nextWave = -1; this.spawnWave(); }
       }
     }
   }
 
   private ranking(): RoundPlayer[] {
-    return [...this.ships].sort((a, b) => b.score - a.score).map(s => ({ slot: s.slot, name: s.name, color: s.color, score: s.score, detail: s.lives <= 0 ? 'Eliminacja' : `${s.lives} życia · ${s.hp} HP`, value: s.hp, maxValue: 100, isBot: false }));
+    return [...this.ships].sort((a, b) => b.score - a.score).map(s => ({
+      slot: s.slot, name: s.name, color: s.color, score: s.score,
+      detail: s.lives <= 0 ? (this.isEnglish ? 'Eliminated' : 'Eliminacja') : this.isEnglish ? `${s.lives} lives · ${s.hp} HP` : `${s.lives} życia · ${s.hp} HP`,
+      value: s.hp, maxValue: 100, isBot: false,
+    }));
   }
   protected hud(): RoundHud {
-    return { timeLeft: this.timeLeft, countdown: this.countdown, paused: this.paused, objective: `Przetrwaj ${this.targetWaves} fal`, status: this.drones.length ? `FALA ${this.wave}/${this.targetWaves} · ${this.drones.length} CELÓW` : 'CZYSTO! NADCIĄGA KOLEJNA FALA', players: this.ranking() };
+    return {
+      timeLeft: this.timeLeft, countdown: this.countdown, paused: this.paused,
+      objective: this.isEnglish ? `Survive ${this.targetWaves} waves` : `Przetrwaj ${this.targetWaves} fal`,
+      status: this.drones.length
+        ? this.isEnglish ? `WAVE ${this.wave}/${this.targetWaves} · ${this.drones.length} TARGETS` : `FALA ${this.wave}/${this.targetWaves} · ${this.drones.length} CELÓW`
+        : this.isEnglish ? 'CLEAR! NEXT WAVE INCOMING' : 'CZYSTO! NADCIĄGA KOLEJNA FALA',
+      players: this.ranking(),
+    };
   }
-  protected timeout(): void { this.finish({ title: 'Czas minął', subtitle: `Dotarliście do fali ${this.wave}. Wróćcie po więcej!`, winnerSlot: null, players: this.ranking() }); }
+  protected timeout(): void {
+    this.finish({ title: this.isEnglish ? 'Time is up' : 'Czas minął', subtitle: this.isEnglish ? `You reached wave ${this.wave}. Come back for more!` : `Dotarliście do fali ${this.wave}. Wróćcie po więcej!`, winnerSlot: null, players: this.ranking() });
+  }
 
   protected render(ctx: CanvasRenderingContext2D): void {
     ctx.fillStyle = '#060a1a'; ctx.fillRect(0, 0, WIDTH, HEIGHT);
@@ -238,6 +251,6 @@ export class OrbitRound extends CanvasRound {
       ctx.fillStyle = ship.color; ctx.textAlign = 'center'; ctx.font = 'bold 11px sans-serif'; ctx.fillText(ship.name.toUpperCase(), ship.x, ship.y - 28);
     }
     for (const s of this.sparks) { ctx.globalAlpha = clamp(s.life / s.max, 0, 1); ctx.fillStyle = s.color; ctx.fillRect(s.x, s.y, 3, 3); } ctx.globalAlpha = 1;
-    ctx.fillStyle = '#6e8aaa'; ctx.textAlign = 'left'; ctx.font = 'bold 12px monospace'; ctx.fillText('ORBITALNA FALA  /  SEKTOR 07', 25, HEIGHT - 22);
+    ctx.fillStyle = '#6e8aaa'; ctx.textAlign = 'left'; ctx.font = 'bold 12px monospace'; ctx.fillText(this.isEnglish ? 'ORBITAL WAVE  /  SECTOR 07' : 'ORBITALNA FALA  /  SEKTOR 07', 25, HEIGHT - 22);
   }
 }

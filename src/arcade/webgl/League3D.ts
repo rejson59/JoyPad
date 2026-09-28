@@ -83,7 +83,8 @@ export class League3DRound extends WebGLRound3D {
         gameAudio.explosion();
         if (this.goals[team] >= this.targetGoals) {
           const winner = this.cars.find(car => car.team === team && !car.isBot) ?? this.cars.find(car => car.team === team);
-          this.finish({ title: `Drużyna ${team === 0 ? 'pomarańczowa' : 'niebieska'} wygrywa`, subtitle: `Wynik ${this.goals[0]} : ${this.goals[1]} · mecz zakończony przed czasem.`, winnerSlot: winner?.slot ?? null, players: this.ranking() });
+          const teamName = team === 0 ? (this.isEnglish ? 'orange' : 'pomarańczowa') : (this.isEnglish ? 'blue' : 'niebieska');
+          this.finish({ title: this.isEnglish ? `The ${teamName} team wins` : `Drużyna ${teamName} wygrywa`, subtitle: this.isEnglish ? `Score ${this.goals[0]} : ${this.goals[1]} · match ends early.` : `Wynik ${this.goals[0]} : ${this.goals[1]} · mecz zakończony przed czasem.`, winnerSlot: winner?.slot ?? null, players: this.ranking() });
         } else this.resetKick();
       } else { this.ball.x = clamp(this.ball.x, -FIELD_X, FIELD_X); this.ball.vx *= -.82; }
     }
@@ -92,18 +93,19 @@ export class League3DRound extends WebGLRound3D {
   private ranking(): RoundPlayer[] {
     return [...this.cars].sort((a, b) => b.score - a.score).map(car => ({
       slot: car.slot, name: car.name, color: car.color, score: car.score,
-      detail: `Drużyna ${car.team === 0 ? 'pomarańczowa' : 'niebieska'} · boost ${Math.round(car.boost)}%`, value: car.boost, maxValue: 100, isBot: car.isBot,
+      detail: this.isEnglish ? `${car.team === 0 ? 'Orange' : 'Blue'} team · boost ${Math.round(car.boost)}%` : `Drużyna ${car.team === 0 ? 'pomarańczowa' : 'niebieska'} · boost ${Math.round(car.boost)}%`, value: car.boost, maxValue: 100, isBot: car.isBot,
     }));
   }
 
   protected hud(): RoundHud {
-    return { timeLeft: this.timeLeft, countdown: this.countdown, paused: this.paused, objective: `${this.goals[0]} — ${this.goals[1]} / ${this.targetGoals} goli`, status: `POMARAŃCZOWI ${this.goals[0]} · NIEBIESCY ${this.goals[1]}`, players: this.ranking() };
+    return { timeLeft: this.timeLeft, countdown: this.countdown, paused: this.paused, objective: this.isEnglish ? `${this.goals[0]} — ${this.goals[1]} / ${this.targetGoals} goals` : `${this.goals[0]} — ${this.goals[1]} / ${this.targetGoals} goli`, status: this.isEnglish ? `ORANGE ${this.goals[0]} · BLUE ${this.goals[1]}` : `POMARAŃCZOWI ${this.goals[0]} · NIEBIESCY ${this.goals[1]}`, players: this.ranking() };
   }
 
   protected timeout(): void {
     const team: 0 | 1 = this.goals[0] === this.goals[1] ? 0 : this.goals[0] > this.goals[1] ? 0 : 1;
     const winner = this.cars.find(car => car.team === team && !car.isBot) ?? this.cars.find(car => car.team === team);
-    this.finish({ title: this.goals[0] === this.goals[1] ? 'Remis na stadionie' : `Wygrywa drużyna ${team === 0 ? 'pomarańczowa' : 'niebieska'}`, subtitle: `Koniec czasu · ${this.goals[0]} : ${this.goals[1]}.`, winnerSlot: winner?.slot ?? null, players: this.ranking() });
+    const teamName = team === 0 ? (this.isEnglish ? 'orange' : 'pomarańczowa') : (this.isEnglish ? 'blue' : 'niebieska');
+    this.finish({ title: this.goals[0] === this.goals[1] ? (this.isEnglish ? 'Stadium draw' : 'Remis na stadionie') : this.isEnglish ? `${teamName[0].toUpperCase()}${teamName.slice(1)} team wins` : `Wygrywa drużyna ${teamName}`, subtitle: this.isEnglish ? `Time is up · ${this.goals[0]} : ${this.goals[1]}.` : `Koniec czasu · ${this.goals[0]} : ${this.goals[1]}.`, winnerSlot: winner?.slot ?? null, players: this.ranking() });
   }
 
   protected camera(viewIndex: number): { eye: Vec3; target: Vec3 } {

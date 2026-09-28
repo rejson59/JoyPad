@@ -1,5 +1,6 @@
 import { AdditiveBlending, BackSide, BoxGeometry, BufferAttribute, BufferGeometry, Color, ConeGeometry, CylinderGeometry, DoubleSide, Euler, Float32BufferAttribute, Group, InstancedMesh, LineSegments, Matrix4, Mesh, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, Object3D, PMREMGenerator, PlaneGeometry, Quaternion, Scene, ShaderMaterial, SphereGeometry, Texture, TorusGeometry, Vector3, WebGLRenderer } from 'three';
 import { Track, ROAD_HALF } from './track';
+import type { Language } from '../../platform/i18n';
 import { GeoBuilder } from './geo';
 import {
   facadeTexture,
@@ -126,6 +127,7 @@ export function makeEnvironment(renderer: WebGLRenderer) {
 
 export interface CityOptions {
   rain: boolean;
+  language?: Language;
 }
 
 export class City {
@@ -135,6 +137,7 @@ export class City {
   startLights: MeshBasicMaterial[] = [];
   private barrierTex: Texture;
   private billboardMats: MeshBasicMaterial[] = [];
+  private language: Language;
   private beaconMat: MeshBasicMaterial;
   private padMats: MeshBasicMaterial[] = [];
   private traffic!: InstancedMesh;
@@ -149,6 +152,7 @@ export class City {
   private tmpP = new Vector3();
 
   constructor(private track: Track, opts: CityOptions) {
+    this.language = opts.language ?? 'pl';
     this.skyMat = makeSkyMaterial();
     this.sky = new Mesh(new SphereGeometry(3000, 48, 24), this.skyMat);
     this.sky.renderOrder = -10;
@@ -426,7 +430,7 @@ export class City {
     beam.position.set(0, 12, 0);
     beam.castShadow = true;
     g.add(beam);
-    const screenMat = new MeshBasicMaterial({ map: screenTexture(), toneMapped: false, color: new Color(0.85, 0.85, 0.85) });
+    const screenMat = new MeshBasicMaterial({ map: screenTexture(this.language), toneMapped: false, color: new Color(0.85, 0.85, 0.85) });
     for (const s of [1, -1]) {
       const screen = new Mesh(new PlaneGeometry(16, 2.4), screenMat);
       screen.position.set(0, 12, s * 0.62);
@@ -636,7 +640,7 @@ export class City {
     const chosen = bbCandidates.filter((_, i) => i % 3 === 0).slice(0, 34);
     chosen.forEach((c, i) => {
       const mat = new MeshBasicMaterial({
-        map: billboardTexture(i),
+        map: billboardTexture(i, this.language),
         transparent: true,
         toneMapped: false,
         color: new Color(0.9, 0.9, 0.9),

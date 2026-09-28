@@ -1,6 +1,7 @@
 import { JoyPadLogo } from './JoyPadLogo';
 import { useEffect, useRef, useState } from 'react';
 import { useReducedMotion } from '../lib/useReducedMotion';
+import { useLanguage } from '../platform/i18n';
 
 /**
  * Ekran ładowania JoyPad: logo z poświatą, przesuwający się skanlinia i „WITAJ”.
@@ -8,6 +9,7 @@ import { useReducedMotion } from '../lib/useReducedMotion';
  */
 export function BootSplash({ onDone }: { onDone: () => void }) {
   const reduced = useReducedMotion();
+  const language = useLanguage();
   const done = useRef(onDone);
   useEffect(() => { done.current = onDone; }, [onDone]);
   const [leaving, setLeaving] = useState(false);
@@ -34,7 +36,7 @@ export function BootSplash({ onDone }: { onDone: () => void }) {
         </div>
         {!reduced && <div className="pointer-events-none absolute inset-x-0 top-0 h-10 bg-gradient-to-b from-transparent via-orange-300/25 to-transparent" style={{ animation: 'boot-scan 1.1s .15s ease-in-out both' }} />}
       </div>
-      <div className="joy-kicker mt-3 text-[11px] tracking-[.5em] text-orange-200/80" style={{ animation: reduced ? undefined : 'boot-hello .7s .55s ease-out both' }}>TWÓJ WIECZÓR. TWOJA GRA.</div>
+      <div className="joy-kicker mt-3 text-[11px] tracking-[.5em] text-orange-200/80" style={{ animation: reduced ? undefined : 'boot-hello .7s .55s ease-out both' }}>{language === 'en' ? 'YOUR EVENING. YOUR GAME.' : 'TWÓJ WIECZÓR. TWOJA GRA.'}</div>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import "./platform/platform.css";
 import "./fonts";
 import JoypadApp from "./arcade/JoypadApp";
 import { isPadRoute } from "./net/protocol";
+import { loadLanguage } from "./platform/i18n";
 
 // Tryb pada (telefon) ładowany leniwie — komputer nie musi go pobierać.
 const PadApp = lazy(() => import("./pad/PadApp"));
@@ -22,7 +23,7 @@ function Root() {
   }, []);
   if (pad) {
     return (
-      <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-[#0a0a0b] text-zinc-400">Ładowanie pada…</div>}>
+      <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-[#0a0a0b] text-zinc-400">{loadLanguage() === 'en' ? 'Loading controller…' : 'Ładowanie pada…'}</div>}>
         <PadApp />
       </Suspense>
     );

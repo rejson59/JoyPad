@@ -128,9 +128,10 @@ class Particles {
 // ---------------- Game ----------------
 export class Game {
   [key: string]: any;
-  constructor(container: HTMLElement, opts: { lowFx?: boolean } = {}) {
+  constructor(container: HTMLElement, opts: { lowFx?: boolean; language?: 'pl' | 'en' } = {}) {
     this.container = container;
     this.lowFx = !!opts.lowFx;
+    this.language = opts.language ?? 'pl';
     this.padMode = false;
     this.humanShips = [];
     this.readCtrl = null;
@@ -424,7 +425,7 @@ export class Game {
       s.vel.set(0, 0, team === 0 ? -40 : 40);
     }
     this.camera.position.set(0, 10, 790);
-    this.msg('BITWA ROZPOCZĘTA — ZNISZCZ WSZYSTKIE WROGIE JEDNOSTKI', 4);
+    this.msg(this.language === 'en' ? 'BATTLE STARTED — DESTROY ALL ENEMY UNITS' : 'BITWA ROZPOCZĘTA — ZNISZCZ WSZYSTKIE WROGIE JEDNOSTKI', 4);
     this.ended = false; this.cursor.x = this.cursor.y = 0;
     this.lockPointer();
   }
@@ -458,7 +459,7 @@ export class Game {
       s.vel.set(0, 0, 40);
     }
     this.camera.position.set(0, 10, 790);
-    this.msg('BITWA ROZPOCZĘTA — ZNISZCZ WSZYSTKIE WROGIE JEDNOSTKI', 4);
+    this.msg(this.language === 'en' ? 'BATTLE STARTED — DESTROY ALL ENEMY UNITS' : 'BITWA ROZPOCZĘTA — ZNISZCZ WSZYSTKIE WROGIE JEDNOSTKI', 4);
     this.ended = false; this.cursor.x = this.cursor.y = 0;
     if (!this.padMode) this.lockPointer();
   }
@@ -561,8 +562,8 @@ export class Game {
     const locked = s.isPlayer ? (s.lockT >= 1 ? s.target : null) : s.target;
     this.missiles.push({ mesh, vel: s.vel.clone().add(_v2.set(0, -8, 0).applyQuaternion(q)), speed: 60, life: 7, owner: s, target: locked, arm: 0.3 });
     this.sfx.missile(s.isPlayer ? 1 : this.volAt(mesh.position));
-    if (s.isPlayer) this.msg(locked ? 'RAKIETA ODPALONA — NAMIERZONO CEL' : 'RAKIETA ODPALONA (bez namierzania)', 1.5);
-    if (locked && locked.isPlayer) this.msg('⚠ RAKIETA NA OGONIE!', 2);
+    if (s.isPlayer) this.msg(this.language === 'en' ? (locked ? 'MISSILE LAUNCHED — TARGET LOCKED' : 'MISSILE LAUNCHED (NO LOCK)') : (locked ? 'RAKIETA ODPALONA — NAMIERZONO CEL' : 'RAKIETA ODPALONA (bez namierzania)'), 1.5);
+    if (locked && locked.isPlayer) this.msg(this.language === 'en' ? '⚠ INCOMING MISSILE!' : '⚠ RAKIETA NA OGONIE!', 2);
   }
   volAt(p) { const d = this.camera.position.distanceTo(p); return clamp(1 - d / 900, 0, 1); }
 
@@ -587,12 +588,12 @@ export class Game {
     s.dead = true; s.hp = 0;
     this.explode(s.group.position.clone(), s.scale * 1.6, s.vel, s);
     this.scene.remove(s.group);
-    if (from) { from.kills++; if (from.isPlayer) { this.stats.kills++; this.msg(`ZNISZCZONO: ${s.name}`, 2.5); } }
+    if (from) { from.kills++; if (from.isPlayer) { this.stats.kills++; this.msg(this.language === 'en' ? `DESTROYED: ${s.name}` : `ZNISZCZONO: ${s.name}`, 2.5); } }
     if (s.humanSlot >= 0 && this.onShipFx) this.onShipFx(s.humanSlot, 'dead');
     if (from && from.humanSlot >= 0 && this.onShipFx) this.onShipFx(from.humanSlot, 'kill');
     this.killfeed.unshift({ t: 6, a: from ? from.name : 'Kolizja', at: from ? from.team : 2, b: s.name, bt: s.team });
     if (this.killfeed.length > 6) this.killfeed.pop();
-    if (s.isPlayer) this.msg('TWÓJ STATEK ZOSTAŁ ZNISZCZONY', 4);
+    if (s.isPlayer) this.msg(this.language === 'en' ? 'YOUR SHIP WAS DESTROYED' : 'TWÓJ STATEK ZOSTAŁ ZNISZCZONY', 4);
   }
   explode(pos, sc, vel, ship = null) {
     const v0 = vel ? vel.clone().multiplyScalar(0.3) : V();
@@ -698,7 +699,7 @@ export class Game {
     // guns
     p.heat = Math.max(0, p.heat - dt * 0.33); if (p.overheat && p.heat < 0.35) p.overheat = false;
     if ((this.mouseDown || k.Space) && p.fireCd <= 0 && !p.overheat) {
-      p.fireCd = p.rate; p.heat += p.cls === 'heavy' ? 0.05 : 0.035; if (p.heat >= 1) { p.overheat = true; this.msg('PRZEGRZANIE DZIAŁ!', 1.5); }
+      p.fireCd = p.rate; p.heat += p.cls === 'heavy' ? 0.05 : 0.035; if (p.heat >= 1) { p.overheat = true; this.msg(this.language === 'en' ? 'WEAPONS OVERHEATED!' : 'PRZEGRZANIE DZIAŁ!', 1.5); }
       let aim = null;
       if (p.target && !p.target.dead) {
         const lead = this.leadPoint(p, p.target);
@@ -1014,7 +1015,7 @@ export class Game {
           if (p.lockT > 0) {
             c.strokeStyle = p.lockT >= 1 ? 'rgba(255,40,40,1)' : 'rgba(255,200,60,0.9)';
             c.beginPath(); c.arc(pr.x, pr.y, q * 1.6, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p.lockT); c.stroke();
-            if (p.lockT >= 1) { c.fillStyle = 'rgba(255,40,40,1)'; c.fillText('NAMIERZONO', pr.x, pr.y - q * 1.6 - 8); }
+            if (p.lockT >= 1) { c.fillStyle = 'rgba(255,40,40,1)'; c.fillText(this.language === 'en' ? 'LOCKED' : 'NAMIERZONO', pr.x, pr.y - q * 1.6 - 8); }
           }
         }
       } else {
@@ -1038,7 +1039,7 @@ export class Game {
     if (alive) for (const m of this.missiles) if (m.target === p) {
       const pr = this.project(m.mesh.position); let dx = pr.x - W / 2, dy = pr.y - H / 2; if (pr.behind) { dx = -dx; dy = -dy; }
       const a = Math.atan2(dy, dx), r = Math.min(W, H) * 0.3;
-      c.fillStyle = `rgba(255,${(Math.sin(this.time * 20) > 0 ? 200 : 50)},0,0.95)`; c.fillText('▲ RAKIETA', W / 2 + Math.cos(a) * r, H / 2 + Math.sin(a) * r);
+      c.fillStyle = `rgba(255,${(Math.sin(this.time * 20) > 0 ? 200 : 50)},0,0.95)`; c.fillText(this.language === 'en' ? '▲ MISSILE' : '▲ RAKIETA', W / 2 + Math.cos(a) * r, H / 2 + Math.sin(a) * r);
     }
     if (!alive) return;
     // crosshair (ship forward)

@@ -1,16 +1,15 @@
 import { LoaderCircle, WifiOff } from 'lucide-react';
+import { useT } from '../platform/i18n';
 
-/**
- * QR w ramce skanera: narożne wsporniki + dryfująca linia skanowania.
- * Zastępuje surowy biały kwadrat w centrum połączeń i panelu pada.
- */
+/** QR w ramce skanera: narożne wsporniki + dryfująca linia skanowania. */
 export function QrFrame({
-  src, size = 176, loadingLabel = 'Generuję kod…',
+  src, size = 176, loadingLabel,
 }: {
   src: string;
   size?: number;
   loadingLabel?: string;
 }) {
+  const { t } = useT();
   return (
     <div className="qr-frame" style={{ width: size + 20, height: size + 20 }}>
       <span className="qr-corner qr-corner-tl" />
@@ -21,18 +20,18 @@ export function QrFrame({
         <div className="qr-scanline pointer-events-none absolute inset-x-2 top-0 h-10 bg-gradient-to-b from-transparent via-orange-300/25 to-transparent" />
       </div>
       {src ? (
-        <img src={src} alt="Kod QR do podłączenia telefonu" width={size} height={size} className="relative z-10 block" style={{ width: size, height: size }} />
+        <img src={src} alt={t('qr.alt')} width={size} height={size} className="relative z-10 block" style={{ width: size, height: size }} />
       ) : (
         <div className="relative z-10 flex items-center justify-center" style={{ width: size, height: size }}>
           <LoaderCircle className="h-8 w-8 animate-spin text-orange-500" />
-          <span className="sr-only">{loadingLabel}</span>
+          <span className="sr-only">{loadingLabel ?? t('qr.loading')}</span>
         </div>
       )}
     </div>
   );
 }
 
-/** Wariant dla błędu (np. brak sygnalizacji) — te same wsporniki, wygaszone. */
+/** Faded frame for a QR that cannot be generated because there is no server. */
 export function QrFrameError({ size = 176 }: { size?: number }) {
   return (
     <div className="qr-frame opacity-70" style={{ width: size + 20, height: size + 20 }}>

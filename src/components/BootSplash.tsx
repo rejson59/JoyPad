@@ -5,17 +5,6 @@ import { useReducedMotion } from '../lib/useReducedMotion';
 import { useLanguage } from '../platform/i18n';
 
 type BootSplashVariant = 'console' | 'controller';
-const BOOT_SESSION_KEY = 'joypad.boot.1.7';
-
-function hasSeenBoot(): boolean {
-  try { return sessionStorage.getItem(BOOT_SESSION_KEY) === '1'; }
-  catch { return false; }
-}
-
-function markBootSeen(): void {
-  try { sessionStorage.setItem(BOOT_SESSION_KEY, '1'); }
-  catch { /* session storage is optional */ }
-}
 
 function isCompactScreen(variant: BootSplashVariant): boolean {
   if (variant === 'controller') return true;
@@ -32,13 +21,11 @@ export function BootSplash({ onDone, variant = 'console' }: { onDone: () => void
   const skip = useRef<() => void>(() => {});
   useEffect(() => { done.current = onDone; }, [onDone]);
   const [leaving, setLeaving] = useState(false);
-  const [complete, setComplete] = useState(() => hasSeenBoot() || reduced);
+  const [complete, setComplete] = useState(reduced);
   const en = language === 'en';
 
   useEffect(() => {
-    const seen = hasSeenBoot();
-    if (seen || reduced) {
-      if (reduced && !seen) markBootSeen();
+    if (reduced) {
       setComplete(true);
       done.current();
       return;
@@ -52,7 +39,6 @@ export function BootSplash({ onDone, variant = 'console' }: { onDone: () => void
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('joypad-dialog-command', onRemoteCommand);
-      markBootSeen();
       setLeaving(true);
       fadeTimer = window.setTimeout(() => {
         setComplete(true);

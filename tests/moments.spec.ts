@@ -10,6 +10,22 @@ async function harness(page: Page) {
   });
 }
 
+async function skipStartupReleaseNotes(page: Page) {
+  await page.addInitScript(() => localStorage.setItem('joypad.whats-new-version', '1.7.0'));
+}
+
+test('localized release notes appear at startup once and can be dismissed', async ({ page }) => {
+  await page.goto('/');
+  const whatsNew = page.getByRole('dialog', { name: 'Co nowego?' });
+  await expect(whatsNew).toBeVisible({ timeout: 15_000 });
+  await expect(whatsNew).toContainText('Moments Gallery');
+  await whatsNew.getByRole('button', { name: 'Do biblioteki' }).click();
+  await expect(whatsNew).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator('.os-library')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('dialog', { name: 'Co nowego?' })).toHaveCount(0);
+});
+
 test('real independent clips decode, seek, play, slow down, download and release URLs', async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
   await harness(page);
@@ -51,6 +67,7 @@ for (const [id, split] of [['tanks', false], ['race', false], ['race', true], ['
 }
 
 test('recording preference persists and can be switched off on TV', async ({ page }) => {
+  await skipStartupReleaseNotes(page);
   await page.goto('/');
   await page.getByRole('button', { name: 'Ustawienia systemu' }).click();
   const control = page.getByRole('switch', { name: 'Nagrywanie Moments', exact: true });
@@ -81,7 +98,10 @@ test('actual TV flow: captured pickup → results → video → rematch → new 
     expect(patched).not.toBe(code);
     await route.fulfill({ response, body: patched });
   });
-  await page.addInitScript(() => { localStorage.setItem('joypad.evening.game', JSON.stringify('tanks')); });
+  await page.addInitScript(() => {
+    localStorage.setItem('joypad.evening.game', JSON.stringify('tanks'));
+    localStorage.setItem('joypad.whats-new-version', '1.7.0');
+  });
   await page.goto('/');
   await page.locator('[data-game-index="0"]').click();
   await page.getByRole('button', { name: 'Rozpocznij pojedynek', exact: false }).click();

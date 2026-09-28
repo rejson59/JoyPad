@@ -406,7 +406,7 @@ function PadContent() {
   }, [st.screen, st.game]);
 
   /* ---------- Connection screen ---------- */
-  if (!booted) return <BootSplash onDone={() => setBooted(true)} />;
+  if (!booted) return <BootSplash variant="controller" onDone={() => setBooted(true)} />;
   if (st.status !== 'connected') {
     // „lost” też jest zajęte — klient sam próbuje wrócić do gry.
     const busy = st.status === 'connecting' || st.status === 'lost';

@@ -129,7 +129,7 @@ export default function JoypadApp() {
         return;
       }
       if (showLab) { if (command === 'back' || command === 'home' || command === 'select') closeLab(); return; }
-      if (showConnections || overlay.current || document.querySelector('dialog[open]')) { window.dispatchEvent(new CustomEvent('joypad-dialog-command', { detail: command })); return; }
+      if (showConnections || overlay.current || document.querySelector('dialog[open], .boot-splash')) { window.dispatchEvent(new CustomEvent('joypad-dialog-command', { detail: command })); return; }
       if (selectedRef.current) { setRemote({ id: ++serial.current, command }); return; }
       const active = document.activeElement as HTMLElement | null;
       if (command === 'up') { document.querySelector<HTMLElement>('.os-topbar nav button')?.focus(); return; }
@@ -156,7 +156,7 @@ export default function JoypadApp() {
       choose(index); open(GAMES[index].id);
     };
     const key = (e: KeyboardEvent) => {
-      if (selectedRef.current || (e.target instanceof Element && e.target.closest('input,select,textarea,dialog'))) return;
+      if (selectedRef.current || document.querySelector('.boot-splash') || (e.target instanceof Element && e.target.closest('input,select,textarea,dialog'))) return;
       if ((e.code === 'Enter' || e.code === 'Space') && e.target instanceof Element && e.target.closest('button,a')) return;
       const map: Record<string, RemoteCommand> = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', Enter: 'select', Escape: 'back' };
       if (map[e.code]) { e.preventDefault(); handle(map[e.code]); }
@@ -186,7 +186,7 @@ export default function JoypadApp() {
 
   let content: ReactNode;
   if (!booted) {
-    content = <BootSplash onDone={() => setBooted(true)} />;
+    content = <BootSplash variant="console" onDone={() => setBooted(true)} />;
   } else if (selected) {
     content = (
       <GameErrorBoundary key={selected} onExit={exit} language={language}>

@@ -94,7 +94,7 @@ export class RaceRound extends CanvasRound {
       if (car.checkpoint === 1) {
         car.lap++;
         if (car.lap >= this.laps) {
-          this.finish({ title: `${car.name} na mecie!`, subtitle: `Pierwszy kończy ${this.laps} okrążenia. Podium należy do ${car.name}!`, winnerSlot: car.isBot ? null : car.slot, players: this.ranking() });
+          this.finish({ title: this.isEnglish ? `${car.name} takes the finish!` : `${car.name} na mecie!`, subtitle: this.isEnglish ? `First to finish ${this.laps} laps. The podium belongs to ${car.name}!` : `Pierwszy kończy ${this.laps} okrążenia. Podium należy do ${car.name}!`, winnerSlot: car.isBot ? null : car.slot, players: this.ranking() });
         }
       }
     }
@@ -121,17 +121,22 @@ export class RaceRound extends CanvasRound {
 
   private ranking(): RoundPlayer[] {
     return [...this.cars].sort((a, b) => (b.lap * CHECKPOINTS + b.checkpoint) - (a.lap * CHECKPOINTS + a.checkpoint) || b.nearest - a.nearest).map(c => ({
-      slot: c.slot, name: c.name, color: c.color, score: Math.min(this.laps, c.lap), detail: `${Math.min(this.laps, c.lap + 1)}/${this.laps} okr.`, value: Math.round(c.energy), maxValue: 100, isBot: c.isBot,
+      slot: c.slot, name: c.name, color: c.color, score: Math.min(this.laps, c.lap), detail: this.isEnglish ? `${Math.min(this.laps, c.lap + 1)}/${this.laps} laps` : `${Math.min(this.laps, c.lap + 1)}/${this.laps} okr.`, value: Math.round(c.energy), maxValue: 100, isBot: c.isBot,
     }));
   }
 
   protected hud(): RoundHud {
-    return { timeLeft: this.timeLeft, countdown: this.countdown, paused: this.paused, objective: `${this.laps} okrążenia · pierwszy na mecie`, status: 'WYŚCIG / NOCNE MIASTO', players: this.ranking() };
+    return {
+      timeLeft: this.timeLeft, countdown: this.countdown, paused: this.paused,
+      objective: this.isEnglish ? `${this.laps} laps · first to finish` : `${this.laps} okrążenia · pierwszy na mecie`,
+      status: this.isEnglish ? 'RACE / NIGHT CITY' : 'WYŚCIG / NOCNE MIASTO',
+      players: this.ranking(),
+    };
   }
 
   protected timeout(): void {
     const rank = this.ranking();
-    this.finish({ title: 'Koniec wyścigu', subtitle: `Najdalej dojechał ${rank[0].name}.`, winnerSlot: rank[0].isBot ? null : rank[0].slot, players: rank });
+    this.finish({ title: this.isEnglish ? 'Race complete' : 'Koniec wyścigu', subtitle: this.isEnglish ? `${rank[0].name} made it the farthest.` : `Najdalej dojechał ${rank[0].name}.`, winnerSlot: rank[0].isBot ? null : rank[0].slot, players: rank });
   }
 
   protected render(ctx: CanvasRenderingContext2D): void {
@@ -185,6 +190,6 @@ export class RaceRound extends CanvasRound {
     // ambient city lamp lights
     for (const x of [66, 1130]) for (const y of [72, 642]) { glow(ctx, x, y, 67, 'rgba(143,78,250,.16)'); ctx.fillStyle = '#9b61db'; ctx.fillRect(x - 4, y - 4, 8, 8); }
     ctx.fillStyle = '#80a0bd'; ctx.font = 'bold 12px monospace'; ctx.textAlign = 'left';
-    ctx.fillText('NEONOWY PĘD  /  NOCNE MIASTO', 25, HEIGHT - 21);
+    ctx.fillText(this.isEnglish ? 'NEON RUSH  /  NIGHT CITY' : 'NEONOWY PĘD  /  NOCNE MIASTO', 25, HEIGHT - 21);
   }
 }

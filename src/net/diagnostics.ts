@@ -10,6 +10,7 @@
  */
 import { STUN_SERVERS, hasConfiguredTurn, hasTurnOverride, turnServers, signalingFromLocation, type SignalingConfig } from './signaling';
 import { RELAY_BROKERS, RelayChannel, relayTopicFor } from './relay';
+import { loadLanguage, t as translate, type Language } from '../platform/i18n';
 
 export type DiagStatus = 'running' | 'ok' | 'warn' | 'fail';
 
@@ -31,11 +32,11 @@ function randomTag(): string {
   return `${arr[0].toString(36)}${arr[1].toString(36)}`;
 }
 
-function probeWebSocket(url: string, timeoutMs: number): Promise<number> {
+function probeWebSocket(url: string, timeoutMs: number, language: Language): Promise<number> {
   return new Promise((resolve, reject) => {
     const started = performance.now();
     let socket: WebSocket;
-    try { socket = new WebSocket(url); } catch { reject(new Error('nie można otworzyć gniazda')); return; }
+    try { socket = new WebSocket(url); } catch { reject(new Error(translate(language, 'diagnostics.probe.socket'))); return; }
 
     const finish = (fn: () => void) => {
       clearTimeout(timer);
@@ -43,9 +44,9 @@ function probeWebSocket(url: string, timeoutMs: number): Promise<number> {
       try { socket.close(); } catch { /* ignore */ }
       fn();
     };
-    const timer = setTimeout(() => finish(() => reject(new Error('brak odpowiedzi'))), timeoutMs);
+    const timer = setTimeout(() => finish(() => reject(new Error(translate(language, 'diagnostics.probe.timeout')))), timeoutMs);
     socket.onopen = () => finish(() => resolve(performance.now() - started));
-    socket.onerror = () => finish(() => reject(new Error('serwer odrzucił gniazdo WebSocket')));
+    socket.onerror = () => finish(() => reject(new Error(translate(language, 'diagnostics.probe.rejected'))));
   });
 }
 
@@ -183,27 +184,27 @@ const ms = (v: number) => `${Math.round(v)} ms`;
 export async function runDiagnostics(
   signaling: SignalingConfig = signalingFromLocation(),
   report: DiagReporter = () => {},
+  language: Language = loadLanguage(),
 ): Promise<DiagStep[]> {
+  const tr = (key: string, values: Record<string, string | number> = {}) => translate(language, key, values);
   const results: DiagStep[] = [];
   const push = (s: DiagStep) => { results.push(s); report(s); return s; };
 
   /* 1. Przeglądarka / kontekst ------------------------------------------------ */
-  report({ id: 'webrtc', label: 'Przeglądarka', status: 'running', detail: 'sprawdzam…' });
+  report({ id: 'webrtc', label: tr('diagnostics.browser'), status: 'running', detail: tr('diagnostics.browser.running') });
   if (typeof RTCPeerConnection === 'undefined') {
     push({
-      id: 'webrtc', label: 'Przeglądarka', status: 'fail',
-      detail: 'Ta przeglądarka nie obsługuje WebRTC.',
-      hint: 'Otwórz grę w Chrome, Safari, Edge albo Firefoksie (aktualna wersja).',
+      id: 'webrtc', label: tr('diagnostics.browser'), status: 'fail',
+      detail: tr('diagnostics.browser.unsupported'),
+      hint: tr('diagnostics.browser.hint'),
     });
     return results;
   }
   const secureContext = typeof window !== 'undefined' && window.isSecureContext;
   push({
-    id: 'webrtc', label: 'Przeglądarka',
+    id: 'webrtc', label: tr('diagnostics.browser'),
     status: secureContext ? 'ok' : 'warn',
-    detail: secureContext
-      ? 'WebRTC działa, strona otwarta bezpiecznie (HTTPS).'
-      : 'WebRTC działa, ale strona nie jest otwarta po HTTPS — niektóre funkcje przeglądarki mogą być zablokowane.',
+    detail: secureContext ? tr('diagnostics.browser.secure') : tr('diagnostics.browser.insecure'),
   });
 
   const host = signaling.host ?? '0.peerjs.com';
@@ -213,7 +214,7 @@ export async function runDiagnostics(
   const secure = signaling.secure ?? true;
 
   /* 2a. Serwer sygnalizacji — HTTP -------------------------------------------- */
-  report({ id: 'api', label: 'Serwer sygnalizacji (HTTP)', status: 'running', detail: 'pytam o identyfikator…' });
+  report({ id: 'api', label: tr('diagnostics.signalHttp'), status: 'running', detail: tr('diagnostics.signalHttp.running') });
   let apiOk = false;
   try {
     const controller = new AbortController();
@@ -225,44 +226,44 @@ export async function runDiagnostics(
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const took = performance.now() - started;
     push({
-      id: 'api', label: 'Serwer sygnalizacji (HTTP)',
+      id: 'api', label: tr('diagnostics.signalHttp'),
       status: took < 3000 ? 'ok' : 'warn',
-      detail: `Odpowiedź w ${ms(took)} — ${host}:${port}.`,
-      hint: took < 3000 ? undefined : 'Serwer odpowiada wolno — łączenie może potrwać dłużej, gra ponawia próby automatycznie.',
+      detail: tr('diagnostics.signalHttp.response', { time: ms(took), host, port }),
+      hint: took < 3000 ? undefined : tr('diagnostics.signalHttp.slow'),
     });
   } catch (err) {
     push({
-      id: 'api', label: 'Serwer sygnalizacji (HTTP)', status: 'fail',
-      detail: `Brak odpowiedzi z ${host}:${port} (${err instanceof Error ? err.message : 'błąd'}).`,
-      hint: 'Serwer sygnalizacji jest niedostępny — bez niego komputer i telefon nie mogą się odnaleźć. Spróbuj za chwilę, sprawdź filtr sieci/VPN albo wskaż własny serwer parametrem ?srv=host:port.',
+      id: 'api', label: tr('diagnostics.signalHttp'), status: 'fail',
+      detail: tr('diagnostics.signalHttp.fail', { host, port, error: err instanceof Error ? err.message : String(err) }),
+      hint: tr('diagnostics.signalHttp.hint'),
     });
   }
 
   /* 2b. Serwer sygnalizacji — WebSocket --------------------------------------- */
-  report({ id: 'ws', label: 'Serwer sygnalizacji (WebSocket)', status: 'running', detail: 'otwieram gniazdo…' });
+  report({ id: 'ws', label: tr('diagnostics.signalWs'), status: 'running', detail: tr('diagnostics.signalWs.running') });
   if (!apiOk) {
-    push({ id: 'ws', label: 'Serwer sygnalizacji (WebSocket)', status: 'fail', detail: 'Pominięte — serwer nie odpowiada po HTTP.' });
+    push({ id: 'ws', label: tr('diagnostics.signalWs'), status: 'fail', detail: tr('diagnostics.signalWs.skipped') });
   } else {
     try {
       const url = `${secure ? 'wss' : 'ws'}://${host}:${port}${path}peerjs?key=${key}&id=sf-diag-${randomTag()}&token=diag&version=diag`;
-      const took = await probeWebSocket(url, 12_000);
+      const took = await probeWebSocket(url, 12_000, language);
       push({
-        id: 'ws', label: 'Serwer sygnalizacji (WebSocket)',
+        id: 'ws', label: tr('diagnostics.signalWs'),
         status: took < 4000 ? 'ok' : 'warn',
-        detail: `Gniazdo otwarte w ${ms(took)}.`,
-        hint: took < 4000 ? undefined : 'To ten etap zwykle odpowiada za komunikat o przekroczonym czasie. Gra czeka teraz na serwer do 25 s i ponawia próbę.',
+        detail: tr('diagnostics.signalWs.open', { time: ms(took) }),
+        hint: took < 4000 ? undefined : tr('diagnostics.signalWs.slow'),
       });
     } catch (err) {
       push({
-        id: 'ws', label: 'Serwer sygnalizacji (WebSocket)', status: 'fail',
-        detail: `Nie udało się otworzyć gniazda (${err instanceof Error ? err.message : 'błąd'}).`,
-        hint: 'Sieć blokuje połączenia WebSocket do serwera sygnalizacji (typowo: firmowe Wi‑Fi, VPN, filtr rodzicielski). Spróbuj innej sieci — np. hotspotu z telefonu.',
+        id: 'ws', label: tr('diagnostics.signalWs'), status: 'fail',
+        detail: tr('diagnostics.signalWs.fail', { error: err instanceof Error ? err.message : String(err) }),
+        hint: tr('diagnostics.signalWs.hint'),
       });
     }
   }
 
   /* 3. STUN (ta sama sieć / adres publiczny) ---------------------------------- */
-  report({ id: 'stun', label: 'STUN (adres publiczny)', status: 'running', detail: 'zbieram kandydatów…' });
+  report({ id: 'stun', label: tr('diagnostics.stun'), status: 'running', detail: tr('diagnostics.stun.running') });
   // Główna próba — pełna lista STUN
   const stun = await probeIce(STUN_SERVERS, 10_000);
   const srflx = stun.kinds.get('srflx');
@@ -279,13 +280,13 @@ export async function runDiagnostics(
   }
 
   if (srflx !== undefined) {
-    push({ id: 'stun', label: 'STUN (adres publiczny)', status: 'ok', detail: `Publiczny adres wykryty w ${ms(srflx)}.` });
+    push({ id: 'stun', label: tr('diagnostics.stun'), status: 'ok', detail: tr('diagnostics.stun.public', { time: ms(srflx) }) });
   } else if (hostCandidates !== undefined) {
     // Mamy host, ale nie srflx — typowo firewall blokuje UDP 19302/3478
     push({
-      id: 'stun', label: 'STUN (adres publiczny)', status: 'warn',
-      detail: 'Brak odpowiedzi serwerów STUN — wykryto tylko adresy lokalne.',
-      hint: 'Połączenie zadziała, gdy komputer i telefon są w tej samej sieci Wi‑Fi. Dla różnych sieci potrzebny jest działający STUN/TURN. Jeśli jesteś w firmowej/VPN — spróbuj hotspotu z telefonu.',
+      id: 'stun', label: tr('diagnostics.stun'), status: 'warn',
+      detail: tr('diagnostics.stun.missing'),
+      hint: tr('diagnostics.stun.missingHint'),
     });
   } else {
     // Ani host ani srflx — nawet lokalne kandydaty nie działają (mDNS wyłączone, VPN blokuje, brak uprawnień)
@@ -293,23 +294,23 @@ export async function runDiagnostics(
     const hasMdns = [...stun.candidates, ...(localProbe?.candidates ?? [])].some(c => c.includes('.local'));
     if (hasMdns) {
       push({
-        id: 'stun', label: 'STUN (adres publiczny)', status: 'warn',
-        detail: 'Wykryto lokalne kandydaty mDNS (.local) — przeglądarka ukrywa adresy dla prywatności.',
-        hint: 'To normalne w Chrome/Firefox. Połączenie w tej samej sieci Wi‑Fi powinno działać mimo tego komunikatu.',
+        id: 'stun', label: tr('diagnostics.stun'), status: 'warn',
+        detail: tr('diagnostics.stun.mdns'),
+        hint: tr('diagnostics.stun.mdnsHint'),
       });
     } else {
       const errPart = stun.error ? ` (${stun.error})` : '';
-      const localErr = localProbe?.error ? ` / lokalnie: ${localProbe.error}` : '';
+      const localErr = localProbe?.error ? tr('diagnostics.stun.localError', { error: localProbe.error }) : '';
       push({
-        id: 'stun', label: 'STUN (adres publiczny)', status: 'fail',
-        detail: `Nie udało się zebrać żadnych kandydatów sieciowych${errPart}${localErr}.`,
-        hint: 'Wygląda na to, że przeglądarka całkowicie zablokowała WebRTC — sprawdź VPN, zaporę, tryb prywatny/incognito, lub spróbuj w Chrome/Edge/Firefox bez rozszerzeń blokujących. Sprawdź też, czy masz dostęp do internetu.',
+        id: 'stun', label: tr('diagnostics.stun'), status: 'fail',
+        detail: tr('diagnostics.stun.fail', { details: `${errPart}${localErr}` }),
+        hint: tr('diagnostics.stun.failHint'),
       });
     }
   }
 
   /* 4. TURN (przekaźnik dla różnych sieci) ------------------------------------ */
-  report({ id: 'turn', label: 'TURN (przekaźnik)', status: 'running', detail: 'pytam przekaźnik o miejsce…' });
+  report({ id: 'turn', label: tr('diagnostics.turn'), status: 'running', detail: tr('diagnostics.turn.running') });
   // Wymuszamy relay. Bez tego każda próba TURN zbiera też host/srflx ze zwykłej
   // sieci i raportuje mylące „wykryto host, srflx”, choć przekaźnik nie zadziałał.
   const turn = await probeIce(turnServers(), 12_000, 'relay');
@@ -317,34 +318,32 @@ export async function runDiagnostics(
   const dedicatedTurn = hasConfiguredTurn() || hasTurnOverride();
   if (turnRelay !== undefined) {
     push({
-      id: 'turn', label: 'TURN (przekaźnik)', status: 'ok',
-      detail: `${dedicatedTurn ? 'Skonfigurowany' : 'Wbudowany'} przekaźnik TURN gotowy w ${ms(turnRelay)}.`,
+      id: 'turn', label: tr('diagnostics.turn'), status: 'ok',
+      detail: tr(dedicatedTurn ? 'diagnostics.turn.readyDedicated' : 'diagnostics.turn.readyShared', { time: ms(turnRelay) }),
     });
   } else {
     const error = turn.error ? ` (${turn.error})` : '';
     push({
-      id: 'turn', label: 'TURN (przekaźnik)', status: 'warn',
-      detail: `${dedicatedTurn ? 'Skonfigurowany' : 'Współdzielony darmowy'} przekaźnik TURN nie odpowiedział${error}.`,
-      hint: dedicatedTurn
-        ? 'Sprawdź adres, port, transport oraz dane logowania TURN. Do połączeń między Wi‑Fi i LTE serwer musi zwrócić kandydata relay.'
-        : 'To nie oznacza, że gra nie połączy różnych sieci — poniższy awaryjny przekaźnik łączy Wi‑Fi z LTE bez żadnej konfiguracji. Własny TURN da najszybsze łączenie (patrz README).',
+      id: 'turn', label: tr('diagnostics.turn'), status: 'warn',
+      detail: tr(dedicatedTurn ? 'diagnostics.turn.failDedicated' : 'diagnostics.turn.failShared', { error }),
+      hint: tr(dedicatedTurn ? 'diagnostics.turn.hintDedicated' : 'diagnostics.turn.hintShared'),
     });
   }
 
   /* 5. Awaryjny przekaźnik — łączenie „zawsze i wszędzie” ---------------------- */
-  report({ id: 'relay', label: 'Awaryjny przekaźnik (Wi‑Fi ↔ LTE)', status: 'running', detail: 'testuję publicznego brokera wiadomości…' });
+  report({ id: 'relay', label: tr('diagnostics.relay'), status: 'running', detail: tr('diagnostics.relay.running') });
   const relay = await probeRelay();
   if (relay) {
     push({
-      id: 'relay', label: 'Awaryjny przekaźnik (Wi‑Fi ↔ LTE)', status: 'ok',
-      detail: `Przekaźnik gotowy w ${ms(relay.took)} (${relay.label}) — urządzenia w RÓŻNYCH sieciach też się połączą, nawet gdy WebRTC/TURN nie działa.`,
-      hint: 'To awaryjna ścieżka: gra leci przez nią tylko, gdy łączenie bezpośrednie nie przechodzi. Jest o kilkadziesiąt ms wolniejsza od WebRTC.',
+      id: 'relay', label: tr('diagnostics.relay'), status: 'ok',
+      detail: tr('diagnostics.relay.ready', { time: ms(relay.took), host: relay.label }),
+      hint: tr('diagnostics.relay.readyHint'),
     });
   } else {
     push({
-      id: 'relay', label: 'Awaryjny przekaźnik (Wi‑Fi ↔ LTE)', status: 'fail',
-      detail: 'Żaden z publicznych brokerów nie odpowiedział (albo sieć je blokuje).',
-      hint: 'Bez przekaźnika (i bez TURN) łączenie między różnymi sieciami może nie zadziałać. Możliwe obejścia: własny TURN — dodaj ?turn=turn:turn.example.com:3478 (opcjonalnie + ?turnUser= i ?turnPass=) do adresu gry, albo sekret VITE_TURN_* przy wdrożeniu.',
+      id: 'relay', label: tr('diagnostics.relay'), status: 'fail',
+      detail: tr('diagnostics.relay.fail'),
+      hint: tr('diagnostics.relay.failHint'),
     });
   }
 

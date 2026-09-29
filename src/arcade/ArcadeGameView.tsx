@@ -15,21 +15,32 @@ import { padHost } from '../net/padHost';
 import type { RemoteCommand, RemoteEvent } from '../net/protocol';
 import { PadHostPanel } from '../pad/PadHostPanel';
 import { ScreenCurtain, SegmentedControl, useCurtain } from '../components/motion';
-import { gameInfo, type GameId } from './catalog';
-import { MATCH_MODE_LABEL, nextTournamentRound, type MatchMode } from './matchModes';
+import { localizeGame, gameInfo, type GameId } from './catalog';
+import { nextTournamentRound, type MatchMode } from './matchModes';
 import { useMenuMusic } from '../lib/useMenuMusic';
+import { useT, type Language } from '../platform/i18n';
 import { COLORS, type DisplayMode, type GameRound, type Racer, type RenderQuality, type RoundConfig, type RoundHud, type RoundResult } from './runtime';
 
-type ArcadeId = Exclude<GameId, 'tanks'>;
+type ArcadeId = Exclude<GameId, 'tanks' | 'blockcraft'>;
 type Stage = 'menu' | 'game' | 'over';
-
-const RULES: Record<ArcadeId, { primaryLabel: string; primary: string[]; secondaryLabel: string; secondary: string[]; hint: string; action: string; win: string }> = {
-  race: { primaryLabel: 'OKRĄŻENIA', primary: ['2 okrążenia', '3 okrążenia', '4 okrążenia'], secondaryLabel: 'RYWALE SI', secondary: ['Bez botów', '1 bot', '2 boty', '3 boty'], hint: 'Kieruj joystickiem w kierunku drogi. Zbieraj skrzynie z bonusami: gdy pojawi się karta, AKCJA używa przedmiotu; bez karty daje krótki turbo-zryw.', action: 'AKCJA / TURBO', win: 'Pierwszy na mecie wygrywa.' },
-  orbit: { primaryLabel: 'STATEK', primary: ['Interceptor', 'Valkyrie', 'Titan'], secondaryLabel: 'SIŁA WROGA', secondary: ['Rekrut', 'Pilot', 'Weteran'], hint: 'Joystick prowadzi statek, OGIEŃ strzela z dział. Pełne wychylenie gałki albo przytrzymanie AKCJI = dopalacz. Rakieta odpala się sama przy pełnym namierzeniu celu.', action: 'OGIEŃ', win: 'Rozbijcie całą wrogą eskadrę.' },
-  snake: { primaryLabel: 'CEL PUNKTOWY', primary: ['8 punktów', '12 punktów', '16 punktów'], secondaryLabel: 'RYWALE SI', secondary: ['Bez botów', '1 bot', '2 boty', '3 boty'], hint: 'Nowy tytuł w wersji beta. Na telefonie użyj czterech strzałek — tapnięcie zmienia kierunek. Złote impulsy są warte więcej, a SPRINT przyspiesza.', action: 'SPRINT', win: 'Pierwszy do celu wygrywa.' },
-  temple: { primaryLabel: 'CEL WYPRAWY', primary: ['8 reliktów', '12 reliktów', '16 reliktów'], secondaryLabel: 'STRAŻNICY', secondary: ['Odkrywca', 'Śmiałek', 'Legenda'], hint: 'Zbieraj zielone relikty. Trzymaj AKCJA obok skrzyni, by ją otworzyć, lub podczas biegu, by sprintować. Po zebraniu celu dotrzyjcie do portalu.', action: 'AKCJA', win: 'Zbierzcie relikty i dotrzyjcie do wyjścia.' },
-  voxel: { primaryLabel: 'CEL ZBIERANIA', primary: ['8 surowców', '12 surowców', '16 surowców'], secondaryLabel: 'NOCNE CRAWLERY', secondary: ['Spokojna noc', '2 strażników', '3 strażników', '4 strażników'], hint: 'Klockowy biom jest proceduralny. Zbieraj kryształy i drewno, wracaj do bazy, aby podnosić jej poziom. W nocy pojawiają się crawlery.', action: 'AKCJA', win: 'Zbierzcie zasoby i wróćcie do bazy.' },
-  league: { primaryLabel: 'LIMIT GOLI', primary: ['3 gole', '5 goli', '7 goli'], secondaryLabel: 'RYWALE SI', secondary: ['Bez botów', '1 bot', '2 boty', '3 boty'], hint: 'Pchaj piłkę do bramki. Joystick steruje autem, AKCJA to boost. Odbicia i turbo mają większą siłę niż zwykła jazda.', action: 'TURBO', win: 'Pierwsza drużyna do limitu wygrywa.' },
+type GameRules = { primaryLabel: string; primary: string[]; secondaryLabel: string; secondary: string[]; hint: string; action: string; win: string };
+const RULES: Record<ArcadeId, Record<Language, GameRules>> = {
+  race: {
+    pl: { primaryLabel: 'OKRĄŻENIA', primary: ['2 okrążenia', '3 okrążenia', '4 okrążenia'], secondaryLabel: 'RYWALE SI', secondary: ['Bez botów', '1 bot', '2 boty', '3 boty'], hint: 'Kieruj joystickiem w kierunku drogi. Zbieraj skrzynie z bonusami: gdy pojawi się karta, AKCJA używa przedmiotu; bez karty daje krótki turbo-zryw.', action: 'AKCJA / TURBO', win: 'Pierwszy na mecie wygrywa.' },
+    en: { primaryLabel: 'LAPS', primary: ['2 laps', '3 laps', '4 laps'], secondaryLabel: 'AI RIVALS', secondary: ['No bots', '1 bot', '2 bots', '3 bots'], hint: 'Steer in the direction of the road. Pick up item crates: ACTION uses a held item; when you have none, it gives a short turbo burst.', action: 'ACTION / TURBO', win: 'First across the finish line wins.' },
+  },
+  orbit: {
+    pl: { primaryLabel: 'STATEK', primary: ['Interceptor', 'Valkyrie', 'Titan'], secondaryLabel: 'SIŁA WROGA', secondary: ['Rekrut', 'Pilot', 'Weteran'], hint: 'Joystick prowadzi statek, OGIEŃ strzela z dział. Pełne wychylenie gałki albo przytrzymanie AKCJI = dopalacz. Rakieta odpala się sama przy pełnym namierzeniu celu.', action: 'OGIEŃ', win: 'Rozbijcie całą wrogą eskadrę.' },
+    en: { primaryLabel: 'SHIP', primary: ['Interceptor', 'Valkyrie', 'Titan'], secondaryLabel: 'ENEMY FORCE', secondary: ['Recruit', 'Pilot', 'Veteran'], hint: 'Use the stick to fly and FIRE to shoot. Push the stick fully or hold ACTION to boost. Homing missiles launch automatically when a target is locked.', action: 'FIRE', win: 'Defeat the enemy squadron.' },
+  },
+  snake: {
+    pl: { primaryLabel: 'CEL PUNKTOWY', primary: ['8 punktów', '12 punktów', '16 punktów'], secondaryLabel: 'RYWALE SI', secondary: ['Bez botów', '1 bot', '2 boty', '3 boty'], hint: 'Użyj kierunków na telefonie lub klawiaturze. Zbieraj impulsy, omijaj stalowe przeszkody i rywali. Przytrzymaj SPRINT, by przyspieszyć — zużywa energię.', action: 'SPRINT', win: 'Pierwszy do celu punktowego wygrywa.' },
+    en: { primaryLabel: 'SCORE TO WIN', primary: ['8 points', '12 points', '16 points'], secondaryLabel: 'AI RIVALS', secondary: ['No bots', '1 bot', '2 bots', '3 bots'], hint: 'Tap a direction on your phone or use the keyboard. Collect energy, avoid steel obstacles and rivals. Hold SPRINT to speed up — it uses energy.', action: 'SPRINT', win: 'First to the score target wins.' },
+  },
+  league: {
+    pl: { primaryLabel: 'LIMIT GOLI', primary: ['3 gole', '5 goli', '7 goli'], secondaryLabel: 'RYWALE SI', secondary: ['Bez botów', '1 bot', '2 boty', '3 boty'], hint: 'Pchaj piłkę do bramki. Joystick steruje autem, AKCJA to boost. Odbicia i turbo mają większą siłę niż zwykła jazda.', action: 'TURBO', win: 'Pierwsza drużyna do limitu wygrywa.' },
+    en: { primaryLabel: 'GOAL LIMIT', primary: ['3 goals', '5 goals', '7 goals'], secondaryLabel: 'AI RIVALS', secondary: ['No bots', '1 bot', '2 bots', '3 bots'], hint: 'Drive the ball into the goal. Steer with the stick and hold ACTION to boost. Bounces and turbo hits carry more force than regular driving.', action: 'TURBO', win: 'First team to the goal limit wins.' },
+  },
 };
 
 const formatTime = (n: number) => `${Math.floor(n / 60)}:${String(Math.floor(n % 60)).padStart(2, '0')}`;
@@ -66,18 +77,9 @@ async function createRound(id: ArcadeId, canvas: HTMLCanvasElement, config: Roun
       }
       return new (await import('./games/Orbit')).OrbitRound(canvas, config);
     }
-    case 'snake': {
-      if (hasWebGL2(canvas)) return new (await import('./webgl/Arcade3D')).Arcade3DRound(canvas, config, 'snake');
+    case 'snake':
+      // Wężowy Wir pozostaje celowo lekki: zawsze renderuje się w Canvas 2D.
       return new (await import('./games/Snake')).SnakeRound(canvas, config);
-    }
-    case 'temple': {
-      if (hasWebGL2(canvas)) return new (await import('./webgl/Arcade3D')).Arcade3DRound(canvas, config, 'temple');
-      return new (await import('./games/Temple')).TempleRound(canvas, config);
-    }
-    case 'voxel': {
-      if (hasWebGL2(canvas)) return new (await import('./webgl/Voxel3D')).Voxel3DRound(canvas, config);
-      return new (await import('./games/Voxel')).VoxelRound(canvas, config);
-    }
     case 'league': {
       if (hasWebGL2(canvas)) return new (await import('./webgl/League3D')).League3DRound(canvas, config);
       return new (await import('./games/League')).LeagueRound(canvas, config);
@@ -85,18 +87,26 @@ async function createRound(id: ArcadeId, canvas: HTMLCanvasElement, config: Roun
   }
 }
 
-function OptionStepper({ title, value, change, accent, help }: { title: string; value: string; change: (step: number) => void; accent: string; help: string }) {
-  return <div className="arcade-option rounded-2xl p-4"><div className="joy-kicker text-slate-400">{title}</div><div className="mt-3 flex items-center justify-between gap-2"><button onClick={() => change(-1)} aria-label={`Poprzednie: ${title}`} className="joy-arrow"><ChevronLeft size={18} /></button><span key={value} className="flip-in block min-h-[26px] text-center text-sm font-bold sm:text-base" style={{ color: accent }}>{value}</span><button onClick={() => change(1)} aria-label={`Następne: ${title}`} className="joy-arrow"><ChevronRight size={18} /></button></div><div className="mt-3 text-center text-[11px] text-slate-500">{help}</div></div>;
+function OptionStepper({ title, value, change, accent, help, language }: { title: string; value: string; change: (step: number) => void; accent: string; help: string; language: Language }) {
+  return <div className="arcade-option rounded-2xl p-4"><div className="joy-kicker text-slate-400">{title}</div><div className="mt-3 flex items-center justify-between gap-2"><button onClick={() => change(-1)} aria-label={`${language === 'en' ? 'Previous' : 'Poprzednie'}: ${title}`} className="joy-arrow"><ChevronLeft size={18} /></button><span key={value} className="flip-in block min-h-[26px] text-center text-sm font-bold sm:text-base" style={{ color: accent }}>{value}</span><button onClick={() => change(1)} aria-label={`${language === 'en' ? 'Next' : 'Następne'}: ${title}`} className="joy-arrow"><ChevronRight size={18} /></button></div><div className="mt-3 text-center text-[11px] text-slate-500">{help}</div></div>;
 }
 
-function Segmented<T extends string>({ title, values, value, onChange, accent, labels }: { title: string; values: readonly T[]; value: T; onChange: (value: T) => void; accent: string; labels: Record<T, string> }) {
+function Segmented<T extends string>({ title, values, value, onChange, accent, labels, language }: { title: string; values: readonly T[]; value: T; onChange: (value: T) => void; accent: string; labels: Record<T, string>; language: Language }) {
+  const descriptions: Record<string, string> = language === 'en' ? {
+    split: '2–4 views on one screen', shared: 'One shared arena for the whole crew',
+    performance: 'Lower resolution, smoother play', quality: 'More detail, higher GPU load', balanced: 'A balance of smoothness and quality',
+  } : {
+    split: '2–4 widoki na jednym ekranie', shared: 'Wspólna arena dla całej ekipy',
+    performance: 'Niższa rozdzielczość, priorytet płynności', quality: 'Więcej detali, większe obciążenie GPU', balanced: 'Równowaga płynności i jakości',
+  };
   return <div className="arcade-option rounded-2xl p-4"><div className="joy-kicker text-slate-400">{title}</div>
     <div className="mt-3"><SegmentedControl options={values.map(v => ({ value: v, label: labels[v] }))} value={value} onChange={onChange} accent={accent} label={title} /></div>
-    <div className="mt-3 text-center text-[11px] text-slate-500">{value === 'split' ? '2–4 widoki na jednym ekranie' : value === 'shared' ? 'Wspólna arena dla całej kanapy' : value === 'performance' ? 'Niższa rozdzielczość, priorytet płynności' : value === 'quality' ? 'Więcej detali, większe obciążenie GPU' : 'Równowaga płynności i jakości'}</div></div>;
+    <div className="mt-3 text-center text-[11px] text-slate-500">{descriptions[value] || ''}</div></div>;
 }
 
 export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: () => void; remote: RemoteEvent | null }) {
-  const info = gameInfo(id), rules = RULES[id];
+  const { language, t } = useT();
+  const info = localizeGame(gameInfo(id), language), rules = RULES[id][language];
   const [stage, setStage] = useState<Stage>('menu');
   const [primary, setPrimary] = useState(() => readChoice(`${id}.primary`, rules.primary.map((_, i) => i), id === 'race' || id === 'snake' || id === 'league' ? 1 : 0));
   const [secondary, setSecondary] = useState(() => readChoice(`${id}.secondary`, rules.secondary.map((_, i) => i), id === 'race' || id === 'league' ? 2 : 1));
@@ -140,10 +150,10 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
    * Refy aktualizują się w efekcie (nie w trakcie renderu), a kolejność
    * deklaracji PRZED efektem silnika gwarantuje świeżą migawkę na starcie.
    */
-  const roundSetupRef = useRef({ participants, primary, secondary, displayMode, quality });
+  const roundSetupRef = useRef({ participants, primary, secondary, displayMode, quality, language });
   useEffect(() => {
     stageRef.current = stage;
-    roundSetupRef.current = { participants, primary, secondary, displayMode, quality };
+    roundSetupRef.current = { participants, primary, secondary, displayMode, quality, language };
   });
 
   const stepPrimary = useCallback((step: number) => setPrimary(i => (i + step + rules.primary.length) % rules.primary.length), [rules.primary.length]);
@@ -159,7 +169,7 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
     // Start rundy idzie pod kurtyną w kolorze gry — menu znika, arena wstaje.
     curtain.begin(info.accent, () => {
       const pads = padHost.slots().filter((p): p is NonNullable<typeof p> => p !== null);
-      const humans: Racer[] = pads.length ? pads.map(p => ({ slot: p.slot, name: p.nick, color: COLORS[p.slot], isBot: false })) : [{ slot: 0, name: 'GRACZ 1', color: COLORS[0], isBot: false }];
+      const humans: Racer[] = pads.length ? pads.map(p => ({ slot: p.slot, name: p.nick, color: COLORS[p.slot], isBot: false })) : [{ slot: 0, name: language === 'en' ? 'PLAYER 1' : 'GRACZ 1', color: COLORS[0], isBot: false }];
       const bots: Racer[] = [];
       if (id === 'race' || id === 'snake' || id === 'league') {
         for (let slot = 0; slot < 4 && bots.length < secondary; slot++) {
@@ -174,7 +184,7 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
       setStage('game');
       gameAudio.init(); gameAudio.uiClick();
     });
-  }, [curtain, id, info.accent, secondary]);
+  }, [curtain, id, info.accent, secondary, language]);
 
   useEffect(() => {
     padHost.onPauseRequest = () => round.current?.togglePause();
@@ -217,14 +227,14 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   useEffect(() => {
     if (stage !== 'game' || !roundKey || !canvas.current) return;
     let cancelled = false;
-    const { participants, primary, secondary, displayMode, quality } = roundSetupRef.current;
-    const recording = beginRecording();
+    const { participants, primary, secondary, displayMode, quality, language } = roundSetupRef.current;
+    const recording = beginRecording(language);
     const recorder = recording.events;
     recorder.observe({ timeLeft: 0, countdown: 3, paused: false, players: participants.map(p => ({ ...p, score: 0 })) });
     const config = {
       onFrame: recording.video.frame,
       onMoment: (event: MomentEvent) => recorder.record(event),
-      players: participants, padInputs: padHost.inputs, primary, secondary, displayMode, quality,
+      players: participants, padInputs: padHost.inputs, primary, secondary, displayMode, quality, language,
       onHud: (next: RoundHud) => {
         if (cancelled) return;
         recording.video.setPaused(next.paused || next.countdown > 0);
@@ -288,10 +298,14 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
 
   const mute = () => { gameAudio.init(); gameAudio.setMuted(!muted); setMuted(!muted); };
   const cssVars = { '--game-accent': info.accent, '--game-soft': info.accentSoft } as React.CSSProperties;
+  const modeLabels = language === 'en' ? { classic: 'QUICK MATCH', tournament: 'TOURNAMENT', '2v2': '2V2 / TEAMS' } : { classic: 'ZWYKŁA RUNDA', tournament: 'TURNIEJ', '2v2': '2V2 / DRUŻYNY' };
+  const displayLabels = language === 'en' ? { shared: 'SHARED', split: 'SPLIT-SCREEN' } : { shared: 'WSPÓLNY', split: 'PODZIELONY EKRAN' };
+  const qualityLabels = language === 'en' ? { performance: 'PERFORMANCE', balanced: 'BALANCED', quality: 'QUALITY' } : { performance: 'PŁYNNOŚĆ', balanced: 'BALANS', quality: 'DETAL' };
+  const modeTag = matchMode === 'tournament' ? t('game.matchTournament', { n: tournamentRound + 1 }) : matchMode === '2v2' ? '2V2' : displayMode === 'split' ? (language === 'en' ? 'SPLIT' : 'PODZIELONY') : (language === 'en' ? 'SHARED' : 'WSPÓLNY');
 
   if (stage === 'menu') return <>
     <GameSetup info={info} music={menuMusicOn} onMusic={() => toggleMenuMusic(!menuMusicOn)} onExit={onExit} onStart={start} onPads={() => setShowPads(true)} hint={rules.hint} win={rules.win}>
-      <OptionStepper title={rules.primaryLabel} value={rules.primary[primary]} accent={info.accent} change={stepPrimary} help="Pilot: ← / →" /><OptionStepper title={rules.secondaryLabel} value={rules.secondary[secondary]} accent={info.accent} change={stepSecondary} help="Pilot: ↑ / ↓" /><Segmented title="WIDOK ARENY" values={['shared', 'split'] as const} value={displayMode} onChange={changeDisplay} accent={info.accent} labels={{ shared: 'WSPÓLNY', split: 'SPLIT-SCREEN' }} /><Segmented title="PROFIL SPRZĘTU" values={['performance', 'balanced', 'quality'] as const} value={quality} onChange={changeQuality} accent={info.accent} labels={{ performance: 'PŁYNNOŚĆ', balanced: 'BALANS', quality: 'DETAL' }} /><Segmented title="FORMAT MECZU" values={['classic', 'tournament', '2v2'] as const} value={matchMode} onChange={changeMatchMode} accent={info.accent} labels={MATCH_MODE_LABEL} />
+      <OptionStepper title={rules.primaryLabel} value={rules.primary[primary]} accent={info.accent} change={stepPrimary} help={language === 'en' ? 'Remote: ← / →' : 'Pilot: ← / →'} language={language} /><OptionStepper title={rules.secondaryLabel} value={rules.secondary[secondary]} accent={info.accent} change={stepSecondary} help={language === 'en' ? 'Remote: ↑ / ↓' : 'Pilot: ↑ / ↓'} language={language} /><Segmented title={language === 'en' ? 'ARENA VIEW' : 'WIDOK ARENY'} values={['shared', 'split'] as const} value={displayMode} onChange={changeDisplay} accent={info.accent} labels={displayLabels} language={language} /><Segmented title={language === 'en' ? 'HARDWARE PROFILE' : 'PROFIL SPRZĘTU'} values={['performance', 'balanced', 'quality'] as const} value={quality} onChange={changeQuality} accent={info.accent} labels={qualityLabels} language={language} /><Segmented title={language === 'en' ? 'MATCH FORMAT' : 'FORMAT MECZU'} values={['classic', 'tournament', '2v2'] as const} value={matchMode} onChange={changeMatchMode} accent={info.accent} labels={modeLabels} language={language} />
     </GameSetup>
     {showPads && <ConnectionsScreen onClose={() => setShowPads(false)} />}
     <ScreenCurtain state={curtain.state} />
@@ -305,21 +319,21 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   return (
     <>
     <div className={`arcade-page arcade-${id} flex h-screen min-h-[360px] flex-col overflow-hidden text-white`} style={cssVars}>
-      <div className="z-20 flex shrink-0 items-center justify-between gap-2 border-b border-white/10 bg-[#0b0e12]/95 px-3 py-2 sm:px-5"><div className="flex min-w-0 items-center gap-2 sm:gap-4"><div className="arcade-title truncate text-sm font-bold sm:text-lg" style={{ color: info.accent }}>{info.title}</div><span className="hidden rounded-full border border-white/10 px-2 py-1 text-[10px] font-bold text-slate-300 sm:block">{hud?.status || 'ŁADOWANIE ARENY…'}</span></div>
+      <div className="z-20 flex shrink-0 items-center justify-between gap-2 border-b border-white/10 bg-[#0b0e12]/95 px-3 py-2 sm:px-5"><div className="flex min-w-0 items-center gap-2 sm:gap-4"><div className="arcade-title truncate text-sm font-bold sm:text-lg" style={{ color: info.accent }}>{info.title}</div><span className="hidden rounded-full border border-white/10 px-2 py-1 text-[10px] font-bold text-slate-300 sm:block">{hud?.status || t('game.statusLoading')}</span></div>
         <div className="flex items-center gap-1.5 font-mono2 text-sm font-bold sm:gap-2 sm:text-lg"><Timer size={16} style={{ color: info.accent }} /> {formatTime(hud?.timeLeft ?? 0)}</div>
-        <div className="flex items-center gap-1"><span className="hidden rounded-full border border-white/10 px-2 py-1 text-[10px] font-bold text-slate-500 sm:block">{matchMode === 'tournament' ? `TURNIEJ ${tournamentRound + 1}/3` : matchMode === '2v2' ? '2V2' : displayMode === 'split' ? 'SPLIT' : 'SHARED'} · {quality.toUpperCase()}</span><button onClick={mute} title={muted ? 'Włącz dźwięk' : 'Wycisz'} className="arcade-icon">{muted ? <VolumeX size={17} /> : <Volume2 size={17} />}</button><button onClick={() => setShowPads(true)} title="Pady i kod pokoju" className="arcade-icon"><Smartphone size={17} /></button><button onClick={() => round.current?.togglePause()} title="Pauza (P)" className="arcade-icon"><Pause size={17} /></button><button onClick={() => setStage('menu')} title="Zakończ rundę" className="arcade-icon text-amber-300"><Home size={17} /></button><button onClick={onExit} title="Wróć do JoyPad" className="arcade-icon text-orange-300"><Gamepad2 size={17} /></button></div>
+        <div className="flex items-center gap-1"><span className="hidden rounded-full border border-white/10 px-2 py-1 text-[10px] font-bold text-slate-500 sm:block">{modeTag} · {qualityLabels[quality]}</span><button onClick={mute} title={muted ? t('game.soundOn') : t('game.mute')} className="arcade-icon">{muted ? <VolumeX size={17} /> : <Volume2 size={17} />}</button><button onClick={() => setShowPads(true)} title={t('game.pads')} className="arcade-icon"><Smartphone size={17} /></button><button onClick={() => round.current?.togglePause()} title={t('game.pause')} className="arcade-icon"><Pause size={17} /></button><button onClick={() => setStage('menu')} title={t('game.endRound')} className="arcade-icon text-amber-300"><Home size={17} /></button><button onClick={onExit} title={t('game.back')} className="arcade-icon text-orange-300"><Gamepad2 size={17} /></button></div>
       </div>
-      <div className="relative min-h-0 flex-1 bg-[#06090c]"><canvas ref={canvas} className="absolute inset-0 h-full w-full" aria-label={`Arena gry ${info.title}`} />
+      <div className="relative min-h-0 flex-1 bg-[#06090c]"><canvas ref={canvas} className="absolute inset-0 h-full w-full" aria-label={language === 'en' ? `${info.title} game arena` : `Arena gry ${info.title}`} />
         <div className="pointer-events-none absolute left-3 top-3 z-10 rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-[11px] font-bold backdrop-blur sm:left-5 sm:top-4 sm:text-sm" style={{ color: info.accent }}>{hud?.objective || rules.win}</div>
         {hud?.powerUp && <div className={`pointer-events-none absolute right-3 top-3 z-10 w-[min(205px,52vw)] rounded-xl border bg-black/75 px-3 py-2.5 shadow-2xl backdrop-blur sm:right-5 sm:top-4 ${hud.powerUp.rolling ? 'animate-pulse' : ''}`} style={{ borderColor: `${hud.powerUp.color}66`, boxShadow: `0 10px 30px ${hud.powerUp.color}20` }}>
-          <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[.16em] text-white/55"><Zap size={13} style={{ color: hud.powerUp.color }} /> BONUS NA TRASIE</div>
+          <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[.16em] text-white/55"><Zap size={13} style={{ color: hud.powerUp.color }} /> {t('game.actionBonus')}</div>
           <div className="mt-1 flex items-center justify-between gap-2"><b className="truncate text-sm font-black" style={{ color: hud.powerUp.color }}>{hud.powerUp.label}</b>{hud.powerUp.count > 1 && <span className="shrink-0 rounded-full px-1.5 py-0.5 font-mono2 text-[11px] font-bold text-black" style={{ background: hud.powerUp.color }}>×{hud.powerUp.count}</span>}</div>
           <div className="mt-1 text-[10px] leading-tight text-white/60">{hud.powerUp.hint}</div>
         </div>}
-        {hud?.countdown !== undefined && hud.countdown > 0 && <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/30"><span className="joy-kicker text-white/70">PRZYGOTUJ SIĘ</span><span key={Math.ceil(hud.countdown)} className="count-pop arcade-title text-8xl font-black drop-shadow-lg sm:text-9xl" style={{ color: info.accent, textShadow: `0 0 70px ${info.accent}99` }}>{Math.ceil(hud.countdown)}</span></div>}
+        {hud?.countdown !== undefined && hud.countdown > 0 && <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/30"><span className="joy-kicker text-white/70">{t('game.ready')}</span><span key={Math.ceil(hud.countdown)} className="count-pop arcade-title text-8xl font-black drop-shadow-lg sm:text-9xl" style={{ color: info.accent, textShadow: `0 0 70px ${info.accent}99` }}>{Math.ceil(hud.countdown)}</span></div>}
         {startFlash && <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"><span className="start-flash arcade-title text-7xl font-black sm:text-9xl" style={{ color: info.accent, textShadow: `0 0 90px ${info.accent}` }}>START</span></div>}
         {hud?.paused && <PauseSheet game={info.title} onResume={() => round.current?.togglePause()} onExit={onExit} />}
-        {!hud && <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 text-sm text-slate-300"><LoaderCircle size={20} className="animate-spin" /> Ładowanie areny…</div>}
+        {!hud && <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 text-sm text-slate-300"><LoaderCircle size={20} className="animate-spin" /> {t('game.loading')}</div>}
         {showPads && <div className="absolute inset-0 z-40 flex items-center justify-center overflow-auto bg-black/80 p-4 backdrop-blur" onClick={() => setShowPads(false)}><div className="w-full max-w-2xl" onClick={e => e.stopPropagation()}><PadHostPanel players={PLAYER_DEFS} onClose={() => setShowPads(false)} context="arcade" /></div></div>}
       </div>
       <div className="z-10 flex min-h-[76px] shrink-0 gap-2 overflow-x-auto border-t border-white/10 bg-[#0b0e12] p-2 sm:justify-center sm:p-3">{hud?.players.map(p => <div key={p.slot} className="min-w-[142px] flex-1 rounded-xl border border-white/10 bg-white/[.035] px-3 py-2 sm:max-w-[250px]"><div className="flex items-center justify-between gap-2"><span className="truncate text-xs font-bold" style={{ color: p.color }}>{p.name}{p.isBot && <span className="ml-1 text-[9px] text-slate-500">BOT</span>}</span><b className="font-mono2 text-base" style={{ color: p.color }}>{p.score}</b></div><div className="mt-1 truncate text-[11px] text-slate-400">{p.detail}</div>{p.value !== undefined && <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, p.value / (p.maxValue || 100) * 100))}%`, background: p.color }} /></div>}</div>)}</div>

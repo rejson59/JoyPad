@@ -1,7 +1,9 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { X } from 'lucide-react';
+import { useT } from '../platform/i18n';
 
 export function Sheet({ title, onClose, children, wide = false, variant = 'system', eyebrow = 'JOYPAD / SYSTEM', artwork }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean; variant?: 'system' | 'cinema'; eyebrow?: string; artwork?: string }) {
+  const { t } = useT();
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const node = ref.current; const previous = document.activeElement as HTMLElement | null;
@@ -30,6 +32,6 @@ export function Sheet({ title, onClose, children, wide = false, variant = 'syste
   }, [onClose]);
   return <dialog ref={ref} className={`os-sheet ${wide ? 'os-sheet-wide' : ''} ${variant === 'cinema' ? 'cine-sheet' : ''}`} aria-label={title} onKeyDown={e => e.stopPropagation()} onCancel={e => { e.preventDefault(); onClose(); }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
     {artwork && <div className="cine-sheet-art" aria-hidden="true"><img src={artwork} alt="" /><span /></div>}
-    <div className="os-sheet-content"><header><div><span className="os-eyebrow">{eyebrow}</span><h2>{title}</h2></div><button className="os-icon" onClick={onClose} aria-label="Zamknij"><X size={20} /></button></header>{children}</div>
+    <div className="os-sheet-content"><header><div><span className="os-eyebrow">{eyebrow}</span><h2>{title}</h2></div><button className="os-icon" onClick={onClose} aria-label={t('common.close')}><X size={20} /></button></header>{children}</div>
   </dialog>;
 }

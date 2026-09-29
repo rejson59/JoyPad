@@ -6,7 +6,8 @@ import { GameSetup } from './console/GameSetup';
 import { ConnectionsScreen } from './components/ConnectionsScreen';
 import { useMenuMusic } from './lib/useMenuMusic';
 import { GameResults } from './console/GameResults';
-import { gameInfo } from './arcade/catalog';
+import { gameInfo, localizeGame } from './arcade/catalog';
+import { useT } from './platform/i18n';
 import { PauseSheet } from './console/PauseSheet';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -19,7 +20,7 @@ import { ScreenCurtain, SegmentedControl, useCurtain } from './components/motion
 import { MapThumb } from './components/MapThumb';
 import { TankGame, type HudState, type HudTank } from './game/engine';
 import { PLAYER_DEFS, type GameMode, type MapId, type PlayerConfig } from './game/types';
-import { MAPS } from './game/maps';
+import { MAPS, localizedMap } from './game/maps';
 import { gameAudio } from './game/audio';
 import { menuMusic } from './game/menuMusic';
 import { padHost } from './net/padHost';
@@ -43,7 +44,8 @@ function KeyCap({ children, color = '#27272a' }: { children: React.ReactNode; co
   );
 }
 
-function PlayerCard({ t, mode, killLimit, phone }: { t: HudTank; mode: GameMode; killLimit: number; phone?: string | null }) {
+function PlayerCard({ t, mode, killLimit, phone, language }: { t: HudTank; mode: GameMode; killLimit: number; phone?: string | null; language: 'pl' | 'en' }) {
+  const en = language === 'en';
   const hpPct = (t.hp / t.maxHp) * 100;
   return (
     <div
@@ -76,12 +78,12 @@ function PlayerCard({ t, mode, killLimit, phone }: { t: HudTank; mode: GameMode;
           />
         </div>
         <div className="mt-1 flex items-center justify-between">
-          <span className="font-mono2 text-[10px] text-zinc-400">{t.alive ? `${t.hp} HP` : t.respawn > 0 ? `RESPAWN ${t.respawn.toFixed(1)}s` : 'ELIMINACJA'}</span>
+          <span className="font-mono2 text-[10px] text-zinc-400">{t.alive ? `${t.hp} HP` : t.respawn > 0 ? `${en ? 'RESPAWN' : 'ODRODZENIE'} ${t.respawn.toFixed(1)}s` : (en ? 'ELIMINATED' : 'ELIMINACJA')}</span>
           <div className="flex gap-1">
-            {t.rapid && <span title="Szybkostrzelność"><Zap className="h-3 w-3 text-amber-400" /></span>}
-            {t.big && <span title="Ciężki pocisk"><Crosshair className="h-3 w-3 text-red-400" /></span>}
-            {t.speed && <span title="Turbo"><Wind className="h-3 w-3 text-sky-400" /></span>}
-            {t.shield > 0 && <span title="Tarcza"><Shield className="h-3 w-3 text-cyan-300" /></span>}
+            {t.rapid && <span title={en ? 'Rapid fire' : 'Szybkostrzelność'}><Zap className="h-3 w-3 text-amber-400" /></span>}
+            {t.big && <span title={en ? 'Heavy shell' : 'Ciężki pocisk'}><Crosshair className="h-3 w-3 text-red-400" /></span>}
+            {t.speed && <span title={en ? 'Turbo' : 'Turbo'}><Wind className="h-3 w-3 text-sky-400" /></span>}
+            {t.shield > 0 && <span title={en ? 'Shield' : 'Tarcza'}><Shield className="h-3 w-3 text-cyan-300" /></span>}
           </div>
         </div>
         {mode === 'deathmatch' && (
@@ -97,6 +99,9 @@ function PlayerCard({ t, mode, killLimit, phone }: { t: HudTank; mode: GameMode;
 }
 
 export default function TankApp({ onExit, remote }: { onExit: () => void; remote: RemoteEvent | null }) {
+  const { language } = useT();
+  const en = language === 'en';
+  const info = localizeGame(gameInfo('tanks'), language);
   const [menuMusicOn, toggleMenuMusic] = useMenuMusic();
   const [screen, setScreen] = useState<Screen>('menu');
   const [menuChoice, setMenuChoice] = useState(() => readChoice('tanks.choice', [0, 1, 2], 0));
@@ -134,10 +139,10 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
    * Refy aktualizują się w efekcie (nie w trakcie renderu), a kolejność
    * deklaracji PRZED efektem silnika gwarantuje świeżą migawkę na starcie.
    */
-  const roundSetupRef = useRef({ players, mapId, mode, killLimit, lives });
+  const roundSetupRef = useRef({ players, mapId, mode, killLimit, lives, language });
   useEffect(() => {
     screenRef.current = screen;
-    roundSetupRef.current = { players, mapId, mode, killLimit, lives };
+    roundSetupRef.current = { players, mapId, mode, killLimit, lives, language };
   });
 
   // --- telefony jako pady: synchronizacja slotów / ekranu ---
@@ -173,13 +178,13 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
   useEffect(() => {
     padHost.setMenuOptions(screen === 'setup' ? {
       revision: JSON.stringify([killLimit, lives, players.map(p => [p.enabled, p.isBot])]),
-      primaryLabel: 'MAPA', primaryValue: MAPS[mapId].name,
-      secondaryLabel: 'TRYB', secondaryValue: mode === 'deathmatch' ? 'Deathmatch' : 'Przetrwanie',
+      primaryLabel: en ? 'MAP' : 'MAPA', primaryValue: localizedMap(mapId, language).name,
+      secondaryLabel: en ? 'MODE' : 'TRYB', secondaryValue: mode === 'deathmatch' ? 'Deathmatch' : en ? 'Survival' : 'Przetrwanie',
     } : screen === 'menu' ? {
-      primaryLabel: 'WYBÓR', primaryValue: ['Pojedynek 1v1', 'Bitwa 4 graczy', 'Trening z botami'][menuChoice],
-      secondaryLabel: 'STEROWANIE', secondaryValue: '← / → wybierz · OK otwórz',
+      primaryLabel: en ? 'MODE' : 'WYBÓR', primaryValue: (en ? ['Duel 1v1', 'Four-player battle', 'Bot training'] : ['Pojedynek 1v1', 'Bitwa 4 graczy', 'Trening z botami'])[menuChoice],
+      secondaryLabel: en ? 'CONTROLS' : 'STEROWANIE', secondaryValue: en ? '← / → choose · Enter open' : '← / → wybierz · OK otwórz',
     } : undefined);
-  }, [screen, mapId, mode, menuChoice, killLimit, lives, players]);
+  }, [screen, mapId, mode, menuChoice, killLimit, lives, players, language, en]);
 
   useEffect(() => {
     remember('tanks.choice', menuChoice); remember('tanks.map', mapId); remember('tanks.mode', mode); remember('tanks.kills', killLimit); remember('tanks.lives', lives);
@@ -263,8 +268,8 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
     if (screen !== 'game') return;
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const { players, mapId, mode, killLimit, lives } = roundSetupRef.current;
-    const recording = beginRecording();
+    const { players, mapId, mode, killLimit, lives, language: roundLanguage } = roundSetupRef.current;
+    const recording = beginRecording(roundLanguage);
     const t = setTimeout(() => {
       gameAudio.init();
       const recorder = recording.events;
@@ -276,9 +281,10 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
         killLimit,
         lives,
         timeLimit: TIME_LIMIT_S,
+        language: roundLanguage,
         onFrame: recording.video.frame,
         onHud: (h) => { recording.video.setPaused(h.paused || h.countdown > 0); recorder.observe({ ...h, players: h.tanks.map(t => ({ slot: t.id, name: t.name, color: t.color, score: t.kills })) }); if (screenRef.current === 'game') setHud(h); },
-        onKill: (event) => { if (event.killer !== event.victim) recorder.record({ kind: 'kill', slot: event.killer, title: 'Cel wyeliminowany', detail: `${event.killerName} eliminuje ${event.victimName}.`, at: event.time, weight: 58 }); },
+        onKill: (event) => { if (event.killer !== event.victim) recorder.record({ kind: 'kill', slot: event.killer, title: roundLanguage === 'en' ? 'Target eliminated' : 'Cel wyeliminowany', detail: roundLanguage === 'en' ? `${event.killerName} eliminates ${event.victimName}.` : `${event.killerName} eliminuje ${event.victimName}.`, at: event.time, weight: 58 }); },
         padInputs: padHost.inputs,
         onPadFx: (slot, fx) => { recorder.fx(slot, fx); padHost.sendFx(slot, fx); },
         onPadHud: (slot, t, h) => padHost.sendHud(slot, {
@@ -317,15 +323,15 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
 
   /* ============ MENU ============ */
   if (screen === 'menu') return <>
-    <GameSetup info={gameInfo('tanks')} music={menuMusicOn} onMusic={() => toggleMenuMusic(!menuMusicOn)} onExit={onExit} onStart={() => handleRemote('select')} onPads={() => setShowPad(true)} startLabel={menuChoice === 0 ? 'Rozpocznij pojedynek' : 'Dopasuj rozgrywkę'} navigationHint="← → / ↑ ↓ Wybierz tryb · Enter Zatwierdź"
-      hint="Lewy joystick prowadzi czołg, prawy celuje wieżą. Wykorzystuj osłony i rykoszety." win="Zdobądź ustaloną liczbę fragów lub przetrwaj przeciwników.">
-      <div className="cine-tank-modes" role="group" aria-label="Tryb bitwy">
+    <GameSetup info={info} music={menuMusicOn} onMusic={() => toggleMenuMusic(!menuMusicOn)} onExit={onExit} onStart={() => handleRemote('select')} onPads={() => setShowPad(true)} startLabel={menuChoice === 0 ? (en ? 'Start duel' : 'Rozpocznij pojedynek') : (en ? 'Configure match' : 'Dopasuj rozgrywkę')} navigationHint={en ? '← → / ↑ ↓ Choose a mode · Enter confirm' : '← → / ↑ ↓ Wybierz tryb · Enter zatwierdź'}
+      hint={en ? 'Left stick drives the tank; right stick aims the turret. Use cover and ricochets.' : 'Lewy joystick prowadzi czołg, prawy celuje wieżą. Wykorzystuj osłony i rykoszety.'} win={en ? 'Reach the kill limit or outlast the opposing tanks.' : 'Zdobądź ustaloną liczbę fragów lub przetrwaj przeciwników.'}>
+      <div className="cine-tank-modes" role="group" aria-label={en ? 'Battle mode' : 'Tryb bitwy'}>
         {[
-          { title: 'Pojedynek 1v1', detail: 'Dwóch graczy. Jeden zwycięzca.', tag: 'SZYBKI START', icon: <Users size={23} /> },
-          { title: 'Bitwa 4 graczy', detail: 'Cała ekipa na jednym polu bitwy.', tag: 'WSPÓLNA ARENA', icon: <Flame size={23} /> },
-          { title: 'Trening z botami', detail: 'Poznaj teren. Dopracuj celność.', tag: 'TY + 2 BOTY', icon: <Bot size={23} /> },
+          { title: en ? 'Duel 1v1' : 'Pojedynek 1v1', detail: en ? 'Two players. One winner.' : 'Dwóch graczy. Jeden zwycięzca.', tag: en ? 'QUICK START' : 'SZYBKI START', icon: <Users size={23} /> },
+          { title: en ? 'Four-player battle' : 'Bitwa 4 graczy', detail: en ? 'The whole crew on one battlefield.' : 'Cała ekipa na jednym polu bitwy.', tag: en ? 'SHARED ARENA' : 'WSPÓLNA ARENA', icon: <Flame size={23} /> },
+          { title: en ? 'Bot training' : 'Trening z botami', detail: en ? 'Learn the map. Sharpen your aim.' : 'Poznaj teren. Dopracuj celność.', tag: en ? 'YOU + 2 BOTS' : 'TY + 2 BOTY', icon: <Bot size={23} /> },
         ].map((choice, index) => <button key={choice.title} aria-pressed={menuChoice === index} onClick={() => { setMenuChoice(index); gameAudio.uiClick(); }}><span>{choice.icon}<small>0{index + 1}</small></span><small>{choice.tag}</small><h3>{choice.title}</h3><p>{choice.detail}</p><i /></button>)}
-        <button className="cine-full-config" onClick={() => goScreen('setup')}><Settings2 size={16} /> Pełna konfiguracja bitwy</button>
+        <button className="cine-full-config" onClick={() => goScreen('setup')}><Settings2 size={16} /> {en ? 'Full battle setup' : 'Pełna konfiguracja bitwy'}</button>
       </div>
     </GameSetup>
     {showPad && <ConnectionsScreen onClose={() => setShowPad(false)} />}
@@ -341,9 +347,9 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
         <div className="mx-auto w-full max-w-6xl px-4 py-6">
           <div className="flex items-center justify-between">
             <button onClick={() => goScreen('menu')} className="press flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-bold text-zinc-300 hover:bg-white/10">
-              <Home className="h-4 w-4" /> MENU
+              <Home className="h-4 w-4" /> {en ? 'MENU' : 'MENU'}
             </button>
-            <h2 className="font-display text-2xl tracking-wide text-orange-400 sm:text-3xl">KONFIGURACJA BITWY</h2>
+            <h2 className="font-display text-2xl tracking-wide text-orange-400 sm:text-3xl">{en ? 'BATTLE SETUP' : 'KONFIGURACJA BITWY'}</h2>
             <button onClick={onExit} className="flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-bold text-zinc-300 hover:text-orange-300"><Home className="h-4 w-4" /> <span className="hidden sm:inline">JOYPAD</span></button>
           </div>
 
@@ -355,7 +361,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
 
           {/* players */}
           <div className="rise-in mt-6" style={{ animationDelay: '110ms' }}>
-            <div className="mb-3 flex items-center gap-2 text-sm font-bold tracking-widest text-zinc-400"><Users className="h-4 w-4" /> GRACZE (min. 2)</div>
+            <div className="mb-3 flex items-center gap-2 text-sm font-bold tracking-widest text-zinc-400"><Users className="h-4 w-4" /> {en ? 'PLAYERS (min. 2)' : 'GRACZE (min. 2)'}</div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {players.map((p) => (
                 <div
@@ -377,10 +383,10 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
                       onClick={() => setPlayers(pl => pl.map(x => x.id === p.id ? { ...x, isBot: !x.isBot } : x))}
                       className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs font-bold transition-all ${p.isBot ? 'border-orange-500/50 bg-orange-500/15 text-orange-300' : 'border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10'}`}
                     >
-                      {p.isBot ? <><Bot className="h-3.5 w-3.5" /> BOT (SI)</> : <><Gamepad2 className="h-3.5 w-3.5" /> CZŁOWIEK</>}
+                      {p.isBot ? <><Bot className="h-3.5 w-3.5" /> {en ? 'BOT (AI)' : 'BOT (SI)'}</> : <><Gamepad2 className="h-3.5 w-3.5" /> {en ? 'HUMAN' : 'CZŁOWIEK'}</>}
                     </button>
                   )}
-                  {p.id === 0 && <div className="mt-2 rounded-lg bg-white/5 px-2 py-1.5 text-center text-xs font-bold text-zinc-400">CZŁOWIEK (zawsze)</div>}
+                  {p.id === 0 && <div className="mt-2 rounded-lg bg-white/5 px-2 py-1.5 text-center text-xs font-bold text-zinc-400">{en ? 'HUMAN (always)' : 'CZŁOWIEK (zawsze)'}</div>}
                   {padBySlot(p.id) && (
                     <div className="mt-2 flex items-center justify-center gap-1.5 rounded-lg border border-green-500/40 bg-green-500/10 px-2 py-1.5 text-xs font-bold text-green-300">
                       <Smartphone className="h-3.5 w-3.5" /> {padBySlot(p.id)!.nick}
@@ -389,11 +395,11 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
                   {/* controls */}
                   <div className={`mt-3 space-y-1.5 text-[11px] ${!p.enabled || p.isBot ? 'pointer-events-none opacity-30' : ''}`}>
                     <div className="grid grid-cols-[52px_1fr] items-center gap-1">
-                      <span className="text-zinc-500">Jazda</span>
+                      <span className="text-zinc-500">{en ? 'Drive' : 'Jazda'}</span>
                       <div className="flex gap-1"><KeyCap>{p.controlLabels.forward}</KeyCap><KeyCap>{p.controlLabels.back}</KeyCap><KeyCap>{p.controlLabels.left}</KeyCap><KeyCap>{p.controlLabels.right}</KeyCap></div>
                     </div>
                     <div className="grid grid-cols-[52px_1fr] items-center gap-1">
-                      <span className="text-zinc-500">Ogień</span>
+                      <span className="text-zinc-500">{en ? 'Fire' : 'Ogień'}</span>
                       <div><KeyCap color="#7c2d12">{p.controlLabels.fire}</KeyCap></div>
                     </div>
                   </div>
@@ -404,10 +410,11 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
 
           {/* maps */}
           <div className="rise-in mt-6" style={{ animationDelay: '190ms' }}>
-            <div className="mb-3 flex items-center gap-2 text-sm font-bold tracking-widest text-zinc-400"><Target className="h-4 w-4" /> ARENA</div>
+            <div className="mb-3 flex items-center gap-2 text-sm font-bold tracking-widest text-zinc-400"><Target className="h-4 w-4" /> {en ? 'ARENA' : 'ARENA'}</div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               {(Object.keys(MAPS) as MapId[]).map((id) => {
                 const m = MAPS[id];
+                const mapCopy = localizedMap(id, language);
                 const active = mapId === id;
                 return (
                   <button
@@ -418,14 +425,14 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
                     <div className="relative h-24 overflow-hidden">
                       <MapThumb map={id} className="absolute inset-0 h-full w-full" />
                       <div className="absolute inset-x-3 bottom-2 flex gap-1">
-                        {m.night && <span className="flex items-center gap-1 rounded bg-black/60 px-2 py-0.5 text-[10px] font-bold text-indigo-300 backdrop-blur-sm"><Moon className="h-3 w-3" /> NOC</span>}
-                        {m.weather === 'rain' && <span className="flex items-center gap-1 rounded bg-black/60 px-2 py-0.5 text-[10px] font-bold text-sky-300 backdrop-blur-sm"><CloudRain className="h-3 w-3" /> DESZCZ</span>}
-                        {m.weather === 'dust' && <span className="flex items-center gap-1 rounded bg-black/60 px-2 py-0.5 text-[10px] font-bold text-orange-300 backdrop-blur-sm"><Wind className="h-3 w-3" /> PYŁ</span>}
+                        {m.night && <span className="flex items-center gap-1 rounded bg-black/60 px-2 py-0.5 text-[10px] font-bold text-indigo-300 backdrop-blur-sm"><Moon className="h-3 w-3" /> {en ? 'NIGHT' : 'NOC'}</span>}
+                        {m.weather === 'rain' && <span className="flex items-center gap-1 rounded bg-black/60 px-2 py-0.5 text-[10px] font-bold text-sky-300 backdrop-blur-sm"><CloudRain className="h-3 w-3" /> {en ? 'RAIN' : 'DESZCZ'}</span>}
+                        {m.weather === 'dust' && <span className="flex items-center gap-1 rounded bg-black/60 px-2 py-0.5 text-[10px] font-bold text-orange-300 backdrop-blur-sm"><Wind className="h-3 w-3" /> {en ? 'DUST' : 'PYŁ'}</span>}
                       </div>
                     </div>
                     <div className="bg-zinc-900 p-3">
-                      <div className="font-bold">{m.name}</div>
-                      <div className="mt-0.5 text-xs leading-snug text-zinc-400">{m.desc}</div>
+                      <div className="font-bold">{mapCopy.name}</div>
+                      <div className="mt-0.5 text-xs leading-snug text-zinc-400">{mapCopy.desc}</div>
                     </div>
                   </button>
                 );
@@ -436,7 +443,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
           {/* mode + rules */}
           <div className="rise-in mt-6 grid grid-cols-1 gap-3 lg:grid-cols-2" style={{ animationDelay: '270ms' }}>
             <div className="metal-panel rounded-2xl p-4">
-              <div className="mb-3 flex items-center gap-2 text-sm font-bold tracking-widest text-zinc-400"><Trophy className="h-4 w-4" /> TRYB GRY</div>
+              <div className="mb-3 flex items-center gap-2 text-sm font-bold tracking-widest text-zinc-400"><Trophy className="h-4 w-4" /> {en ? 'GAME MODE' : 'TRYB GRY'}</div>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => { gameAudio.uiClick(); setMode('deathmatch'); }}
@@ -444,46 +451,46 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
                 >
                   <Crosshair className="h-5 w-5 text-orange-400" />
                   <div className="mt-1 font-bold">Deathmatch</div>
-                  <div className="text-[11px] text-zinc-400">Kto pierwszy zdobędzie limit fragów. Odrodzenia bez limitu.</div>
+                  <div className="text-[11px] text-zinc-400">{en ? 'First to the kill limit wins. Unlimited respawns.' : 'Kto pierwszy zdobędzie limit fragów. Odrodzenia bez limitu.'}</div>
                 </button>
                 <button
                   onClick={() => { gameAudio.uiClick(); setMode('survival'); }}
                   className={`rounded-xl border-2 p-3 text-left transition-all ${mode === 'survival' ? 'border-red-400 bg-red-500/10' : 'border-white/10 bg-white/[0.03]'}`}
                 >
                   <Skull className="h-5 w-5 text-red-400" />
-                  <div className="mt-1 font-bold">Przetrwanie</div>
-                  <div className="text-[11px] text-zinc-400">Ograniczona liczba żyć. Ostatni czołg na placu wygrywa.</div>
+                  <div className="mt-1 font-bold">{en ? 'Survival' : 'Przetrwanie'}</div>
+                  <div className="text-[11px] text-zinc-400">{en ? 'Limited lives. The last tank standing wins.' : 'Ograniczona liczba żyć. Ostatni czołg na placu wygrywa.'}</div>
                 </button>
               </div>
             </div>
             <div className="metal-panel rounded-2xl p-4">
-              <div className="mb-3 flex items-center gap-2 text-sm font-bold tracking-widest text-zinc-400"><Timer className="h-4 w-4" /> ZASADY</div>
+              <div className="mb-3 flex items-center gap-2 text-sm font-bold tracking-widest text-zinc-400"><Timer className="h-4 w-4" /> {en ? 'RULES' : 'ZASADY'}</div>
               {mode === 'deathmatch' ? (
                 <div>
-                  <div className="mb-2 text-sm text-zinc-300">Limit fragów: <b className="text-orange-400">{killLimit}</b></div>
+                  <div className="mb-2 text-sm text-zinc-300">{en ? 'Kill limit:' : 'Limit fragów:'} <b className="text-orange-400">{killLimit}</b></div>
                   <SegmentedControl
                     options={([3, 5, 8, 10, 15] as const).map(v => ({ value: String(v), label: String(v) }))}
                     value={String(killLimit)}
                     onChange={v => setKillLimit(Number(v))}
                     accent="#fbbf24"
-                    label="Limit fragów"
+                    label={en ? 'Kill limit' : 'Limit fragów'}
                   />
                 </div>
               ) : (
                 <div>
-                  <div className="mb-2 text-sm text-zinc-300">Liczba żyć: <b className="text-red-400">{lives}</b></div>
+                  <div className="mb-2 text-sm text-zinc-300">{en ? 'Lives:' : 'Liczba żyć:'} <b className="text-red-400">{lives}</b></div>
                   <SegmentedControl
                     options={([1, 2, 3, 5, 7] as const).map(v => ({ value: String(v), label: String(v) }))}
                     value={String(lives)}
                     onChange={v => setLives(Number(v))}
                     accent="#f87171"
-                    label="Liczba żyć"
+                    label={en ? 'Lives' : 'Liczba żyć'}
                   />
                 </div>
               )}
               <div className="mt-3 flex items-center gap-2 rounded-lg bg-white/5 p-2.5 text-[11px] text-zinc-400">
                 <Info className="h-4 w-4 shrink-0 text-orange-400" />
-                Limit czasu: 5 minut. Przy remisie wygrywa gracz z największą liczbą fragów. Pociski rykoszetują raz — uważaj na własne odbicia!
+                {en ? 'Time limit: 5 minutes. Ties go to the player with the most kills. Shells ricochet once — watch your own shots!' : 'Limit czasu: 5 minut. Przy remisie wygrywa gracz z największą liczbą fragów. Pociski rykoszetują raz — uważaj na własne odbicia!'}
               </div>
             </div>
           </div>
@@ -494,10 +501,10 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
               disabled={!canStart}
               className={`flex items-center gap-3 rounded-2xl px-12 py-4 text-xl font-black tracking-widest transition-all ${canStart ? 'bg-gradient-to-b from-orange-400 to-orange-600 text-black shadow-[0_0_40px_rgba(251,146,60,0.4)] hover:scale-105' : 'cursor-not-allowed bg-zinc-800 text-zinc-500'}`}
             >
-              <Play className="h-6 w-6 fill-current" /> DO BOJU!
+              <Play className="h-6 w-6 fill-current" /> {en ? 'BATTLE!' : 'DO BOJU!'}
             </button>
-            {!canStart && <div className="text-sm font-bold text-red-400">Włącz minimum 2 graczy!</div>}
-            <div className="text-xs text-zinc-500">Włączono: {enabledCount} graczy • Pauza: P / ESC</div>
+            {!canStart && <div className="text-sm font-bold text-red-400">{en ? 'Enable at least 2 players!' : 'Włącz minimum 2 graczy!'}</div>}
+            <div className="text-xs text-zinc-500">{en ? 'Active: ' : 'Włączono: '}{enabledCount} {en ? 'players' : 'graczy'} • {en ? 'Pause' : 'Pauza'}: P / ESC</div>
           </div>
         </div>
       </div>
@@ -511,8 +518,8 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
     const winner = results.tanks.find(t => t.id === results.winner);
     const sorted = [...results.tanks].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
     return <>
-      <GameResults replayNotice={replayNotice} moments={moments} info={gameInfo('tanks')} title={winner ? winner.name : 'Remis.'} subtitle={winner ? `${winner.kills} fragów. Pole bitwy należy do Ciebie.` : 'Żaden czołg nie zdominował pola bitwy.'} winnerSlot={results.winner ?? null} scoreLabel="FRAGI"
-        players={sorted.map(t => ({ slot: t.id, name: t.name, color: t.color, score: t.kills, detail: `${t.deaths} zgonów · K/D ${(t.kills / Math.max(1, t.deaths)).toFixed(2)}${mode === 'survival' ? ` · ${t.lives} żyć` : ''}` }))}
+      <GameResults replayNotice={replayNotice} moments={moments} info={info} title={winner ? winner.name : (en ? 'Draw.' : 'Remis.')} subtitle={winner ? `${winner.kills} ${en ? 'kills. The battlefield is yours.' : 'fragów. Pole bitwy należy do Ciebie.'}` : (en ? 'No tank took control of the battlefield.' : 'Żaden czołg nie zdominował pola bitwy.')} winnerSlot={results.winner ?? null} scoreLabel={en ? 'KILLS' : 'FRAGI'}
+        players={sorted.map(t => ({ slot: t.id, name: t.name, color: t.color, score: t.kills, detail: `${t.deaths} ${en ? 'deaths' : 'zgonów'} · K/D ${(t.kills / Math.max(1, t.deaths)).toFixed(2)}${mode === 'survival' ? ` · ${t.lives} ${en ? 'lives' : 'żyć'}` : ''}` }))}
         onRestart={() => startGame()} onSettings={() => goScreen('setup')} onMenu={() => goScreen('menu')} onExit={onExit} />
       <ScreenCurtain state={curtain.state} />
     </>;
@@ -525,9 +532,9 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
       {/* top bar */}
       <div className="z-20 flex items-center justify-between gap-2 border-b border-amber-500/20 bg-gradient-to-b from-zinc-900 to-zinc-950 px-3 py-2">
         <div className="flex items-center gap-3">
-          <span className="font-display hidden text-sm tracking-wider text-amber-400 sm:block">STALOWY FRONT</span>
-          <span className="rounded bg-white/10 px-2 py-0.5 text-[11px] font-bold text-zinc-300">{MAPS[mapId].name}</span>
-          <span className="hidden items-center gap-1 rounded bg-white/10 px-2 py-0.5 text-[11px] font-bold text-zinc-300 sm:flex">{mode === 'deathmatch' ? <><Crosshair className="h-3 w-3 text-amber-400" />{killLimit} FRAGÓW</> : <><Heart className="h-3 w-3 text-red-400" />{lives} ŻYĆ</>}</span>
+          <span className="font-display hidden text-sm tracking-wider text-amber-400 sm:block">{info.title.toUpperCase()}</span>
+          <span className="rounded bg-white/10 px-2 py-0.5 text-[11px] font-bold text-zinc-300">{localizedMap(mapId, language).name}</span>
+          <span className="hidden items-center gap-1 rounded bg-white/10 px-2 py-0.5 text-[11px] font-bold text-zinc-300 sm:flex">{mode === 'deathmatch' ? <><Crosshair className="h-3 w-3 text-amber-400" />{killLimit} {en ? 'KILLS' : 'FRAGÓW'}</> : <><Heart className="h-3 w-3 text-red-400" />{lives} {en ? 'LIVES' : 'ŻYĆ'}</>}</span>
         </div>
         <div className="flex items-center gap-2">
           <div className={`flex items-center gap-1.5 rounded-lg border px-3 py-1 font-mono2 text-lg font-extrabold ${(hud?.timeLeft ?? 99) < 30 ? 'timer-urgent border-red-500/60 bg-red-500/15 text-red-300' : 'border-white/15 bg-black/50 text-amber-300'}`}>
@@ -535,23 +542,23 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
           </div>
         </div>
         <div className="flex items-center gap-1.5">
-          <button onClick={() => setShowPad(v => !v)} title="Telefon jako pad" className={`relative rounded-lg border p-2 transition-colors ${showPad ? 'border-amber-400 bg-amber-500/20 text-amber-300' : 'border-white/15 bg-white/5 text-zinc-300 hover:bg-white/10'}`}>
+          <button onClick={() => setShowPad(v => !v)} title={en ? 'Phone controllers' : 'Telefon jako kontroler'} className={`relative rounded-lg border p-2 transition-colors ${showPad ? 'border-amber-400 bg-amber-500/20 text-amber-300' : 'border-white/15 bg-white/5 text-zinc-300 hover:bg-white/10'}`}>
             <Smartphone className="h-4 w-4" />
             {padState.pads.length > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-green-500 px-1 text-[9px] font-bold text-black">{padState.pads.length}</span>}
           </button>
-          <button onClick={() => setShowHelp(h => !h)} title="Sterowanie" className={`rounded-lg border p-2 transition-colors ${showHelp ? 'border-amber-400 bg-amber-500/20 text-amber-300' : 'border-white/15 bg-white/5 text-zinc-300 hover:bg-white/10'}`}>
+          <button onClick={() => setShowHelp(h => !h)} title={en ? 'Controls' : 'Sterowanie'} className={`rounded-lg border p-2 transition-colors ${showHelp ? 'border-amber-400 bg-amber-500/20 text-amber-300' : 'border-white/15 bg-white/5 text-zinc-300 hover:bg-white/10'}`}>
             <Keyboard className="h-4 w-4" />
           </button>
-          <button onClick={toggleMute} title={muted ? 'Włącz dźwięk' : 'Wycisz'} className="rounded-lg border border-white/15 bg-white/5 p-2 text-zinc-300 hover:bg-white/10">
+          <button onClick={toggleMute} title={muted ? (en ? 'Turn sound on' : 'Włącz dźwięk') : (en ? 'Mute' : 'Wycisz')} className="rounded-lg border border-white/15 bg-white/5 p-2 text-zinc-300 hover:bg-white/10">
             {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
           </button>
-          <button onClick={() => gameRef.current?.togglePause()} title="Pauza (P)" className="rounded-lg border border-white/15 bg-white/5 p-2 text-zinc-300 hover:bg-white/10">
+          <button onClick={() => gameRef.current?.togglePause()} title={en ? 'Pause (P)' : 'Pauza (P)'} className="rounded-lg border border-white/15 bg-white/5 p-2 text-zinc-300 hover:bg-white/10">
             {hud?.paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
           </button>
-          <button onClick={() => { gameAudio.uiClick(); goScreen('setup'); }} title="Zakończ bitwę i wróć do ustawień" className="rounded-lg border border-red-500/40 bg-red-500/10 p-2 text-red-300 hover:bg-red-500/20">
+          <button onClick={() => { gameAudio.uiClick(); goScreen('setup'); }} title={en ? 'End battle and return to setup' : 'Zakończ bitwę i wróć do ustawień'} className="rounded-lg border border-red-500/40 bg-red-500/10 p-2 text-red-300 hover:bg-red-500/20">
             <Home className="h-4 w-4" />
           </button>
-          <button onClick={onExit} title="Wróć do JoyPad" className="rounded-lg border border-orange-400/40 bg-orange-500/10 p-2 text-orange-200 hover:bg-orange-500/20"><Gamepad2 className="h-4 w-4" /></button>
+          <button onClick={onExit} title={en ? 'Back to JoyPad' : 'Wróć do JoyPad'} className="rounded-lg border border-orange-400/40 bg-orange-500/10 p-2 text-orange-200 hover:bg-orange-500/20"><Gamepad2 className="h-4 w-4" /></button>
         </div>
       </div>
 
@@ -559,12 +566,10 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
       <div className="relative flex min-h-0 flex-1">
         {/* left HUD */}
         <div className="z-10 hidden w-52 shrink-0 flex-col gap-2 overflow-y-auto border-r border-white/10 bg-zinc-950/90 p-2 md:flex">
-          {hud?.tanks.slice(0, Math.ceil((hud?.tanks.length ?? 0) / 2)).map(t => <PlayerCard key={t.id} t={t} mode={mode} killLimit={killLimit} phone={padBySlot(t.id)?.nick} />)}
+          {hud?.tanks.slice(0, Math.ceil((hud?.tanks.length ?? 0) / 2)).map(t => <PlayerCard key={t.id} t={t} mode={mode} killLimit={killLimit} phone={padBySlot(t.id)?.nick} language={language} />)}
           <div className="mt-auto rounded-xl border border-white/10 bg-black/50 p-2.5 text-[10px] leading-relaxed text-zinc-500">
-            <div className="mb-1 flex items-center gap-1 font-bold tracking-widest text-zinc-400"><Lightbulb className="h-3 w-3 text-amber-400" /> TAKTYKA</div>
-            • Strzelaj w ściany, by rykoszetem trafić wroga za rogiem.<br />
-            • Zbieraj <span className="text-green-400">power-upy</span> — tarcza ratuje życie.<br />
-            • Cofanie + skręt = szybki unik.
+            <div className="mb-1 flex items-center gap-1 font-bold tracking-widest text-zinc-400"><Lightbulb className="h-3 w-3 text-amber-400" /> {en ? 'TACTICS' : 'TAKTYKA'}</div>
+            {en ? <>• Ricochet shots off walls to hit enemies around corners.<br />• Collect <span className="text-green-400">power-ups</span> — a shield can save you.<br />• Reverse + turn for a quick dodge.</> : <>• Strzelaj w ściany, by rykoszetem trafić wroga za rogiem.<br />• Zbieraj <span className="text-green-400">power-upy</span> — tarcza ratuje życie.<br />• Cofanie + skręt = szybki unik.</>}
           </div>
         </div>
 
@@ -598,7 +603,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
           </div>
 
           {/* pause overlay */}
-          {hud?.paused && <PauseSheet game="Stalowy Front" onResume={() => gameRef.current?.togglePause()} onExit={onExit} />}
+          {hud?.paused && <PauseSheet game={info.title} onResume={() => gameRef.current?.togglePause()} onExit={onExit} />}
 
           {/* pad overlay */}
           {showPad && (
@@ -620,14 +625,14 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
                       {padBySlot(p.id) && <span className="flex items-center gap-1 rounded bg-green-500/15 px-1.5 py-0.5 text-[10px] text-green-300"><Smartphone className="h-3 w-3" />{padBySlot(p.id)!.nick}</span>}
                     </div>
                     <div className="space-y-1.5 text-xs text-zinc-300">
-                      <div className="flex items-center justify-between"><span>Przód / Tył</span><span className="flex gap-1"><KeyCap>{p.controlLabels.forward}</KeyCap><KeyCap>{p.controlLabels.back}</KeyCap></span></div>
-                      <div className="flex items-center justify-between"><span>Obrót w lewo / prawo</span><span className="flex gap-1"><KeyCap>{p.controlLabels.left}</KeyCap><KeyCap>{p.controlLabels.right}</KeyCap></span></div>
-                      <div className="flex items-center justify-between"><span className="font-bold text-red-300">OGIEŃ</span><KeyCap color="#7c2d12">{p.controlLabels.fire}</KeyCap></div>
+                      <div className="flex items-center justify-between"><span>{en ? 'Forward / Reverse' : 'Przód / Tył'}</span><span className="flex gap-1"><KeyCap>{p.controlLabels.forward}</KeyCap><KeyCap>{p.controlLabels.back}</KeyCap></span></div>
+                      <div className="flex items-center justify-between"><span>{en ? 'Turn left / right' : 'Obrót w lewo / prawo'}</span><span className="flex gap-1"><KeyCap>{p.controlLabels.left}</KeyCap><KeyCap>{p.controlLabels.right}</KeyCap></span></div>
+                      <div className="flex items-center justify-between"><span className="font-bold text-red-300">{en ? 'FIRE' : 'OGIEŃ'}</span><KeyCap color="#7c2d12">{p.controlLabels.fire}</KeyCap></div>
                     </div>
                   </div>
                 ))}
                 <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200 sm:col-span-2">
-                  <b>Pauza:</b> <KeyCap>P</KeyCap> lub <KeyCap>ESC</KeyCap> — Wieżyczka podąża za kadłubem. Pociski rykoszetują raz od ścian. Zbieraj zielone skrzynki z bonusami!
+                  <b>{en ? 'Pause:' : 'Pauza:'}</b> <KeyCap>P</KeyCap> {en ? 'or' : 'lub'} <KeyCap>ESC</KeyCap> — {en ? 'The turret follows your hull when not aiming. Shells ricochet once. Collect green power-up crates!' : 'Wieżyczka podąża za kadłubem. Pociski rykoszetują raz od ścian. Zbieraj zielone skrzynki z bonusami!'}
                 </div>
               </div>
             </div>
@@ -636,15 +641,15 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
 
         {/* right HUD */}
         <div className="z-10 hidden w-52 shrink-0 flex-col gap-2 overflow-y-auto border-l border-white/10 bg-zinc-950/90 p-2 md:flex">
-          {hud?.tanks.slice(Math.ceil((hud?.tanks.length ?? 0) / 2)).map(t => <PlayerCard key={t.id} t={t} mode={mode} killLimit={killLimit} phone={padBySlot(t.id)?.nick} />)}
+          {hud?.tanks.slice(Math.ceil((hud?.tanks.length ?? 0) / 2)).map(t => <PlayerCard key={t.id} t={t} mode={mode} killLimit={killLimit} phone={padBySlot(t.id)?.nick} language={language} />)}
           <div className="mt-auto space-y-1.5">
             <div className="rounded-xl border border-white/10 bg-black/50 p-2.5 text-[10px] leading-relaxed text-zinc-500">
-              <div className="mb-1 flex items-center gap-1 font-bold tracking-widest text-zinc-400"><Package className="h-3 w-3 text-green-400" /> BONUSY</div>
-              <div className="flex items-center gap-1.5"><span className="font-mono2 font-bold text-green-400">+</span> Naprawa +50 HP</div>
-              <div className="flex items-center gap-1.5"><span className="font-mono2 font-bold text-green-400">◈</span> Tarcza 10 s</div>
-              <div className="flex items-center gap-1.5"><span className="font-mono2 font-bold text-green-400">≋</span> Szybkostrzelność</div>
-              <div className="flex items-center gap-1.5"><span className="font-mono2 font-bold text-green-400">●</span> Ciężki pocisk</div>
-              <div className="flex items-center gap-1.5"><span className="font-mono2 font-bold text-green-400">»</span> Turbo 12 s</div>
+              <div className="mb-1 flex items-center gap-1 font-bold tracking-widest text-zinc-400"><Package className="h-3 w-3 text-green-400" /> {en ? 'POWER-UPS' : 'BONUSY'}</div>
+              <div className="flex items-center gap-1.5"><span className="font-mono2 font-bold text-green-400">+</span> {en ? 'Repair +50 HP' : 'Naprawa +50 HP'}</div>
+              <div className="flex items-center gap-1.5"><span className="font-mono2 font-bold text-green-400">◈</span> {en ? 'Shield 10 s' : 'Tarcza 10 s'}</div>
+              <div className="flex items-center gap-1.5"><span className="font-mono2 font-bold text-green-400">≋</span> {en ? 'Rapid fire' : 'Szybkostrzelność'}</div>
+              <div className="flex items-center gap-1.5"><span className="font-mono2 font-bold text-green-400">●</span> {en ? 'Heavy shell' : 'Ciężki pocisk'}</div>
+              <div className="flex items-center gap-1.5"><span className="font-mono2 font-bold text-green-400">»</span> {en ? 'Turbo 12 s' : 'Turbo 12 s'}</div>
             </div>
           </div>
         </div>
@@ -666,7 +671,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
             )}
           </div>
         ))}
-        <span className="text-[11px] text-zinc-600">P = pauza</span>
+        <span className="text-[11px] text-zinc-600">P = {en ? 'pause' : 'pauza'}</span>
       </div>
     </div>
     <ScreenCurtain state={curtain.state} />

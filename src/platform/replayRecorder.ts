@@ -1,5 +1,7 @@
 import fixWebmDuration from 'fix-webm-duration';
 import type { Moment } from './momentRecorder';
+import type { Language } from './i18n';
+import { t as translateMessage } from './i18n';
 
 export interface ReplayClip {
   url: string;
@@ -53,20 +55,22 @@ export class ReplayRecorder {
   private ending = false;
   private stopWaits = new Map<Segment, ReturnType<typeof setTimeout>>();
   private readonly limits: Limits;
+  private readonly language: Language;
 
-  constructor(enabled = true, limits: Partial<Limits> = {}) {
+  constructor(enabled = true, limits: Partial<Limits> = {}, language: Language = 'pl') {
     this.limits = { ...REPLAY_LIMITS, ...limits };
-    if (!enabled) { this.notice = 'Nagrywanie Moments wyłączone w ustawieniach TV.'; return; }
+    this.language = language;
+    if (!enabled) { this.notice = translateMessage(language, 'replay.recordingDisabled'); return; }
     try {
       const mime = replayMime();
-      if (!mime) { this.notice = 'Ta przeglądarka nie obsługuje nagrywania Moments. Spróbuj aktualnego Chrome, Edge lub Safari na dużym ekranie.'; return; }
+      if (!mime) { this.notice = translateMessage(language, 'replay.unsupported'); return; }
       this.mime = mime;
       this.surface = document.createElement('canvas');
       this.surface.width = 1280; this.surface.height = 720;
       this.ctx = this.surface.getContext('2d', { alpha: false });
       if (!this.ctx) throw new Error('Canvas2D unavailable');
       document.addEventListener('visibilitychange', this.visibility);
-    } catch { this.fail('Nie udało się przygotować nagrywania. Gra działa dalej.'); }
+    } catch { this.fail(translateMessage(this.language, 'replay.setupFailed')); }
   }
 
   private clock() { return this.elapsed + (this.paused ? 0 : performance.now() - this.resumedAt); }
@@ -80,7 +84,7 @@ export class ReplayRecorder {
         if (paused && s.recorder.state === 'recording') s.recorder.pause();
         if (!paused && s.recorder.state === 'paused') s.recorder.resume();
       }
-    } catch { this.fail('Przeglądarka przerwała nagrywanie podczas pauzy.'); }
+    } catch { this.fail(translateMessage(this.language, 'replay.pauseFailed')); }
   }
 
   /** Must be called in the same render task, not in a separate rAF or polling loop. */
@@ -102,7 +106,7 @@ export class ReplayRecorder {
       if (!newest || now - newest.start >= this.limits.strideMs) this.startSegment(now);
       for (const s of this.segments) if (s.end === undefined) s.frames++;
       this.prune();
-    } catch { this.fail('Nagrywanie zostało przerwane (kodek, zasoby lub niedostępny obraz gry).'); }
+    } catch { this.fail(translateMessage(this.language, 'replay.frameFailed')); }
   };
 
   private startSegment(start: number) {
@@ -116,12 +120,12 @@ export class ReplayRecorder {
       if (this.disposed || s.failed || !event.data.size) return;
       if (this.bytes + event.data.size > this.limits.maxBytes) {
         s.failed = true;
-        this.fail('Osiągnięto limit pamięci Moments. Zachowano wcześniej ukończone klipy.');
+        this.fail(translateMessage(this.language, 'replay.memoryLimit'));
         return;
       }
       s.chunks.push(event.data); s.bytes += event.data.size; this.bytes += event.data.size;
     };
-    recorder.onerror = () => { s.failed = true; this.fail('Kodek przerwał nagrywanie. Zachowano wcześniej ukończone klipy.'); };
+    recorder.onerror = () => { s.failed = true; this.fail(translateMessage(this.language, 'replay.codecFailed')); };
     recorder.onstop = () => { clearTimeout(this.stopWaits.get(s)); this.stopWaits.delete(s); resolve(); };
     recorder.start(1000); // Timeslices are retained together, INCLUDING the initial header.
   }

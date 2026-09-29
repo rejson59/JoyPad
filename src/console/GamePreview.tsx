@@ -4,6 +4,7 @@ import { Pause, Play } from 'lucide-react';
 import type { GameInfo } from '../arcade/catalog';
 import { useReducedMotion } from '../lib/useReducedMotion';
 import { useConsolePreferences } from './preferences';
+import { useT } from '../platform/i18n';
 
 export const PREVIEW_GAMES = ['tanks', 'race', 'orbit'] as const;
 /** Bump when public/previews/* is re-recorded: the files keep stable names, so a query
@@ -12,6 +13,7 @@ const PREVIEW_REVISION = '2';
 /** Recorded offline: never import an engine, connect a pad or advance a real match here. */
 export function GamePreview({ game, suspended, controlsTarget }: { game: GameInfo; suspended: boolean; controlsTarget: HTMLElement | null }) {
   const prefs = useConsolePreferences();
+  const { language } = useT();
   const reduced = useReducedMotion();
   const root = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
@@ -57,11 +59,11 @@ export function GamePreview({ game, suspended, controlsTarget }: { game: GameInf
   return <>
     <div ref={root} className={`os-wallpaper os-game-preview ${playing && mounted ? 'is-playing' : ''}`} style={{ '--preview-ratio': ratio } as CSSProperties}>
       <img className="is-selected" src={`${import.meta.env.BASE_URL}${game.cover}`} alt="" style={{ viewTransitionName: playing && mounted ? 'none' : 'game-cover' }} />
-      {mounted && <video ref={video} style={{ viewTransitionName: playing ? 'game-cover' : 'none' }} muted playsInline loop preload="none" aria-label={`Nagrana rozgrywka botów w Full HD — ${game.title}`} onLoadedMetadata={event => { const { videoWidth, videoHeight } = event.currentTarget; if (videoWidth && videoHeight) setRatio(`${videoWidth} / ${videoHeight}`); }} onPlaying={() => setPlaying(true)} onWaiting={() => setPlaying(false)} onError={() => { setFailed(true); setPlaying(false); }}>
+      {mounted && <video ref={video} style={{ viewTransitionName: playing ? 'game-cover' : 'none' }} muted playsInline loop preload="none" aria-label={language === 'en' ? `Recorded Full HD gameplay preview — ${game.title}` : `Nagrana rozgrywka botów w Full HD — ${game.title}`} onLoadedMetadata={event => { const { videoWidth, videoHeight } = event.currentTarget; if (videoWidth && videoHeight) setRatio(`${videoWidth} / ${videoHeight}`); }} onPlaying={() => setPlaying(true)} onWaiting={() => setPlaying(false)} onError={() => { setFailed(true); setPlaying(false); }}>
         <source src={`${import.meta.env.BASE_URL}previews/${game.id}.mp4?v=${PREVIEW_REVISION}`} type="video/mp4" />
         <source src={`${import.meta.env.BASE_URL}previews/${game.id}.webm?v=${PREVIEW_REVISION}`} type="video/webm" />
       </video>}
     </div>
-    {controlsTarget && createPortal(<button type="button" className="os-icon os-background-toggle" disabled={failed} title={failed ? 'Podgląd niedostępny · okładka pozostaje' : mounted ? 'Zatrzymaj nagranie rozgrywki' : 'Odtwórz nagranie rozgrywki'} aria-label={mounted ? 'Zatrzymaj podgląd rozgrywki' : 'Odtwórz podgląd rozgrywki'} onClick={() => { if (mounted) { setPaused(true); setRequested(false); } else { setPaused(false); setRequested(true); } }}>{mounted ? <Pause size={18} /> : <Play size={18} />}</button>, controlsTarget)}
+    {controlsTarget && createPortal(<button type="button" className="os-icon os-background-toggle" disabled={failed} title={failed ? (language === 'en' ? 'Preview unavailable · showing cover' : 'Podgląd niedostępny · okładka pozostaje') : mounted ? (language === 'en' ? 'Pause gameplay preview' : 'Zatrzymaj nagranie rozgrywki') : (language === 'en' ? 'Play gameplay preview' : 'Odtwórz nagranie rozgrywki')} aria-label={mounted ? (language === 'en' ? 'Pause gameplay preview' : 'Zatrzymaj podgląd rozgrywki') : (language === 'en' ? 'Play gameplay preview' : 'Odtwórz podgląd rozgrywki')} onClick={() => { if (mounted) { setPaused(true); setRequested(false); } else { setPaused(false); setRequested(true); } }}>{mounted ? <Pause size={18} /> : <Play size={18} />}</button>, controlsTarget)}
   </>;
 }

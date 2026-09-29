@@ -2,6 +2,7 @@ import type { FloatText, GameMode, KillEvent, Light, MapId, Particle, PlayerConf
 import { MAPS, WORLD_H, WORLD_W } from './maps';
 import { gameAudio } from './audio';
 import type { PadFx, PadInput } from '../net/protocol';
+import type { Language } from '../platform/i18n';
 
 export interface HudTank {
   id: number; name: string; color: string;
@@ -28,6 +29,7 @@ interface EngineOpts {
   killLimit: number;
   lives: number;
   timeLimit: number;
+  language?: Language;
   onHud: (h: HudState) => void;
   onKill: (k: KillEvent) => void;
   onFrame?: (canvas: HTMLCanvasElement) => void;
@@ -75,6 +77,7 @@ export class TankGame {
   lightCanvas: HTMLCanvasElement;
   lctx: CanvasRenderingContext2D;
   opts: EngineOpts;
+  language: Language = 'pl';
   map = MAPS.desert;
 
   tanks: TankState[] = [];
@@ -123,6 +126,7 @@ export class TankGame {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
     this.opts = opts;
+    this.language = opts.language ?? 'pl';
     this.map = MAPS[opts.mapId];
     this.timeLeft = opts.timeLimit;
     this.ground = document.createElement('canvas');
@@ -337,7 +341,7 @@ export class TankGame {
       if (!this.paused && !this.gameOver) {
         if (this.countdown > 0) {
           this.countdown -= dt;
-          if (this.countdown <= 0) { this.countdown = 0; gameAudio.countdownBeep(true); this.addText(WORLD_W / 2, WORLD_H / 2 - 60, 'OGNIA!', '#fbbf24', 64); }
+          if (this.countdown <= 0) { this.countdown = 0; gameAudio.countdownBeep(true); this.addText(WORLD_W / 2, WORLD_H / 2 - 60, this.language === 'en' ? 'FIRE!' : 'OGNIA!', '#fbbf24', 64); }
         } else {
           // slow-mo
           if (this.slowMo > 0) { this.slowMo -= dt; this.timeScale = lerp(this.timeScale, 0.35, 0.2); }
@@ -860,7 +864,7 @@ export class TankGame {
     if (wl.hp <= 0 && !wl.destroyed) {
       wl.destroyed = true;
       gameAudio.wallBreak();
-      this.addText(wl.x + wl.w / 2, wl.y, '+Zniszczono', '#e5e5e5', 15);
+      this.addText(wl.x + wl.w / 2, wl.y, this.language === 'en' ? '+Destroyed' : '+Zniszczono', '#e5e5e5', 15);
       // rubble on ground
       const g = this.gctx;
       g.fillStyle = 'rgba(0,0,0,0.25)';
@@ -1044,7 +1048,7 @@ export class TankGame {
       this.opts.onPadFx?.(killer.id, 'kill');
       this.addText(t.x, t.y - 70, `${killer.cfg.name} +1`, killer.cfg.color, 22);
     } else if (suicide) {
-      this.addText(t.x, t.y - 70, 'SAMOZNISZCZENIE!', '#f87171', 20);
+      this.addText(t.x, t.y - 70, this.language === 'en' ? 'SELF-DESTRUCTION!' : 'SAMOZNISZCZENIE!', '#f87171', 20);
     }
     const ev: KillEvent = {
       killer: killerId, victim: t.id,
@@ -1085,7 +1089,7 @@ export class TankGame {
     t.hp = t.maxHp; t.alive = true; t.spawnShield = 2.5;
     t.rapidUntil = 0; t.bigUntil = 0; t.speedUntil = 0; t.shield = 0;
     this.addLight(t.x, t.y, 200, '150,220,255', 0.8, 0.5, false);
-    this.addText(t.x, t.y - 50, 'POWRÓT DO WALKI', t.cfg.color, 18);
+    this.addText(t.x, t.y - 50, this.language === 'en' ? 'BACK IN ACTION' : 'POWRÓT DO WALKI', t.cfg.color, 18);
     this.opts.onPadFx?.(t.id, 'respawn');
   }
 
@@ -1148,7 +1152,9 @@ export class TankGame {
   applyPowerup(t: TankState, p: PowerUpState) {
     gameAudio.pickup();
     this.addLight(p.x, p.y, 200, '150,255,170', 1, 0.5, false);
-    const labels: Record<string, string> = {
+    const labels: Record<string, string> = this.language === 'en' ? {
+      repair: '+50 ARMOR', shield: 'SHIELD 10s', rapid: 'RAPID FIRE', big: 'HEAVY SHELL', speed: 'TURBO 12s',
+    } : {
       repair: '+50 PANCERZ', shield: 'TARCZA 10s', rapid: 'SZYBKOSTRZELNOŚĆ', big: 'CIĘŻKI POCISK', speed: 'TURBO 12s',
     };
     this.addText(t.x, t.y - 56, labels[p.kind], '#86efac', 19);
@@ -1304,7 +1310,7 @@ export class TankGame {
       ctx.textAlign = 'center';
       ctx.font = '400 150px "Black Ops One", sans-serif';
       ctx.lineWidth = 10; ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-      const label = n > 3 ? 'GOTOWI?' : n <= 0 ? 'START' : String(n);
+      const label = n > 3 ? (this.language === 'en' ? 'READY?' : 'GOTOWI?') : n <= 0 ? 'START' : String(n);
       ctx.strokeText(label, WORLD_W / 2, WORLD_H / 2 + 40);
       const grad = ctx.createLinearGradient(0, WORLD_H / 2 - 100, 0, WORLD_H / 2 + 60);
       grad.addColorStop(0, '#fde68a'); grad.addColorStop(1, '#f59e0b');

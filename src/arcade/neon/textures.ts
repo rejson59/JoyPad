@@ -248,17 +248,17 @@ export function checkerTexture() {
 }
 
 const BILLBOARDS = [
-  { t: 'NEON RUSH', s: 'GRAND PRIX 2099', c1: '#00f0ff', c2: '#ff2bd6' },
-  { t: 'ZAP COLA', s: 'ENERGIA KWANTOWA', c1: '#ff3b3b', c2: '#ffd400' },
-  { t: 'HYPERDRIVE', s: 'NAPĘD FUZYJNY', c1: '#7cff4f', c2: '#00f0ff' },
-  { t: 'ネオン都市', s: 'NEO KRAKÓW', c1: '#ff2bd6', c2: '#ffffff' },
-  { t: 'SYNTH//CORP', s: 'PRZYSZŁOŚĆ JEST TERAZ', c1: '#b04dff', c2: '#00f0ff' },
-  { t: 'KART-X', s: 'MISTRZOSTWA ŚWIATA', c1: '#ffae00', c2: '#ff2bd6' },
-  { t: 'ORBITAL', s: 'LOTY NA KSIĘŻYC 99₡', c1: '#4fd1ff', c2: '#ffffff' },
-  { t: 'CYBER SUSHI', s: '24/7 DRONY DOSTAWY', c1: '#ff4f8b', c2: '#7cff4f' },
+  { t: 'NEON RUSH', pl: 'GRAND PRIX 2099', en: 'GRAND PRIX 2099', c1: '#00f0ff', c2: '#ff2bd6' },
+  { t: 'ZAP COLA', pl: 'ENERGIA KWANTOWA', en: 'QUANTUM ENERGY', c1: '#ff3b3b', c2: '#ffd400' },
+  { t: 'HYPERDRIVE', pl: 'NAPĘD FUZYJNY', en: 'FUSION DRIVE', c1: '#7cff4f', c2: '#00f0ff' },
+  { t: 'ネオン都市', pl: 'NEO KRAKÓW', en: 'NEO KRAKÓW', c1: '#ff2bd6', c2: '#ffffff' },
+  { t: 'SYNTH//CORP', pl: 'PRZYSZŁOŚĆ JEST TERAZ', en: 'THE FUTURE IS NOW', c1: '#b04dff', c2: '#00f0ff' },
+  { t: 'KART-X', pl: 'MISTRZOSTWA ŚWIATA', en: 'WORLD CHAMPIONSHIP', c1: '#ffae00', c2: '#ff2bd6' },
+  { t: 'ORBITAL', pl: 'LOTY NA KSIĘŻYC 99₡', en: 'MOON FLIGHTS 99₡', c1: '#4fd1ff', c2: '#ffffff' },
+  { t: 'CYBER SUSHI', pl: '24/7 DRONY DOSTAWY', en: '24/7 DRONE DELIVERY', c1: '#ff4f8b', c2: '#7cff4f' },
 ];
 
-export function billboardTexture(i: number) {
+export function billboardTexture(i: number, language: 'pl' | 'en' = 'pl') {
   const W = 1024;
   const H = 512;
   const b = canvas(W, H);
@@ -281,7 +281,7 @@ export function billboardTexture(i: number) {
   b.ctx.shadowColor = d.c2;
   b.ctx.fillStyle = d.c2;
   b.ctx.font = 'bold 56px "Segoe UI", sans-serif';
-  b.ctx.fillText(d.s, W / 2, H * 0.76);
+  b.ctx.fillText(language === 'en' ? d.en : d.pl, W / 2, H * 0.76);
   // linie skanowania
   b.ctx.shadowBlur = 0;
   b.ctx.fillStyle = 'rgba(0,0,0,0.25)';
@@ -311,7 +311,7 @@ export function itemBoxTexture() {
   return tex(b.c, true, false);
 }
 
-export function screenTexture() {
+export function screenTexture(language: 'pl' | 'en' = 'pl') {
   const W = 512;
   const H = 128;
   const b = canvas(W, H);
@@ -323,7 +323,7 @@ export function screenTexture() {
   b.ctx.font = 'bold 70px "Segoe UI", sans-serif';
   b.ctx.textAlign = 'center';
   b.ctx.textBaseline = 'middle';
-  b.ctx.fillText('START ▸ META', W / 2, H / 2);
+  b.ctx.fillText(language === 'en' ? 'START ▸ FINISH' : 'START ▸ META', W / 2, H / 2);
   return tex(b.c, true, false);
 }
 

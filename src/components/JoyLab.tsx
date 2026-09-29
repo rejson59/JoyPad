@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, Gamepad2, X } from 'lucide-react';
 import { padHost } from '../net/padHost';
 import { usePadHost } from '../pad/PadHostPanel';
+import { useT } from '../platform/i18n';
 
 /**
  * LAB KONTROLERA na dużym ekranie — pokój zabaw w duchu Astro's Playroom.
@@ -17,7 +18,7 @@ import { usePadHost } from '../pad/PadHostPanel';
  */
 
 const ZONE_COLORS = ['#fbbf24', '#fb923c', '#f472b6', '#ef4444', '#a78bfa', '#38bdf8', '#2dd4bf', '#a3e635'];
-const ZONE_NAMES = ['KLIK', 'DUBLET', 'BUZZ', 'SERCE', 'TRZEPOT', 'SERIA', 'FALA', 'BĘBEN'];
+const ZONE_NAMES = { pl: ['KLIK', 'DUBLET', 'BUZZ', 'SERCE', 'TRZEPOT', 'SERIA', 'FALA', 'BĘBEN'], en: ['TAP', 'DOUBLE', 'BUZZ', 'HEART', 'FLUTTER', 'COMBO', 'WAVE', 'DRUM'] } as const;
 const ZONE_ANCHORS: [number, number][] = [[0.18, 0.3], [0.5, 0.18], [0.82, 0.3], [0.2, 0.7], [0.8, 0.7], [0.35, 0.45], [0.65, 0.45], [0.5, 0.82]];
 
 interface Body { x: number; y: number; vx: number; vy: number; r: number; rot: number; vr: number; color: string; square: boolean }
@@ -25,13 +26,15 @@ interface Pulse { x: number; y: number; t: number; color: string; label: string 
 
 function SensorLab({ onClose }: { onClose: () => void }) {
   const state = usePadHost();
+  const { language } = useT();
+  const en = language === 'en';
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const inputRef = useRef({ gx: 0, gy: 0, shake: 0, mask: 0, spin: 0 });
   const prevMask = useRef(0);
   const shakeAt = useRef(0);
   const [done, setDone] = useState({ shake: false, tilt: false, zones: false });
   const pad = state.pads[0];
-  const padName = pad?.nick || 'Twój telefon';
+  const padName = pad?.nick || (en ? 'Your phone' : 'Twój telefon');
   const padColor = '#f97316';
   const allDone = done.shake && done.tilt && done.zones;
 
@@ -119,7 +122,7 @@ function SensorLab({ onClose }: { onClose: () => void }) {
         const bit = 1 << i;
         if ((mask & bit) && !(prevMask.current & bit)) {
           const [ax, ay] = ZONE_ANCHORS[i];
-          pulses.push({ x: W * ax, y: H * ay, t: 1, color: ZONE_COLORS[i], label: ZONE_NAMES[i] });
+          pulses.push({ x: W * ax, y: H * ay, t: 1, color: ZONE_COLORS[i], label: ZONE_NAMES[language][i] });
           for (const b of bodies) {
             const dx = b.x - W * ax, dy = b.y - H * ay, d = Math.hypot(dx, dy) || 1;
             if (d < 320) { const k = (1 - d / 320) * 700; b.vx += (dx / d) * k; b.vy += (dy / d) * k; }
@@ -204,26 +207,30 @@ function SensorLab({ onClose }: { onClose: () => void }) {
     };
     raf = requestAnimationFrame(frame);
     return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', layout); };
-  }, []);
+  }, [language]);
 
-  const stations: { key: keyof typeof done; num: string; title: string; hint: string }[] = [
+  const stations: { key: keyof typeof done; num: string; title: string; hint: string }[] = en ? [
+    { key: 'shake', num: '01', title: 'SHAKE TEST', hint: 'Shake your phone — pieces rattle and your phone vibrates' },
+    { key: 'tilt', num: '02', title: 'GYROSCOPE', hint: 'Tilt your phone — gravity pulls the pieces with it' },
+    { key: 'zones', num: '03', title: 'HAPTIC ZONES', hint: 'Tap the color zones — each has its own pulse' },
+  ] : [
     { key: 'shake', num: '01', title: 'GRZECHOTKA', hint: 'Potrząśnij telefonem — elementy grzechoczą, a telefon wibruje' },
     { key: 'tilt', num: '02', title: 'ŻYROSKOP', hint: 'Przechyl telefon — grawitacja kulki ciągnie za przechyłem' },
     { key: 'zones', num: '03', title: 'STREFY HAPTYCZNE', hint: 'Dotknij kolorowych stref — każda ma inny impuls' },
   ];
 
   return (
-    <div className="fixed inset-0 z-[100] select-none overflow-hidden bg-[#07090f] text-white" role="dialog" aria-label="Lab kontrolera">
+    <div className="fixed inset-0 z-[100] select-none overflow-hidden bg-[#07090f] text-white" role="dialog" aria-label={en ? 'Controller lab' : 'Lab kontrolera'}>
       <div className="pointer-events-none absolute inset-0 opacity-[.05]" style={{ backgroundImage: 'linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px)', backgroundSize: '48px 48px' }} />
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
       <div className="pointer-events-none absolute inset-0 flex flex-col p-5 sm:p-8">
         <header className="flex items-start justify-between gap-3">
           <div>
-            <div className="joy-kicker flex items-center gap-2 text-orange-300"><Gamepad2 size={14} /> LAB KONTROLERA / POKÓJ ZABAW</div>
-            <h1 className="joy-heading mt-2 text-3xl font-extrabold tracking-[-.04em] sm:text-5xl">Twój telefon <span className="joy-gradient-text">żyje</span></h1>
-            <p className="mt-2 max-w-md text-xs leading-relaxed text-slate-400 sm:text-sm">Weź <b className="text-white">{padName}</b> w dłoń i wykonaj 3 zadania. Wszystko na tym ekranie reaguje na ruch telefonu.</p>
+            <div className="joy-kicker flex items-center gap-2 text-orange-300"><Gamepad2 size={14} /> {en ? 'CONTROLLER LAB / PLAYROOM' : 'LAB KONTROLERA / POKÓJ ZABAW'}</div>
+            <h1 className="joy-heading mt-2 text-3xl font-extrabold tracking-[-.04em] sm:text-5xl">{en ? <>Your phone <span className="joy-gradient-text">is alive</span></> : <>Twój telefon <span className="joy-gradient-text">żyje</span></>}</h1>
+            <p className="mt-2 max-w-md text-xs leading-relaxed text-slate-400 sm:text-sm">{en ? <>Pick up <b className="text-white">{padName}</b> and complete three tasks. Everything on this screen reacts to your phone.</> : <>Weź <b className="text-white">{padName}</b> w dłoń i wykonaj 3 zadania. Wszystko na tym ekranie reaguje na ruch telefonu.</>}</p>
           </div>
-          <button onClick={onClose} className="pointer-events-auto flex items-center gap-2 rounded-xl border border-white/20 bg-black/40 px-4 py-2.5 text-xs font-bold backdrop-blur hover:bg-white/10"><X size={15} /> DO BIBLIOTEKI</button>
+          <button onClick={onClose} className="pointer-events-auto flex items-center gap-2 rounded-xl border border-white/20 bg-black/40 px-4 py-2.5 text-xs font-bold backdrop-blur hover:bg-white/10"><X size={15} /> {en ? 'BACK TO LIBRARY' : 'DO BIBLIOTEKI'}</button>
         </header>
 
         <div className="mt-auto grid gap-2 sm:max-w-md">
@@ -240,8 +247,8 @@ function SensorLab({ onClose }: { onClose: () => void }) {
 
         {allDone && (
           <div className="pointer-events-none mt-4 self-start rounded-2xl border border-orange-400/50 bg-orange-500/15 px-6 py-4 backdrop-blur" style={{ animation: 'boot-glow .8s ease-out both', boxShadow: `0 0 42px ${padColor}55` }}>
-            <div className="joy-heading text-2xl font-extrabold text-orange-300 sm:text-3xl">TWÓJ KONTROLER ŻYJE!</div>
-            <div className="mt-1 text-xs text-slate-300">Wszystkie 3 testy zaliczone — {padName} to prawdziwy pad. Możesz iść do gry!</div>
+            <div className="joy-heading text-2xl font-extrabold text-orange-300 sm:text-3xl">{en ? 'YOUR CONTROLLER IS ALIVE!' : 'TWÓJ KONTROLER ŻYJE!'}</div>
+            <div className="mt-1 text-xs text-slate-300">{en ? `All three tests passed — ${padName} is ready to play!` : `Wszystkie 3 testy zaliczone — ${padName} to prawdziwy pad. Możesz iść do gry!`}</div>
           </div>
         )}
       </div>

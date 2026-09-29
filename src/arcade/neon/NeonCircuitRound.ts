@@ -32,6 +32,7 @@ export class NeonCircuitRound implements GameRound {
     const difficulty = Math.max(0, Math.min(2, config.secondary));
 
     this.scene = new NeonRushScene(container, {
+      language: config.language,
       name: this.humanPlayers[0].name,
       colorIdx: 0,
       difficulty,
@@ -94,8 +95,8 @@ export class NeonCircuitRound implements GameRound {
       const roundHud = neonHudToRoundHud(hud, this.config);
       const winner = roundHud.players[0];
       const result: RoundResult = {
-        title: winner ? `${winner.name} wygrywa!` : 'Koniec wyścigu',
-        subtitle: 'Neonowa trasa rozstrzygnięta.',
+        title: this.config.language === 'en' ? (winner ? `${winner.name} wins!` : 'Race complete') : (winner ? `${winner.name} wygrywa!` : 'Koniec wyścigu'),
+        subtitle: this.config.language === 'en' ? 'The Neon Rush circuit is complete.' : 'Neonowa trasa rozstrzygnięta.',
         winnerSlot: winner && !winner.isBot ? winner.slot : null,
         players: roundHud.players,
       };
@@ -104,28 +105,39 @@ export class NeonCircuitRound implements GameRound {
   }
 }
 
-const NEON_POWER_UPS: Record<NonNullable<HudState['item']>, Omit<RoundPowerUp, 'count'>> = {
-  boost: { label: 'DOPALACZ', color: '#ff9d2e', hint: 'AKCJA · natychmiastowy zryw' },
-  triple: { label: 'POTRÓJNY DOPALACZ', color: '#ffcf4a', hint: 'AKCJA · zostały trzy użycia' },
-  rocket: { label: 'RAKIETA', color: '#ff5b5b', hint: 'AKCJA · namierz rywala przed Tobą' },
-  mine: { label: 'MINA', color: '#f47cff', hint: 'AKCJA · zostaw pułapkę za sobą' },
-  shield: { label: 'TARCZA', color: '#59d9ff', hint: 'AKCJA · pochłania następne trafienie' },
+const NEON_POWER_UPS: Record<NonNullable<HudState['item']>, { pl: Omit<RoundPowerUp, 'count'>; en: Omit<RoundPowerUp, 'count'> }> = {
+  boost: { pl: { label: 'DOPALACZ', color: '#ff9d2e', hint: 'AKCJA · natychmiastowy zryw' }, en: { label: 'BOOST', color: '#ff9d2e', hint: 'ACTION · instant burst' } },
+  triple: { pl: { label: 'POTRÓJNY DOPALACZ', color: '#ffcf4a', hint: 'AKCJA · zostały trzy użycia' }, en: { label: 'TRIPLE BOOST', color: '#ffcf4a', hint: 'ACTION · three charges left' } },
+  rocket: { pl: { label: 'RAKIETA', color: '#ff5b5b', hint: 'AKCJA · namierz rywala przed Tobą' }, en: { label: 'ROCKET', color: '#ff5b5b', hint: 'ACTION · target a rival ahead' } },
+  mine: { pl: { label: 'MINA', color: '#f47cff', hint: 'AKCJA · zostaw pułapkę za sobą' }, en: { label: 'MINE', color: '#f47cff', hint: 'ACTION · drop a trap behind you' } },
+  shield: { pl: { label: 'TARCZA', color: '#59d9ff', hint: 'AKCJA · pochłania następne trafienie' }, en: { label: 'SHIELD', color: '#59d9ff', hint: 'ACTION · absorbs the next hit' } },
 };
 
-function neonPowerUp(hud: HudState): RoundPowerUp | null {
+function neonPowerUp(hud: HudState, language: RoundConfig['language']): RoundPowerUp | null {
+  const en = language === 'en';
   if (hud.rolling) return {
-    label: 'LOSOWANIE…',
-    count: 0,
-    color: '#f97316',
-    hint: 'Bonus jest właśnie przygotowywany',
-    rolling: true,
+    label: en ? 'ROLLING…' : 'LOSOWANIE…', count: 0, color: '#f97316',
+    hint: en ? 'Your pickup is being prepared' : 'Bonus jest właśnie przygotowywany', rolling: true,
   };
   if (!hud.item) return null;
-  return { ...NEON_POWER_UPS[hud.item], count: hud.item === 'triple' ? hud.itemCount : 1 };
+  return { ...(NEON_POWER_UPS[hud.item][en ? 'en' : 'pl']), count: hud.item === 'triple' ? hud.itemCount : 1 };
+}
+
+function ordinal(place: number, en: boolean) {
+  if (!en) return `${place}. miejsce`;
+  const mod100 = place % 100;
+  const suffix = mod100 >= 11 && mod100 <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[place % 10] ?? 'th';
+  return `${place}${suffix} place`;
 }
 
 export function neonHudToRoundHud(hud: HudState, config: RoundConfig): RoundHud {
   const human = config.players.filter(player => !player.isBot);
+  const en = config.language === 'en';
+  const laps = [2, 3, 4][config.primary] ?? 3;
+  const phase = en
+    ? hud.phase === 'countdown' ? 'SETUP' : hud.phase === 'race' ? 'RACE' : 'FINISH'
+    : hud.phase === 'countdown' ? 'START' : hud.phase === 'race' ? 'WYŚCIG' : 'META';
+  const message = hud.message === 'RESPAWN' ? (en ? 'RESPAWN' : 'ODRODZENIE') : hud.message;
   const players = hud.standings.map(standing => {
     const owner = human[standing.slot];
     return {
@@ -133,7 +145,7 @@ export function neonHudToRoundHud(hud: HudState, config: RoundConfig): RoundHud 
       name: standing.name,
       color: standing.color,
       score: Math.min(standing.lap, 99),
-      detail: standing.finished ? `META · ${standing.place}. miejsce` : `${Math.max(1, standing.lap)}/${[2, 3, 4][config.primary] ?? 3} okr.`,
+      detail: standing.finished ? `${en ? 'FINISH' : 'META'} · ${ordinal(standing.place, en)}` : `${Math.max(1, standing.lap)}/${laps} ${en ? 'laps' : 'okr.'}`,
       value: Math.round(standing.progress * 100),
       maxValue: 100,
       isBot: !standing.isPlayer,
@@ -143,9 +155,9 @@ export function neonHudToRoundHud(hud: HudState, config: RoundConfig): RoundHud 
     timeLeft: Math.max(0, NEON_RACE_DURATION - hud.raceTime),
     countdown: hud.phase === 'countdown' ? Number(hud.countdown) || 1 : 0,
     paused: hud.paused,
-    objective: `${[2, 3, 4][config.primary] ?? 3} okrążenia · ${hud.message || 'nocna trasa'}`,
-    status: `NEONOWY PĘD / ${hud.phase.toUpperCase()}`,
+    objective: `${laps} ${en ? 'laps' : 'okrążeń'} · ${message || (en ? 'night circuit' : 'nocna trasa')}`,
+    status: `${en ? 'NEON RUSH' : 'NEONOWY PĘD'} / ${phase}`,
     players,
-    powerUp: neonPowerUp(hud),
+    powerUp: neonPowerUp(hud, config.language),
   };
 }

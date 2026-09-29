@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent as RPointer
 import type { PadSteer } from '../net/protocol';
 import { unlockHaptics } from './haptics';
 import { useConsolePreferences } from '../console/preferences';
+import { useT } from '../platform/i18n';
 
 /** Martwa strefa (część promienia) — drżący palec nie rusza czołgu. */
 const DEAD_ZONE = 0.12;
@@ -79,6 +80,7 @@ export function Joystick({
   zIndex = 20,
   bottomPadding = 46,
 }: JoystickProps) {
+  const { t } = useT();
   const prefs = useConsolePreferences();
   size = Math.min(size * prefs.controlSize, window.innerWidth * zoneWidthPct / 100 - 12, window.innerHeight * .55);
   bottomPadding += prefs.controlHeight;
@@ -95,6 +97,8 @@ export function Joystick({
   useEffect(() => { onHotRef.current = onHotChange; }, [onHotChange]);
 
   const [knob, setKnob] = useState({ x: 0, y: 0 });
+  const knobVisual = useRef({ x: 0, y: 0 });
+  const knobFrame = useRef(0);
   const [floating, setFloating] = useState<{ x: number; y: number } | null>(null);
   const [active, setActive] = useState(false);
   const [zone, setZone] = useState({ left: 0, top: 0, w: 0, h: 0 });
@@ -147,7 +151,11 @@ export function Joystick({
     let dx = dxRaw, dy = dyRaw;
     const d = Math.hypot(dx, dy);
     if (d > maxTravel) { dx = dx / d * maxTravel; dy = dy / d * maxTravel; }
-    setKnob(k => (k.x === dx && k.y === dy) ? k : { x: dx, y: dy });
+    knobVisual.current = { x: dx, y: dy };
+    if (!knobFrame.current) knobFrame.current = requestAnimationFrame(() => {
+      knobFrame.current = 0;
+      setKnob(current => current.x === knobVisual.current.x && current.y === knobVisual.current.y ? current : knobVisual.current);
+    });
 
     // y odwracamy: góra ekranu = +1 (tak było zawsze — tryb „CZOŁG” się nie zmienia)
     let nx = dx / maxTravel, ny = -dy / maxTravel;
@@ -184,6 +192,8 @@ export function Joystick({
     engaged.current = false;
     if (hotRef.current) { hotRef.current = false; onHotRef.current?.(false); }
     setFloating(null);
+    knobVisual.current = { x: 0, y: 0 };
+    if (knobFrame.current) { cancelAnimationFrame(knobFrame.current); knobFrame.current = 0; }
     setKnob({ x: 0, y: 0 });
     setActive(false);
     onChangeRef.current(0, 0);
@@ -224,7 +234,7 @@ export function Joystick({
   };
 
   // Gałka musi wrócić do zera, nawet gdy ekran pada znika spod palca.
-  useEffect(() => () => { onChangeRef.current(0, 0); }, []);
+  useEffect(() => () => { if (knobFrame.current) cancelAnimationFrame(knobFrame.current); onChangeRef.current(0, 0); }, []);
   useEffect(() => { if (disabled) release(); }, [disabled, release]);
   useEffect(() => {
     const hidden = () => { if (document.hidden) release(); };
@@ -358,8 +368,8 @@ export function Joystick({
           {/* tryb CZOŁG: przypomnienie, że góra/dół to przód/tył czołgu, a nie ekranu */}
           {mode === 'tank' && (
             <>
-              <span className="pointer-events-none absolute left-1/2 top-[19%] -translate-x-1/2 text-[8px] font-black tracking-[0.15em]" style={{ color: `${color}99` }}>PRZÓD</span>
-              <span className="pointer-events-none absolute bottom-[19%] left-1/2 -translate-x-1/2 text-[8px] font-black tracking-[0.15em]" style={{ color: `${color}99` }}>TYŁ</span>
+              <span className="pointer-events-none absolute left-1/2 top-[19%] -translate-x-1/2 text-[8px] font-black tracking-[0.15em]" style={{ color: `${color}99` }}>{t('pad.front')}</span>
+              <span className="pointer-events-none absolute bottom-[19%] left-1/2 -translate-x-1/2 text-[8px] font-black tracking-[0.15em]" style={{ color: `${color}99` }}>{t('pad.rear')}</span>
               <span className="pointer-events-none absolute left-[17%] top-1/2 -translate-y-1/2 text-[10px] font-black" style={{ color: `${color}99` }}>⟲</span>
               <span className="pointer-events-none absolute right-[17%] top-1/2 -translate-y-1/2 text-[10px] font-black" style={{ color: `${color}99` }}>⟳</span>
             </>

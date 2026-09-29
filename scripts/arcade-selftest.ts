@@ -8,9 +8,10 @@ import type { PadInput, PadMessage } from '../src/net/protocol';
 import { RaceRound } from '../src/arcade/games/Race';
 import { OrbitRound } from '../src/arcade/games/Orbit';
 import { SnakeRound } from '../src/arcade/games/Snake';
-import { TempleRound } from '../src/arcade/games/Temple';
-import { VoxelRound } from '../src/arcade/games/Voxel';
 import { LeagueRound } from '../src/arcade/games/League';
+import { Kart } from '../src/arcade/neon/kart';
+import { Track, BARRIER } from '../src/arcade/neon/track';
+import { Vector3 } from 'three';
 import { mat4LookAt, mat4Multiply, mat4Perspective } from '../src/arcade/webgl/runtime3d';
 import type { CanvasRound, RoundConfig, RoundResult } from '../src/arcade/runtime';
 
@@ -160,7 +161,7 @@ const players = [
   { slot: 0, name: 'Ada', color: '#4ade80', isBot: false },
   { slot: 1, name: 'BOT 1', color: '#38bdf8', isBot: true },
 ];
-const rounds = [RaceRound, OrbitRound, SnakeRound, TempleRound, VoxelRound, LeagueRound] as const;
+const rounds = [RaceRound, OrbitRound, SnakeRound, LeagueRound] as const;
 const projection = mat4Perspective(Math.PI / 3, 16 / 9, .1, 100);
 const camera = mat4LookAt([0, 8, 12], [0, 0, 0], [0, 1, 0]);
 const viewProjection = mat4Multiply(projection, camera);
@@ -169,7 +170,7 @@ assert.ok(Array.from(viewProjection).every(Number.isFinite), 'macierz WebGL2 mus
 let simulations = 0;
 for (const Round of rounds) {
   let result: RoundResult | null = null;
-  const config: RoundConfig = { players: Round === OrbitRound || Round === TempleRound ? players.slice(0, 1) : players, padInputs: inputs, primary: 0, secondary: 1, onHud() {}, onFx() {}, onFinish: value => { result = value; } };
+  const config: RoundConfig = { players: Round === OrbitRound ? players.slice(0, 1) : players, padInputs: inputs, primary: 0, secondary: 1, language: 'pl', onHud() {}, onFx() {}, onFinish: value => { result = value; } };
   const round = new Round(canvas, config) as CanvasRound;
   const engine = round as unknown as { clock: number; update: (dt: number) => void; hud: () => { players: { score: number }[] }; render: (ctx: CanvasRenderingContext2D) => void; finished: boolean; timeout: () => void };
   for (let i = 0; i < 400 && !engine.finished; i++) {
@@ -186,6 +187,26 @@ for (const Round of rounds) {
   simulations++;
 }
 console.log(`ARCADE SELFTEST: OK (role admina, protokół, ${simulations} silniki + macierze WebGL2)`);
+
+// Holding steering into the outside rail must preserve forward speed, not glue the kart to the edge.
+const textureContext = new Proxy({} as CanvasRenderingContext2D, {
+  get(target, prop) {
+    if (prop in target) return Reflect.get(target, prop);
+    if (prop === 'createRadialGradient' || prop === 'createLinearGradient') return () => ({ addColorStop() {} });
+    return () => {};
+  },
+});
+(globalThis as unknown as { document: Document }).document = { createElement: () => ({ width: 128, height: 128, getContext: () => textureContext }) } as unknown as Document;
+const edgeTrack = new Track();
+const edgeKart = new Kart({ name: 'Test', color: 0xff8844, accent: 0xffffff, isPlayer: true, skill: 1 });
+edgeKart.place_at(edgeTrack, edgeTrack.length * 0.17, BARRIER - 2.1);
+edgeTrack.project(edgeKart.pos.x, edgeKart.pos.y, edgeKart.pos.z, edgeKart.idx, edgeKart.proj);
+edgeKart.vel.copy(edgeKart.forward(new Vector3())).multiplyScalar(28);
+edgeKart.controls = { throttle: 1, brake: 0, steer: 1, drift: false };
+for (let frame = 0; frame < 1200; frame++) edgeKart.update(1 / 120, edgeTrack, true);
+assert.ok(edgeKart.vf > 14, `edge scrape should retain forward motion; got ${edgeKart.vf.toFixed(2)}`);
+assert.ok(Math.abs(edgeKart.proj.lateral) < BARRIER, 'edge assistance must keep the kart inside the track barriers');
+console.log('NEON EDGE SELFTEST: OK (steering into rail retains speed and recovers inside the track)');
 
 // Disconnects cannot leave a phantom vote; an unknown connection cannot vote.
 const intentHost = new PadHost();

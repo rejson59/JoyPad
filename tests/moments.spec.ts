@@ -11,14 +11,19 @@ async function harness(page: Page) {
 }
 
 async function skipStartupReleaseNotes(page: Page) {
-  await page.addInitScript(() => localStorage.setItem('joypad.whats-new-version', '1.7.0'));
+  await page.addInitScript(() => {
+    localStorage.setItem('joypad.whats-new-version', '1.8.0');
+    // v1.8: ekran powitalny (pytanie o poradnik) ma własny znacznik "widziane".
+    localStorage.setItem('joypad.startup-version', '1');
+  });
 }
 
 test('localized release notes appear at startup once and can be dismissed', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('joypad.startup-version', '1'));
   await page.goto('/');
   const whatsNew = page.getByRole('dialog', { name: 'Co nowego?' });
   await expect(whatsNew).toBeVisible({ timeout: 15_000 });
-  await expect(whatsNew).toContainText('Moments Gallery');
+  await expect(whatsNew).toContainText('Nitro League');
   await whatsNew.getByRole('button', { name: 'Do biblioteki' }).click();
   await expect(whatsNew).toHaveCount(0);
   await page.reload();
@@ -70,7 +75,7 @@ test('recording preference persists and can be switched off on TV', async ({ pag
   await skipStartupReleaseNotes(page);
   await page.goto('/');
   await page.getByRole('button', { name: 'Ustawienia systemu' }).click();
-  const control = page.getByRole('switch', { name: 'Moments · powtórki wideo', exact: true });
+  const control = page.getByRole('switch', { name: 'Momenty · powtórki wideo', exact: true });
   await expect(control).toHaveAttribute('aria-checked', 'true'); await control.click();
   await page.reload(); await page.getByRole('button', { name: 'Ustawienia systemu' }).click();
   await expect(control).toHaveAttribute('aria-checked', 'false');
@@ -100,7 +105,8 @@ test('actual TV flow: captured pickup → results → video → rematch → new 
   });
   await page.addInitScript(() => {
     localStorage.setItem('joypad.evening.game', JSON.stringify('tanks'));
-    localStorage.setItem('joypad.whats-new-version', '1.7.0');
+    localStorage.setItem('joypad.whats-new-version', '1.8.0');
+    localStorage.setItem('joypad.startup-version', '1');
   });
   await page.goto('/');
   await page.locator('[data-game-index="0"]').click();

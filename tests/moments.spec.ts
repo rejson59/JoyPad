@@ -43,7 +43,7 @@ test('real independent clips decode, seek, play, slow down, download and release
   await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.currentTime)).toBeCloseTo(.7, 1);
   const download = page.waitForEvent('download'); await page.getByRole('link', { name: 'Pobierz klip' }).click();
   expect((await download).suggestedFilename()).toMatch(/\.webm$/);
-  await page.getByRole('button', { name: 'Moment 2:', exact: false }).click();
+  await page.getByRole('button', { name: /^(?:Moment|Akcja) 2:/ }).click();
   await expect(page.getByRole('dialog')).toContainText('Test nagrania 2');
   await page.keyboard.press('Escape'); await expect(video).toHaveCount(0);
   await page.evaluate(async () => { const path = '/tests/moments-harness.ts'; (await import(/* @vite-ignore */ path)).dispose(); });

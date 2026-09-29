@@ -70,7 +70,7 @@ test('recording preference persists and can be switched off on TV', async ({ pag
   await skipStartupReleaseNotes(page);
   await page.goto('/');
   await page.getByRole('button', { name: 'Ustawienia systemu' }).click();
-  const control = page.getByRole('switch', { name: 'Nagrywanie Moments', exact: true });
+  const control = page.getByRole('switch', { name: 'Moments · powtórki wideo', exact: true });
   await expect(control).toHaveAttribute('aria-checked', 'true'); await control.click();
   await page.reload(); await page.getByRole('button', { name: 'Ustawienia systemu' }).click();
   await expect(control).toHaveAttribute('aria-checked', 'false');

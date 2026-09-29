@@ -72,6 +72,9 @@ export interface PadClientState {
   result: { winnerName?: string; winnerColor?: string; youWon?: boolean } | null;
   /** Aktywne połączenie leci przez awaryjny przekaźnik (nie przez WebRTC). */
   viaRelay: boolean;
+  /** v1.8: blokada antyspamowa — host ograniczył częstotliwość propozycji. */
+  rateLimitedUntil: number;
+  rateLimitedScope: 'suggest' | null;
 }
 
 type Listener = (s: PadClientState) => void;
@@ -171,6 +174,7 @@ export class PadClient {
     slot: -1, name: '', nick: '', color: '#fbbf24', darkColor: '#78350f',
     screen: 'lobby', game: null, adminSlot: null, selection: 0, roster: [],
     hud: null, arcadeHud: null, latency: 0, result: null, viaRelay: false,
+    rateLimitedUntil: 0, rateLimitedScope: null,
   };
 
   onFx: ((fx: PadFx) => void) | null = null;
@@ -510,6 +514,14 @@ export class PadClient {
           hud: effectiveScreen === 'game' ? this.state.hud : null,
           arcadeHud: effectiveScreen === 'game' ? this.state.arcadeHud : null,
           result: effectiveScreen === 'over' ? { winnerName: msg.winnerName, winnerColor: msg.winnerColor, youWon: msg.youWon } : null,
+        });
+        break;
+      }
+      case 'rateLimited': {
+        // v1.8: host zdusił spam propozycji — pokaż odliczanie w interfejsie pada.
+        this.set({
+          rateLimitedUntil: Date.now() + Math.max(1, (msg as { retryAfter?: number }).retryAfter ?? 3) * 1000,
+          rateLimitedScope: 'suggest',
         });
         break;
       }

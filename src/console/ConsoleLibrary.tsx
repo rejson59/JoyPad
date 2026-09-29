@@ -1,6 +1,4 @@
-import { PlayerAvatar } from '../platform/PlayerAvatar';
 import { JoyPadLogo } from '../components/JoyPadLogo';
-import { normalizeProfile } from '../platform/profile';
 import { RoomControls } from '../platform/RoomControls';
 import { MomentsGallery } from '../platform/MomentsGallery';
 import { WhatsNew } from '../platform/WhatsNew';
@@ -10,17 +8,14 @@ import { GamePreview } from './GamePreview';
 import { hasHistory, lastGame } from './history';
 import { useViewport } from './useViewport';
 import { useEffect, useState, type CSSProperties } from 'react';
-import { Archive, ArrowRight, Gamepad2, Plus, Settings2, Smartphone, Volume2, VolumeX, Wifi, Zap } from 'lucide-react';
+import { Clapperboard, ArrowRight, Plus, Settings2, Volume2, VolumeX } from 'lucide-react';
 import { GAMES, localizeGame, type GameId } from '../arcade/catalog';
 import { usePadHost } from '../pad/PadHostPanel';
-import { PLAYER_DEFS } from '../game/types';
-import { padUrlFor } from '../net/protocol';
-import { QrFrame } from '../components/QrFrame';
 import { Sheet } from './Sheet';
 import { ConsoleSettings } from './Settings';
 import { systemSound } from './sound';
 import { useMenuMusic } from '../lib/useMenuMusic';
-import { sessionSummary } from './sessionSummary';
+import { SessionPanel } from './SessionPanel';
 import { playableIndices } from './navigation';
 import { useT } from '../platform/i18n';
 
@@ -36,18 +31,9 @@ export function ConsoleLibrary({ focus, onFocus, onOpen, onConnections, onLab, o
   const game = localizeGame(sourceGame, language);
   const [panel, setPanel] = useState<'settings' | 'soon' | 'help' | 'room' | 'gallery' | 'news' | null>(() => shouldShowWhatsNew() ? 'news' : null);
   const [music, toggleMusic] = useMenuMusic();
-  const [qr, setQr] = useState('');
   const [previewControls, setPreviewControls] = useState<HTMLSpanElement | null>(null);
-  const url = state.code ? padUrlFor(state.code, state.joinToken) : '';
   const ready = state.status === 'ready' || state.relay === 'online';
-  const session = sessionSummary(state.pads.length, ready, language);
   useEffect(() => { onOverlayChange(panel !== null); return () => onOverlayChange(false); }, [panel, onOverlayChange]);
-  useEffect(() => {
-    let active = true;
-    setQr('');
-    if (url && ready) void import('qrcode').then(({ default: QR }) => QR.toDataURL(url, { width: 256, margin: 2 })).then(src => { if (active) setQr(src); }).catch(() => {});
-    return () => { active = false; };
-  }, [url, ready]);
   useEffect(() => {
     const tile = document.querySelector<HTMLElement>(`[data-game-index="${focus}"]`);
     const rail = tile?.parentElement;
@@ -67,7 +53,7 @@ export function ConsoleLibrary({ focus, onFocus, onOpen, onConnections, onLab, o
         <span ref={setPreviewControls} className="os-preview-controls" />
         <span className="os-network"><i className={ready ? 'is-ready' : ''} />{state.room.locked ? t('library.roomLocked') : ready ? t('library.roomReady') : t('library.roomConnecting')}</span>
         <button className="os-icon" aria-label={music ? t('library.musicOff') : t('library.musicOn')} aria-pressed={music} onClick={() => toggleMusic(!music)}>{music ? <Volume2 size={19} /> : <VolumeX size={19} />}</button>
-        <button className="os-icon" onClick={() => setPanel('gallery')} aria-label={t('common.gallery')}><Archive size={19} /></button>
+        <button className="os-icon" onClick={() => setPanel('gallery')} aria-label={t('common.gallery')}><Clapperboard size={19} /></button>
         <button className="os-icon" onClick={() => setPanel('settings')} aria-label={t('library.settings')}><Settings2 size={20} /></button>
         <button className="os-room-button" onClick={() => setPanel('room')}>{t('library.room')}<span>{state.pads.length}/4</span></button>
         <button className="os-add" onClick={onConnections}><Plus size={18} /><span>{t('library.addPlayer')}</span></button>
@@ -85,20 +71,7 @@ export function ConsoleLibrary({ focus, onFocus, onOpen, onConnections, onLab, o
           <div className="os-feature-tags">{game.features.map(f => <span key={f}>{f}</span>)}</div>
         </div>
       </section>
-      <aside className={`os-session ${session.count ? 'has-crew' : ''}`} aria-label={t('library.session')}>
-        <div className="os-session-heading"><span className="os-eyebrow">{t('library.sharedScreen')}</span><Wifi size={15} /></div>
-        <h2>{session.title}</h2>
-        <p className="os-session-status" role="status">{session.status}</p><p>{session.count ? t('library.chooseAndPrepare') : session.pairing}</p>
-        {!session.count && ready && <div className="os-pairing"><QrFrame src={qr} size={136} /><div><span>{t('library.roomCode')}</span><strong>{state.code || '·····'}</strong><a href="#pad" target="_blank" rel="noopener noreferrer"><Smartphone size={14} /> {t('library.openPad')}</a></div></div>}
-        <div className="os-roster">{PLAYER_DEFS.map((p, slot) => {
-          const pad = state.pads.find(p => p.slot === slot);
-          return <div key={slot} className={`os-player ${pad ? 'is-connected' : ''}`} style={{ '--player-color': p.color } as CSSProperties}><span>{pad ? <PlayerAvatar avatar={normalizeProfile(pad.profile).avatar} size={20} /> : <Gamepad2 size={18} />}</span><div><b>{pad?.nick || (language === 'en' ? `Slot ${slot + 1}` : `Miejsce ${slot + 1}`)}</b><small>{pad ? state.adminSlot === slot ? t('library.admin') : t('library.connected') : t('library.waitingPlayer')}</small></div>{pad && <i />}</div>;
-        })}</div>
-        {state.pads.some(p => p.suggestedGame) && <div className="lobby-votes"><span className="os-eyebrow">{t('library.crewVotes')}</span>{GAMES.filter(g => state.pads.some(p => p.suggestedGame === g.id)).map(g => { const localized = localizeGame(g, language); return <button key={g.id} onClick={() => onOpen(g.id)}><span>{localized.title}<small>{state.pads.filter(p => p.suggestedGame === g.id).map(p => p.nick).join(', ')}</small></span><ArrowRight size={16} /></button>; })}</div>}
-        <button className="os-session-invite" onClick={onConnections}><Plus size={15} />{session.invite}<ArrowRight size={15} /></button>
-        <button className="os-lab-link" onClick={onLab}><Zap size={16} /><span>{t('library.padCheck')}</span><ArrowRight size={16} /></button>
-        {state.error && <details className="os-connection-detail"><summary>{t('library.connectionIssue')}</summary><p className="os-error">{state.error}</p></details>}
-      </aside>
+      <SessionPanel onConnections={onConnections} onLab={onLab} onOpen={onOpen} />
     </main>
     <section className="os-collection" aria-label={t('library.availableGames')}>
       <div className="os-collection-heading"><h2>{t('library.chooseWorld')}</h2><button onClick={() => setPanel('soon')}>{t('library.upcoming')} <span>{GAMES.filter(g => g.wip).length}</span><ArrowRight size={14} /></button></div>

@@ -139,6 +139,8 @@ export class Game {
     this.alive = true;
     this.sfx = new Sfx();
     const r = this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    // v1.8: canvas blokowy — inline zostawiał białą szczelinę (line-box) nad/pod grą.
+    r.domElement.style.display = 'block';
     r.setPixelRatio(Math.min(devicePixelRatio, this.lowFx ? 1.25 : 1.75));
     r.setSize(innerWidth, innerHeight);
     r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.05;
@@ -431,7 +433,29 @@ export class Game {
   }
 
   /** Tryb kanapowy JoyPad: ludzcy gracze z padów + boty sojusznicze vs. eskadra wroga. */
-  startBattleSquad(humans: { cls: ShipClass; up: Upgrades | null; name: string }[], opts: { enemies?: number; allyBots?: number; difficulty?: number } = {}) {
+  /** Etykieta identyfikacyjna gracza nad statkiem (v1.8 — czytelny multiplayer). */
+  private makeCrewLabel(name: string, color: string) {
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 72;
+    const g = c.getContext('2d');
+    if (g) {
+      g.fillStyle = 'rgba(3,10,20,.72)';
+      g.beginPath(); g.roundRect(6, 10, 244, 52, 16); g.fill();
+      g.strokeStyle = color; g.lineWidth = 3;
+      g.beginPath(); g.roundRect(6, 10, 244, 52, 16); g.stroke();
+      g.fillStyle = '#ffffff'; g.font = 'bold 30px "Chakra Petch", monospace';
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(name.toUpperCase().slice(0, 10), 128, 38);
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+    spr.scale.set(7.5, 2.1, 1);
+    spr.position.set(0, 3.6, 0);
+    return spr;
+  }
+
+  startBattleSquad(humans: { cls: ShipClass; up: Upgrades | null; name: string }[], opts: { enemies?: number; allyBots?: number; difficulty?: number; accents?: string[] } = {}) {
     const enemies = opts.enemies ?? 8, allyBots = opts.allyBots ?? 2, difficulty = opts.difficulty ?? 1;
     this.sfx.init();
     this.clearBattle(); this.mode = 'battle'; this.paused = false; this.time = 0;
@@ -441,8 +465,19 @@ export class Game {
       const p = this.makeShip(h.cls, 0, true, h.up, h.name, i);
       p.group.position.set((i - (humans.length - 1) / 2) * 55, rand(-15, 15), 750);
       p.vel.set(0, 0, -p.speed * 0.6);
+      const accent = opts.accents?.[i];
+      if (accent && humans.length > 1) {
+        p.group.add(this.makeCrewLabel(h.name, accent));
+        const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glowTex, color: new THREE.Color(accent), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.9 }));
+        glow.scale.set(4.5, 4.5, 1);
+        glow.position.set(0, -0.6, 0);
+        p.group.add(glow);
+      }
       this.humanShips.push(p);
     });
+    if (humans.length > 1) {
+      this.msg(this.language === 'en' ? `CREW FORMATION — ${humans.length} PILOTS` : `ESKADRA W GOTOWOŚCI — ${humans.length} PILOTÓW`, 3.5);
+    }
     this.player = this.humanShips[0] || null;
     for (let i = 0; i < allyBots; i++) {
       const s = this.makeShip(pool[Math.random() * pool.length | 0], 0, false, null);

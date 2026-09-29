@@ -5,6 +5,8 @@ export interface ConsolePreferences {
   deviceChosen: boolean;
   previews: boolean;
   replays: boolean;
+  /** Widoczność kodu QR w okienku WSPÓLNY EKRAN (v1.8) — domyślnie zawsze widoczny. */
+  showQr: boolean;
   sound: boolean;
   haptics: 'off' | 'subtle' | 'full';
   motion: 'system' | 'reduced';
@@ -12,13 +14,14 @@ export interface ConsolePreferences {
   controlSize: number;
   controlHeight: number;
 }
-const defaults: ConsolePreferences = { deviceProfile: 'auto', deviceChosen: false, previews: true, replays: true, sound: true, haptics: 'subtle', motion: 'system', hand: 'right', controlSize: 1, controlHeight: 0 };
+const defaults: ConsolePreferences = { deviceProfile: 'auto', deviceChosen: false, previews: true, replays: true, showQr: true, sound: true, haptics: 'subtle', motion: 'system', hand: 'right', controlSize: 1, controlHeight: 0 };
 export function sanitizePreferences(raw: Partial<ConsolePreferences>): ConsolePreferences {
   return {
     deviceProfile: raw.deviceProfile === 'ios' || raw.deviceProfile === 'android' ? raw.deviceProfile : 'auto',
     deviceChosen: raw.deviceChosen === true,
     previews: typeof raw.previews === 'boolean' ? raw.previews : true,
     replays: typeof raw.replays === 'boolean' ? raw.replays : true,
+    showQr: typeof raw.showQr === 'boolean' ? raw.showQr : true,
     sound: typeof raw.sound === 'boolean' ? raw.sound : defaults.sound,
     haptics: raw.haptics === 'off' || raw.haptics === 'full' ? raw.haptics : 'subtle',
     motion: raw.motion === 'reduced' ? 'reduced' : 'system',

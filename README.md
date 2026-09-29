@@ -1,138 +1,186 @@
+<div align="center">
+
+<img src="public/brand/joypad-mark.svg" alt="JoyPad" width="120" />
+
 # JoyPad 🎮
 
-## JoyPad OS 02 — duża aktualizacja platformy
+**Matowa konsola do wspólnej gry na jednym ekranie.**
+Telefon jest bezprzewodowym kontrolerem, komputer lub TV wyświetla grę.
+Bez kont, bez instalacji, bez uprawnień — wszystko w przeglądarce.
 
-JoyPad v1.7 rozwija wspólną konsolę: rozbudowana **Moments Gallery**, pełne interfejsy **PL/EN**, pewniejsze prowadzenie w **Neonowym Pędzie**, nowa stalowa arena 2D **Wężowego Wiru**, płynniejsze przejścia oraz lżejsze sterowanie na telefonach. W bibliotece pojawia się też wyłącznie zapowiedź **BlockCraft** — bez grywalnego silnika.
+`v1.8` · JoyPad OS 02 · PL / EN
 
-- [Opis funkcji, ograniczenia i testy platformy](docs/platform-update.md)
-- [Prompt dla Turbo League i bezpieczna integracja ZIP](docs/game-building-prompts.md)
-- [Moments Video — architektura, ograniczenia i testy nagrywania](docs/moments-video.md)
-- [JoyPad v1.6 — archiwalny zakres i ograniczenia beta](docs/v1.6.md)
-- Testy platformy: `npm run selftest:platform`, `npm run selftest:replay` oraz `npm run selftest:v16`.
+</div>
 
+<img src="public/images/og-cover.jpg" alt="Stalowy Front — bitwa czołgów" width="100%" />
 
-**JoyPad OS** — matowa konsola do wspólnej gry na jednym ekranie. Telefon jest bezprzewodowym kontrolerem, komputer lub TV wyświetla grę. **Cztery gry są dostępne: Stalowy Front, Neonowy Pęd, Orbitalna Fala i Wężowy Wir (beta).** Turbo League i BlockCraft pozostają zapowiedziami; BlockCraft to teaser, niegrywalna gra.
+---
 
-## System konsoli
+## Spis treści
 
-Paleta **Obsidian / Ember**: neutralne obsydianowe tła, jasna biel i pomarańczowy akcent głównych akcji. Wspólne kolory są zdefiniowane w `src/console/palette.css`; barwy graczy oraz sygnały ostrzeżeń pozostają niezależne od motywu.
+1. [Jak to działa](#jak-to-działa)
+2. [Gry](#gry)
+3. [Szybki start dla graczy](#szybki-start-dla-graczy)
+4. [Telefon jako pad](#telefon-jako-pad)
+5. [Dla developerów](#dla-developerów)
+6. [Połączenie i prywatność](#połączenie-i-prywatność)
+7. [Publikacja na GitHub Pages](#publikacja-na-github-pages)
+8. [Dokumentacja](#dokumentacja)
 
-- **Biblioteka:** panoramiczne tło wybranej gry, czytelne karty czterech grywalnych tytułów, status pokoju i cztery miejsca graczy. QR jest widoczny przed dołączeniem pierwszego pada; później dostępny przez „Dodaj gracza”.
-- **Języki:** polski i angielski obejmują bibliotekę, ustawienia, pokoje, kontrolery, powiadomienia, Moments i HUD-y wszystkich rund.
-- **Nawigacja:** lewo/prawo wybiera grę, góra przenosi do paska systemowego, dół do okładek. Enter/OK zatwierdza. Tab obsługuje wszystkie przyciski. Fizyczny gamepad ze standardowym mapowaniem obsługuje **bibliotekę** (krzyżak/gałka, A/B), nie zastępuje sterowania w silnikach gier.
-- **Ruch:** krótkie przejścia View Transitions API ze wspólną okładką i tytułem tam, gdzie przeglądarka je obsługuje; 280 ms fallback przyciemnienia na pozostałych urządzeniach. Bez dodatkowego opóźniania wejść. Opcjonalne ograniczenie ruchu respektuje także preferencje systemu.
-- **Panele:** wspólne wysuwane ustawienia, pomoc, połączenia, ustawienia pada i pauza. Natywny dialog utrzymuje fokus, obsługuje Escape i przywraca fokus po zamknięciu. Powrót z panelu pauzy wymaga potwierdzenia zakończenia rundy.
-- **Kontroler:** matowa gałka, ruchomy cień, sprężysty powrót wizualny z natychmiastowym wyzerowaniem sygnału; przyciski z optycznym skokiem i skracającym się cieniem. Stały pasek koloru gracza, krótkie sygnały zdarzeń, krawędziowe efekty zamiast zasłaniania całego ekranu.
-- **Tożsamość gracza:** ta sama paleta na telefonie, w bibliotece i w HUD-ach arcade. Kolor gry pozostaje osobną warstwą atmosfery.
-- **Ergonomia:** lokalnie zapamiętywane rozmiar sterowania, wysokość stref kciuków, strona przycisku akcji w arcade, tryb ruchu oraz haptyka: wyłączona / subtelna / wyraźna. Stalowy Front zachowuje własne układy i zamianę stron.
-- **Dźwięk:** miękkie sygnały nawigacji, zatwierdzenia, powrotu i dołączenia na dużym ekranie. Telefon ich nie dubluje. Muzyka menu jest opcjonalna, domyślnie wyłączona dla nowych użytkowników; poprzednia preferencja jest zachowana.
-- **JoyLab:** opcjonalny „Poznaj swój pad”. Host wysyła stan `lab`, więc TV i telefony wchodzą do testu razem. Administrator wraca do biblioteki dla wszystkich, pozostali mogą lokalnie pominąć test. Czujniki ani haptyka nie są warunkiem gry.
-- **Synchronizacja:** odliczanie i pauza na padzie korzystają z HUD-u hosta, a nie niezależnego zegara. Utrata fokusu, otwarcie ustawień i pauza zerują wejścia kontrolera.
+---
 
-To nadal aplikacja przeglądarkowa: Vibration API nie steruje amplitudą ani adaptacyjnymi triggerami i jest niedostępne w iOS Safari. Profile haptyczne zmieniają długość i rytm, nie fizyczną siłę silnika. Brak wibracji nie blokuje sterowania.
+## Jak to działa
 
+| Krok | Co się dzieje |
+| --- | --- |
+| **1. Otwórz JoyPad na dużym ekranie** | Komputer lub TV z przeglądarką. Pokój z pięcioznakowym kodem otwiera się automatycznie, obok widoczny jest QR. |
+| **2. Telefony skanują QR** | Każdy gracz otwiera link aparatem (albo stronę z `#pad`) i wpisuje kod pokoju + opcjonalny nick. Żadnych kont ani aplikacji ze sklepu. |
+| **3. Graj** | Pierwszy podłączony telefon zostaje administratorem: wybiera grę, ustawienia, startuje rundę i pauzuje. Pozostałe telefony to pady. Rola admina przechodzi dalej, gdy odejdzie. |
 
-| Gra | Co się dzieje | Telefon |
+**Bez telefonów też zagra.** Gry można wybrać myszką/klawiaturą, a sterowanie odbywa się z klawiatury. Poniżej w [Szybkim starcie](#szybki-start-dla-graczy).
+
+### Najważniejsze cechy
+
+- **4 grywalne gry** (opis poniżej) — od bitew czołgów po wyścigi 3D; 1–4 graczy + boty, wspólna arena lub split-screen.
+- **Telefon to pad** — gałka, przyciski akcji, wibracje; dwa układy ([minimalny / twin-stick](#telefon-jako-pad)) przełączane w trakcie gry.
+- **Moments** — po rundzie do trzech prawdziwych nagrań najlepszych akcji, z galerią, pobieraniem i udostępnianiem. Nagrywane lokalnie z obrazu silnika, bez kamery i mikrofonu.
+- **Wspólny wieczór** — „Jestem gotowy", „Chcę rewanżu", propozycje następnej gry od telefonów (zatwierdza gospodarz), pamięć ostatniej gry i ustawień.
+- **System konsoli** — czytelna biblioteka, panele (ustawienia, pomoc, pauza, połączenia), powiadomienia, dźwięki nawigacji, JoyLab („poznaj swój pad"), nagrania rozgrywki botów jako tło biblioteki.
+- **Pełne PL/EN** — interfejs, komunikaty pada i HUD-y wszystkich gier.
+- **Respektuje urządzenie** — profile jakości ograniczające DPR, ograniczenie ruchu (także systemowe), profile Android/iPhone, lokalne preferencje sterowania i haptyki.
+
+---
+
+## Gry
+
+| # | Gra | Co się dzieje | Telefon |
+| --- | --- | --- | --- |
+| 01 | **Stalowy Front** | Bitwy czołgów: 3 mapy, rykoszety, niszczalne osłony, bonusy i boty | Jazda + wieża + ogień (twin-stick) |
+| 02 | **Neonowy Pęd** | Wyścig 3D nocnego miasta: mokry tor, drifty, rampy, turbo, itemy, split-screen | Kierunek jazdy + akcja (bonus/turbo) |
+| 03 | **Orbitalna Fala** | Kooperacyjna obrona przed falami dronów i asteroid; życia, osłony, naprawy, szybki ogień | Lot + celowanie + strzał |
+| 04 | **Wężowy Wir** | Taktyczna stalowa arena 2D: impulsy, energia, sprint i eliminacja — wygrywa ostatni żywy wąż | Cztery kierunki + sprint |
+| 05 | **Nitro League** | Car-soccer 3D: 1–4 graczy + boty, split-screen, reflektory, wspomagania trudności, złoty gol | Kierunek jazdy + skok + turbo |
+| 06 | *BlockCraft* | 🚧 Zapowiedź sandboxa z budowaniem z bloków | — |
+
+Każda gra ma własny ekran wejścia, zasady, ustawienia rundy (np. limit punktów, liczba botów), HUD i ekran wyników. Silniki ładują się leniwie dopiero po wybraniu gry.
+
+---
+
+## Szybki start dla graczy
+
+1. Otwórz JoyPad na komputerze lub TV.
+2. Zeskanuj QR telefonem (albo wejdź na tę samą stronę z `#pad`, wpisz kod pokoju).
+3. Wybierz grę i ustawienia, naciśnij START.
+
+### Sterowanie klawiaturą (gdy nie ma telefonów)
+
+| Gracz | Ruch | Akcja |
 | --- | --- | --- |
-| **Stalowy Front** | Bitwy czołgów: 3 mapy, rykoszety, niszczalne osłony, bonusy i boty | Joystick jazdy, joystick wieży, ogień |
-| **Neonowy Pęd** | Właściwy wyścig Three.js z miasta ZIP-a: mokry proceduralny tor, drifty, rampy, turbo, itemy i split-screen | Kierunek jazdy + akcja bonusu |
-| **Orbitalna Fala** | Kooperacyjna obrona przed kolejnymi falami dronów i asteroid; życia, osłony, naprawy i szybki ogień | Lot, celowanie i strzał |
-| **Wężowy Wir — beta** | Taktyczna arena 2D w stalowo-bursztynowej oprawie: impulsy, przeszkody, boty i sprint | Cztery kierunki + sprint |
-| **BlockCraft — zapowiedź** | Planowany sandbox z budowaniem z bloków. To zapowiedź, niegrywalna gra nie jest jeszcze dostępna. | Szczegóły wkrótce |
-| **Turbo League — zapowiedź** | Planowany car soccer w perspektywie 3D-lite: auta, boost, odbicia i bramki | Szczegóły wkrótce |
+| 1 | `WSAD` | `Q` / `Spacja` |
+| 2 | Strzałki | `Enter` |
+| 3 | `TFGH` | `R` |
+| 4 | `IJKL` | `U` |
 
-Dostępne gry mają własny ekran wejściowy, zasady, ustawienia rundy, HUD i ekran wyników. Gry arcade obsługują 1–4 graczy (plus opcjonalne boty tam, gdzie pasują). W ustawieniach można przełączyć **wspólną arenę / split-screen**, a profil sprzętu ogranicza DPR canvasa do płynnego trybu, balansu albo ostrego trybu jakości. Stalowy Front zachowuje swoje zasady 2–4 uczestników; możesz dobrać boty, gdy grasz sam.
+`P` / `Esc` — pauza. W menu: strzałki + `Enter`, `Tab` obsługuje wszystkie przyciski. Fizyczny gamepad obsługuje bibliotekę (krzyżak/gałka, A/B), ale nie zastępuje sterowania w silnikach gier.
 
-### Grafika i wydajność
+**Warto wiedzieć:** nick zmienisz w sekcji **TWÓJ NICK** bez rozłączania · telefony podłączone w trakcie rundy dołączą od kolejnej · „Zagraj ponownie" przygotowuje nową rundę, nie wznawia meczu · kod pokoju i połączenie przeżywają zmianę gry.
 
-`Neonowy Pęd` korzysta z Three.js, a `Orbitalna Fala` próbuje lekkiego WebGL2 z fallbackiem Canvas2D. Silniki ładują się leniwie po wybraniu gry; `Wężowy Wir` i `Stalowy Front` używają lekkiego Canvas 2D. Profile jakości ograniczają DPR i koszt efektów, animacja joysticka jest aktualizowana najwyżej raz na klatkę, a renderowanie zatrzymuje się po ukryciu karty. Wężowy Wir dodatkowo interpoluje ruch segmentów, zachowując niskie obciążenie.
+---
 
-## Jak zagrać
+## Telefon jako pad
 
-1. Otwórz JoyPad na komputerze lub TV. Pokój z pięcioznakowym kodem otwiera się automatycznie. Na ekranie widać **QR** i listę miejsc.
-2. Każdy gracz skanuje QR albo otwiera tę samą stronę z `#pad`, wpisuje kod i opcjonalny nick. Nie trzeba zakładać konta ani instalować aplikacji.
-3. **Pierwszy aktywnie połączony telefon zostaje administratorem**. Wybiera grę na pilocie, zmienia opcje, uruchamia rundę, pauzuje i wraca do biblioteki. Pozostałe telefony są padami do gry, ale nie zmieniają menu. Gdy administrator odejdzie, uprawnienie przechodzi na najdłużej podłączony z pozostałych telefonów — niekoniecznie na slot 1.
-4. Wystarczy jeden ekran i jeden telefon. Bez telefonu możesz wybrać grę myszką/klawiaturą i grać na klawiaturze. Na telefonie menu jest teraz prostym pilotem: strzałki, `OK`, `WSTECZ` i `GRY`; nie ma tam joysticka ani ciężkich ekranów gry. W lobby działają strzałki + Enter; na ekranach gier również. W sekcji **TWÓJ NICK** można po połączeniu zmienić nazwę bez rozłączania; zapisuje się lokalnie na telefonie, roster odświeża się wszystkim, a nick trafia do HUD-u każdej gry. W rozgrywce telefon przełącza się automatycznie na joystick i przyciski akcji: gracz 1 `WSAD` + `Q`/Spacja, gracz 2 strzałki + Enter, gracz 3 `TFGH` + `R`, gracz 4 `IJKL` + `U`. `P`/`Esc` pauzuje.
+- **Dwa układy** (przełączane w trakcie rundy, zapamiętywane lokalnie):
+  - **Minimalny** — jedna duża pływająca gałka + jeden przycisk; gra jedną ręką. W Orbitalnej Fali celowanie samo wybiera najbliższy cel.
+  - **Twin-stick** — jazda + niezależne celowanie; w Stalowym Froncie dodatkowo auto-ogień i zamiana stron joyesticków.
+- **Ergonomia:** rozmiar sterowania, wysokość stref kciuków, strona przycisku akcji, tryb ruchu i haptyka (wyłączona / subtelna / wyraźna) — wszystko zapamiętywane na telefonie.
+- **Profil urządzenia:** Android, iPhone / iPad lub Automatycznie. Profil iOS utrzymuje gałkę w stałym miejscu i nie udaje funkcji, których nie ma.
+- **Bez zbędnych uprawnień:** pad nie prosi o kamerę, mikrofon, geolokalizację ani powiadomienia. Wibracje, Wake Lock, pełny ekran i sterowanie przechyłem włączasz świadomie przyciskiem; brak wsparcia (np. wibracje w iOS Safari) jest uczciwie pokazany i nie blokuje gry.
+- **Bezpieczeństwo dotyku:** przerwanie dotyku, obrót, tło i utrata sygnału zerują sterowanie; host odcina przestarzałe wejście po ok. sekundzie; telefon wracający do sesji odzyskuje slot przez 60 s.
 
-Telefony podłączone **w trakcie rundy** dostają miejsce w pokoju, ale dołączą do rozgrywki od kolejnej rundy, jeśli ich postać nie była na starcie. Kod pokoju i połączenie pozostają aktywne podczas zmiany gier. Na telefonie można rozłączyć się ręcznie. Administrator może wrócić do JoyPad podczas rundy (w menu pada jest potwierdzenie), a host ma przycisk powrotu.
+---
 
-### Stalowy Front: sterowanie, które już działało
+## Dla developerów
 
-- Lewy joystick: **KIERUNEK** (czołg jedzie tam, gdzie pchasz palec) lub **CZOŁG** (góra = przód, boki = obrót). Ustawienie jest zapamiętywane.
-- Prawy joystick: kierunek wieży niezależny od jazdy. Wychylenie do czerwonego pierścienia może automatycznie strzelać; jest też przycisk **OGIEŃ**. W ustawieniach pada można wyłączyć prawy joystick, auto-ogień i zamienić strony.
-- Wibracje sygnalizują strzał, trafienie, bonusy i wynik. Oryginalny silnik Canvas, mapy i efekty audio nie zostały zastąpione.
-
-### Telefon bez zbędnych uprawnień
-
-Pad nie prosi o kamerę, mikrofon, geolokalizację ani powiadomienia — QR jest odczytywany na drugim urządzeniu, a połączenie nie wymaga tych danych.
-
-- **Wibracje** nie mają standardowego okna „Zezwól”. API wymaga prawdziwego tapnięcia, więc ekran pada pokazuje `TEST` i odblokowuje je synchronicznie przy przycisku, akcji lub joysticku. `navigator.vibrate()` nie jest dostępne np. w iOS Safari; wtedy zostaje wizualny flash i status „Brak wibracji”, bez udawania sukcesu.
-- **Wake Lock** jest domyślnie wyłączony. Włącza się go w `FUNKCJE TELEFONU`, tylko gdy użytkownik chce, a interfejs pokazuje `aktywny`, `brak wsparcia` albo `odrzucony przez system`. Po powrocie do widocznej karty blokada jest ponawiana.
-- **Pełny ekran i blokada obrotu** uruchamiają się wyłącznie po naciśnięciu przycisku. Brak wsparcia lub odrzucenie nie blokuje gry i jest widoczne w statusie.
-- **Sterowanie przechyłem** jest osobnym, wyłączonym domyślnie trybem. Na iOS przycisk wywołuje jawne `DeviceOrientationEvent.requestPermission()`; odmowa nie wpływa na zwykłe sterowanie dotykowe.
-
-### Dwa proste układy pada
-
-W menu telefonu można w trakcie rundy, bez rozłączania, przełączyć i zapamiętać na tym telefonie:
-
-- **Minimalny** — jedna duża, pływająca gałka i jeden przycisk akcji. Krótkie etykiety oraz brak drugiego joysticka ułatwiają grę jedną ręką; w Orbitalnej Fali celowanie automatycznie wybiera najbliższy cel.
-- **Twin-stick** — obecny układ dla jazdy i niezależnego celowania. W Orbitalnej Fali zachowuje osobną gałkę celu, a w Stalowym Froncie nadal dostępne są jazda, wieża, auto-ogień i zamiana stron.
-
-Przełączenie układu wpływa tylko na telefon, nie na sesję ani split-screen pozostałych graczy. Haptyka jest dodatkiem: każdy kierunek i akcja ma pełny fallback dotykowy, więc brak Vibration API nie odbiera sterowania.
-
-## Łączność i ograniczenia
-
-Zachowano dotychczasową ścieżkę połączenia: **PeerJS / WebRTC**, opcjonalny **TURN** oraz awaryjny przekaźnik przez publiczne brokery MQTT-over-WebSocket. Host i telefon ścigają WebRTC z przekaźnikiem; działa to także między Wi‑Fi a LTE, o ile urządzenia mają internet i przynajmniej jedna z tych zewnętrznych usług jest dostępna. **GitHub Pages nie udostępnia własnego serwera sygnalizacji ani gwarantowanego przekaźnika** — publiczne usługi mogą czasem zawodzić. W panelu hosta i telefonu dostępny jest test „Sprawdź połączenie”.
-
-Gdy chcesz używać własnego PeerServer, dodaj do adresu hosta `?srv=host:port/peerjs` (opcja zostanie przekazana przez QR i zapamiętana na telefonie). QR zawiera dodatkowo krótkotrwały klucz pokoju używany tylko podczas handshake; parametry TURN i credentiale nie są kopiowane do linku. WebRTC jest nadal ścieżką preferowaną, a relay pozostaje awaryjny — zabezpieczenia nie są wykonywane przy każdym pakiecie wejścia. Własny TURN można skonfigurować lokalnie na obu urządzeniach parametrami `?turn=turn:twoj-host:3478,turns:twoj-host:5349` wraz z opcjonalnym `turnUser` i `turnPass`, albo przez zmienne buildu `VITE_TURN_URLS`, `VITE_TURN_USERNAME`, `VITE_TURN_CREDENTIAL`. Dane TURN są widoczne dla klientów WebRTC — używaj danych krótkotrwałych lub konta z limitem. Pokój jest zabezpieczony **kodem zaproszenia**, nie systemem logowania; nie udostępniaj kodu nieznajomym.
-
-## Publikacja na GitHub Pages i zmiana nazwy repozytorium
-
-Workflow `.github/workflows/deploy.yml` buduje stronę po pushu na **main** i publikuje katalog `dist` na Pages. W repozytorium: **Settings → Pages → Build and deployment → GitHub Actions**. `VITE_BASE` jest wyliczane automatycznie z **aktualnej nazwy repozytorium**, a link QR opiera się na aktualnym adresie strony. Nazwa projektu wewnątrz strony i pakietu to już **JoyPad**.
-
-Po scaleniu zmian do `main` możesz zmienić nazwę repozytorium na **JoyPad** w GitHub **Settings → General → Repository name**. Następnie uruchom ręcznie **Actions → Deploy to GitHub Pages → Run workflow** (albo zrób nowy push na main), żeby ponownie zbudować stronę pod `https://<nazwa-użytkownika>.github.io/JoyPad/`. Wystarczy nowy QR po uruchomieniu pokoju — stare linki wskazujące poprzednią nazwę repo mogą być nieaktualne. Nie trzeba ręcznie podmieniać ścieżek w kodzie. Dla repozytorium o nazwie `<użytkownik>.github.io` zamiast projektu `/JoyPad/` ustaw `VITE_BASE=/` w workflow.
-
-## Rozwój
+### Wymagania i start
 
 ```bash
 npm ci
-npm run dev                 # lokalnie http://localhost:5173/  |  pad: /#pad
-npm run build               # TypeScript + produkcyjny build
-npm run lint                # ESLint (flat config) + reguły react-hooks
-npm run selftest:arcade     # role admina, protokół, aktywne silniki + macierze WebGL2
-npm run selftest:console    # preferencje, dostępna biblioteka, kolory, priorytety haptyki
-npm run selftest:relay      # warstwa MQTT / awaryjnego przekaźnika
-npm run selftest:v16        # turniej/2v2, galeria i kontrakt profilu v1.6
+npm run dev                 # http://localhost:5173/  |  pad: /#pad
 ```
 
-Każdy push/PR przechodzi workflow `ci.yml` (lint, typecheck, selftesty, build), a `deploy.yml` powtarza selftesty (także `selftest:console`) przed publikacją na GitHub Pages. Fonty (Black Ops One, Chakra Petch, JetBrains Mono) są self-hostowane przez Fontsource — bez żądań do Google Fonts. Okładki gier to WebP, a `public/manifest.webmanifest` z ikonami pozwala „dodać JoyPad do ekranu głównego" na telefonie.
+### Skrypty
 
-Stack: Vite, React, TypeScript, Canvas 2D, Three.js, raw WebGL2, PeerJS, QRCode. `src/arcade/catalog.ts` to biblioteka; `src/arcade/neon/` zawiera silnik Neonowy Pęd i adapter JoyPad, a `src/arcade/games/` cztery aktywne silniki z jedną warstwą obsługi klawiatury/pada (`src/arcade/runtime.ts`). `src/arcade/webgl/runtime3d.ts` dostarcza mały renderer WebGL2, macierze kamery, low-poly geometrię i profile DPR, a `League3D.ts` jest używany przed fallbackiem Canvas2D. Wersja Canvas (`League.ts`) pozostaje bezpiecznym fallbackiem. `src/App.tsx` i `src/game/` zawierają Stalowy Front. `src/net/` zachowuje istniejący transport, poszerzony o stan sesji i komendy admina. Używany jest hash `#pad`, więc GitHub Pages nie potrzebuje routingu serwerowego.
+| Komenda | Co robi |
+| --- | --- |
+| `npm run dev` | Serwer deweloperski Vite |
+| `npm run build` | Typecheck + produkcyjny build (`tsc --noEmit && vite build`) |
+| `npm run lint` | ESLint (flat config) + reguły react-hooks |
+| `npm run selftest:platform` | Uprawnienia admina, protokół pokoju, Moments, nawigacja wyników |
+| `npm run selftest:replay` | Nagrywanie Moments: okna, bufory, limity, nagłówki |
+| `npm run selftest:arcade` | Role, aktywny silnik, macierze WebGL2, bezpieczeństwo pada |
+| `npm run selftest:console` | Preferencje, dźwięk, profile urządzeń, podglądy biblioteki |
+| `npm run selftest:relay` | Warstwa MQTT / awaryjnego przekaźnika |
+| `npm run selftest:v16` | Kontrakt v1.6/v1.7: galeria, notki wydania |
+| `npm run test:replay` | Testy Playwright |
 
-### Warstwa JoyPad OS
+Każdy push/PR przechodzi workflow `ci.yml` (lint, typecheck, selftesty, build).
 
-`src/console/` zawiera bibliotekę, wspólne panele, preferencje, dźwięki systemowe, identyfikację kontrolera i style powierzchni. Nie zmienia silników fizyki ani transportu WebRTC/MQTT. Preferencje urządzenia mają klucz `joypad.console`; zapis w pamięci jest opcjonalny i jego blokada nie przerywa pracy.
+### Stack
 
-Lista sprawdzeń i ograniczeń testu sprzętowego: [docs/console-testing.md](docs/console-testing.md).
+Vite · React 19 · TypeScript · Canvas 2D · Three.js · raw WebGL2 · PeerJS · QRCode.
+Fonty self-hostowane przez Fontsource (Black Ops One, Chakra Petch, JetBrains Mono, Outfit, Space Grotesk) — żadnych żądań do Google Fonts. Okładki w WebP; `public/manifest.webmanifest` pozwala dodać JoyPad do ekranu głównego (PWA).
 
-### Wspólny wieczór
+### Mapa kodu
 
-Telefony mogą zgłaszać **„Jestem gotowy”** przed rundą i **„Chcę rewanż”** po niej. Host pokazuje potwierdzone zgłoszenia, ale to gospodarz uruchamia grę; klawiatura nadal działa bez telefonu. Zmiana ustawień zeruje gotowość. Rozłączeni gracze nie pozostawiają głosów.
+| Ścieżka | Co tam jest |
+| --- | --- |
+| `src/arcade/catalog.ts` | Biblioteka gier (tytuły, opisy PL/EN, flagi `wip`) |
+| `src/arcade/runtime.ts` | Wspólny kontrakt rund + warstwa klawiatury/pada |
+| `src/arcade/games/` | Silniki Canvas 2D: Stalowy Front (`App.tsx` + `src/game/`), fallbacki Race/Orbit, League 2D, Wężowy Wir |
+| `src/arcade/neon/` | Pełny silnik 3D Neonowego Pędu (Three.js) |
+| `src/arcade/starclash/` | Orbitalna Fala 3D (adapter STAR CLASH, źródła: `archive/`) |
+| `src/arcade/webgl/` | Mały renderer WebGL2, macierze, low-poly geometria, `League3D` |
+| `src/console/` | Warstwa JoyPad OS: biblioteka, panele, preferencje, dźwięki, style |
+| `src/platform/` | Pokój, Player Pass, powiadomienia, Moments, i18n |
+| `src/net/` | Transport WebRTC/MQTT, protokół sesji i komendy admina |
+| `src/pad/` | Aplikacja telefonu: kontroler, joystick, haptyka, test połączenia |
+| `archive/` | Zintegrowane paczki źródłowe gier (tylko referencja, patrz `archive/README.md`) |
+| `scripts/` | Selftesty (`selftest:*`) i przechwytywanie podglądów |
 
-Ostatnia uruchomiona gra i ustawienia są zapamiętywane lokalnie (`joypad.evening.*`). **„Zagraj ponownie”** wraca do przygotowania nowej rundy — nie wznawia niezapisanego meczu. Brak dostępu do pamięci przeglądarki nie blokuje gry.
+### Zasady architektury
 
-### Profil telefonu i bezpieczeństwo dotyku
+- Nowe silniki implementują kontrakt `RoundConfig`/`GameRound` z `src/arcade/runtime.ts` (`onHud`, `onFinish`, `onFx`, opcjonalne `onMoment`/`onFrame`) — dzięki temu Moments, HUD i wyniki działają automatycznie.
+- `src/console/` nie zmienia silników fizyki ani transportu; preferencje mają klucz `joypad.console`, a zapis w pamięci jest opcjonalny (prywatny tryb nie psuje gry).
+- Wersja protokołu pozostaje 1: nowe typy wiadomości są opcjonalne i ignorowane przez stare klienty. Po aktualizacji odśwież **TV i telefony**.
 
-Przy pierwszym otwarciu pada wybierz **Android**, **iPhone / iPad** lub **Automatycznie**. Profil można zmienić w ustawieniach telefonu. Profil iOS utrzymuje gałkę w stałym miejscu; nie udaje obsługi wibracji ani pełnego ekranu. Szybki test w labie pozwala sprawdzić gałkę i akcję na TV bez sensorów.
+---
 
-Przerwanie dotyku, obrót, przejście do tła i utrata sygnału zerują sterowanie. Host dodatkowo odcina stare wejście po około sekundzie bez aktualizacji, bez pauzowania wszystkim. Telefon wracający do tej samej sesji próbuje odzyskać poprzednie wolne miejsce przez 60 sekund.
+## Połączenie i prywatność
 
-Na wynikach telefony mogą proponować następną grę, ale wybór zatwierdza gospodarz. Przypomnienia o gotowości są ręczne i mają ograniczenie częstotliwości. Wszystkie nowe animacje respektują ograniczenie ruchu.
+- **Ścieżka:** PeerJS / WebRTC (preferowana) → własny TURN (opcjonalny) → awaryjny przekaźnik MQTT-over-WebSocket przez publiczne brokery. Działa też między Wi‑Fi a LTE, o ile urządzenia mają internet i przynajmniej jedna z usług odpowiada.
+- **GitHub Pages nie ma własnego serwera sygnalizacji** — publiczne usługi mogą czasem zawodzić. W panelu hosta i telefonu jest test „Sprawdź połączenie".
+- **Własny serwer PeerJS:** dodaj `?srv=host:port/peerjs` do adresu hosta (przechodzi przez QR i zapamiętuje się na telefonie).
+- **Własny TURN:** parametry `?turn=turn:host:3478,turns:host:5349` (+ `turnUser`, `turnPass`) albo zmienne builda `VITE_TURN_URLS`, `VITE_TURN_USERNAME`, `VITE_TURN_CREDENTIAL`. Dane TURN są widoczne dla klientów WebRTC — używaj danych krótkotrwałych lub z limitem.
+- **Bezpieczeństwo pokoju:** pięcioznakowy kod + krótkotrwały klucz w QR (tylko handshake). To zabezpieczenie zaproszenia, nie system logowania — nie udostępniaj kodu nieznajomym.
+- **Zero chmury:** stan pokoju, wyniki, Moments i preferencje zostają na urządzeniach. Brak serwera aplikacji.
 
-### Podglądy rozgrywki w bibliotece
+Szczegóły uprawnień i sieci: [docs/platform-update.md](docs/platform-update.md).
 
-Ilustracje pozostają na kafelkach wyboru gier. Tłem biblioteki jest teraz krótkie **nagranie rozgrywki botów** wybranego tytułu: Stalowy Front, Neonowy Pęd lub Orbitalna Fala. To ośmiosekundowe, bezgłośne klipy z rzeczywistych silników, a nie uruchomiona gra w tle.
+---
 
-Nagrania to prawdziwe Full HD (1920×1080, 24 fps) z silników gier — plansza jest dopasowana do własnego kształtu 16:9, więc cały obraz widać i na małym laptopie, i na telewizorze panoramicznym, a okładka wybranej gry pozostaje rozmytym tłem. Panel „WSPÓLNY EKRAN” jest półprzezroczystym szkłem, więc nie zasłania rozgrywki.
+## Publikacja na GitHub Pages
 
-Na dużym ekranie podgląd startuje po chwili zatrzymania wyboru (także w przeglądarkach telewizorów). Telefon, ograniczony ruch i wykryte oszczędzanie danych wymagają ręcznego odtwarzania. Przycisk odtwarzania/pauzy na górnym pasku oraz ustawienie „Automatyczne podglądy gier” dają kontrolę nad ruchem. Brak obsługi pliku zostawia okładkę i nie blokuje gry. Informacje o nagraniach: [public/previews/README.md](public/previews/README.md).
+Workflow `.github/workflows/deploy.yml` buduje stronę po pushu na **main** i publikuje `dist` na Pages (Settings → Pages → **GitHub Actions**). `VITE_BASE` wylicza się z nazwy repozytorium, a link QR używa aktualnego adresu strony — po zmianie nazwy repo uruchom **Actions → Deploy to GitHub Pages → Run workflow** i zeskanuj nowy QR. Dla repo `<user>.github.io` ustaw `VITE_BASE=/` w workflow.
+
+---
+
+## Dokumentacja
+
+| Dokument | Zakres |
+| --- | --- |
+| [docs/platform-update.md](docs/platform-update.md) | Funkcje platformy (pokój, Player Pass, Moments), uprawnienia, ograniczenia, checklisty wydania |
+| [docs/game-building-prompts.md](docs/game-building-prompts.md) | Prompt dla nowych gier (Turbo League) i bezpieczna integracja ZIP |
+| [docs/moments-video.md](docs/moments-video.md) | Architektura i testy nagrywania Moments |
+| [docs/console-testing.md](docs/console-testing.md) | Sprawdzenia konsoli: automatyczne, sandbox, fizyczne urządzenia |
+| [docs/v1.6.md](docs/v1.6.md) | Archiwalny zakres v1.6 |
+| [public/previews/README.md](public/previews/README.md) | Informacje o nagraniach podglądów w bibliotece |

@@ -1,4 +1,4 @@
-export const WHATS_NEW_VERSION = '1.7.0';
+export const WHATS_NEW_VERSION = '1.8.0';
 const STORAGE_KEY = 'joypad.whats-new-version';
 
 type SeenVersionStorage = Pick<Storage, 'getItem' | 'setItem'>;

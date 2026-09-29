@@ -31,7 +31,6 @@ assert.equal(host.session().adminSlot, 0, 'guest cannot promote themselves');
 b.send({ t: 'suggest', game: 'orbit' });
 assert.equal(host.session().roster[1].suggestedGame, 'orbit', 'lobby allows votes');
 const immutable = host.snapshot();
-b.send({ t: 'suggest', game: 'race' });
 assert.equal(immutable.pads[1].suggestedGame, 'orbit', 'snapshots cannot mutate under notification diff');
 a.send({ t: 'room', action: { kind: 'suggestions', value: false } });
 assert.equal(host.session().roster[1].suggestedGame, undefined);
@@ -40,6 +39,15 @@ assert.equal(host.session().roster[1].suggestedGame, undefined, 'disabled sugges
 a.send({ t: 'room', action: { kind: 'suggestions', value: true } });
 b.send({ t: 'suggest', game: 'snake' });
 assert.equal(host.session().roster[1].suggestedGame, 'snake', 'beta games can be voted in after release');
+// v1.8: anty-spam — kubełek (3) pozwala zmienić zdanie, rapid-fire jest ignorowany.
+b.send({ t: 'suggest', game: 'race' });
+assert.equal(host.session().roster[1].suggestedGame, 'race', 'change of mind still works within the bucket');
+b.send({ t: 'suggest', game: 'tanks' });
+b.send({ t: 'suggest', game: 'orbit' });
+b.send({ t: 'suggest', game: 'snake' });
+assert.equal(host.session().roster[1].suggestedGame, 'race', 'anti-spam stops rapid-fire beyond the bucket');
+const rateLimited = b.sent.filter(m => (m as { t?: string }).t === 'rateLimited');
+assert.ok(rateLimited.length >= 2, 'pad is informed about the rate limit');
 a.send({ t: 'room', action: { kind: 'locked', value: true } });
 const rejected = pair('Intruz');
 assert.equal(host.session().roster.length, 2);

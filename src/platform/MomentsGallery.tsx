@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Archive, Download, Play, Trash2, Share2, Filter, ArrowDownWideNarrow } from 'lucide-react';
+import { Clapperboard, Download, Play, Trash2, Share2, Filter, ArrowDownWideNarrow } from 'lucide-react';
 import { deleteGalleryMoment, galleryFileExtension, listGalleryMoments, selectGalleryMoments, GALLERY_MAX_BYTES, GALLERY_MAX_ITEMS, type GalleryMoment } from './momentGallery';
 import { ReplayPlayer } from './ReplayPlayer';
 import { momentTime } from './momentRecorder';
@@ -57,7 +57,7 @@ export function MomentsGallery() {
   const percent = Math.min(100, totalBytes / GALLERY_MAX_BYTES * 100);
 
   return <div className="moments-gallery">
-    <div className="moments-gallery-intro"><Archive size={22} /><div><b>{t('gallery.local')}</b><p>{t('gallery.localInfo')}</p><div className="moments-gallery-storage" aria-label={`${t('gallery.storage')}: ${formatBytes(totalBytes)} / ${formatBytes(GALLERY_MAX_BYTES)}`}><div><span>{t('gallery.storage')}</span><b>{formatBytes(totalBytes)} / {formatBytes(GALLERY_MAX_BYTES)}</b></div><span className="moments-gallery-storage-track"><i style={{ width: `${percent}%` }} /></span><small>{items.length}/{GALLERY_MAX_ITEMS} {t('gallery.items')}</small></div></div></div>
+    <div className="moments-gallery-intro"><Clapperboard size={22} /><div><b>{t('gallery.local')}</b><p>{t('gallery.localInfo')}</p><div className="moments-gallery-storage" aria-label={`${t('gallery.storage')}: ${formatBytes(totalBytes)} / ${formatBytes(GALLERY_MAX_BYTES)}`}><div><span>{t('gallery.storage')}</span><b>{formatBytes(totalBytes)} / {formatBytes(GALLERY_MAX_BYTES)}</b></div><span className="moments-gallery-storage-track"><i style={{ width: `${percent}%` }} /></span><small>{items.length}/{GALLERY_MAX_ITEMS} {t('gallery.items')}</small></div></div></div>
     {error && <p className="replay-error" role="status">{error}<button type="button" onClick={() => setError('')} aria-label={t('common.close')}>×</button></p>}
     {!items.length && !error && <div className="moment-empty">{t('gallery.empty')}</div>}
     {!!items.length && <div className="moments-gallery-toolbar">

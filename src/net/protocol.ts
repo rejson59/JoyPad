@@ -112,8 +112,8 @@ export const ZERO_INPUT: PadInput = { fwd: 0, turn: 0, fire: false };
 export type PadFx = 'fire' | 'hit' | 'kill' | 'dead' | 'pickup' | 'shield' | 'respawn' | 'win' | 'lose';
 
 export type HostScreen = 'lab' | 'lobby' | 'menu' | 'setup' | 'game' | 'over';
-export type RemoteCommand = 'left' | 'right' | 'up' | 'down' | 'select' | 'back' | 'pause' | 'restart' | 'home';
-export const REMOTE_COMMANDS: readonly RemoteCommand[] = ['left', 'right', 'up', 'down', 'select', 'back', 'pause', 'restart', 'home'];
+export type RemoteCommand = 'left' | 'right' | 'up' | 'down' | 'select' | 'back' | 'pause' | 'restart' | 'home' | 'x' | 'y';
+export const REMOTE_COMMANDS: readonly RemoteCommand[] = ['left', 'right', 'up', 'down', 'select', 'back', 'pause', 'restart', 'home', 'x', 'y'];
 export interface RemoteEvent { id: number; command: RemoteCommand }
 
 export interface ArcadeHud {
@@ -182,7 +182,8 @@ export type HostMessage =
   | { t: 'fx'; fx: PadFx }
   | { t: 'pong'; at: number }
   | { t: 'achievement'; id: import('../platform/profile').AchievementId }
-  | { t: 'roundResult'; game: GameId; won: boolean };
+  | { t: 'roundResult'; game: GameId; won: boolean }
+  | { t: 'rateLimited'; scope: 'suggest'; retryAfter: number };
 
 export const PROTOCOL_VERSION = 1;
 

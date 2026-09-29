@@ -22,7 +22,10 @@ export function GameResults({ replayNotice = '', moments = [], info, title, subt
   const rematch = host.pads.filter(p => p.rematch);
   const winner = players.find(player => player.slot === winnerSlot);
   const label = scoreLabel || (en ? 'SCORE' : 'WYNIK');
-  return <div className="cine-results" style={{ '--result-color': winner?.color || 'var(--os-accent)' } as CSSProperties}>
+  // v1.8: najlepszy Moment gra jako tło ekranu wyników — okładka schodzi na drugi plan.
+  const bgReplay = moments.find(m => m.replay)?.replay ?? null;
+  return <div className={`cine-results ${bgReplay ? 'has-replay-bg' : ''}`} style={{ '--result-color': winner?.color || 'var(--os-accent)' } as CSSProperties}>
+    {bgReplay && <div className="cine-results-replay" aria-hidden="true"><video src={bgReplay.url} autoPlay muted loop playsInline /></div>}
     <div className="cine-results-art" aria-hidden="true"><img src={`${import.meta.env.BASE_URL}${info.cover}`} alt="" /></div>
     <header className="cine-result-header"><span className="os-wordmark"><JoyPadLogo size={38} />JoyPad<span>.</span></span><span>{info.title} <i /> {t('results.roundEnd')}</span><button className="cine-back" onClick={onExit}><Home size={16} /> {t('results.library')}</button></header>
     <main className="cine-results-main"><section className="cine-result-moment">

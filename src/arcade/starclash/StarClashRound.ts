@@ -4,7 +4,7 @@ import type { GameRound, Racer, RoundConfig, RoundHud, RoundPlayer } from '../ru
 import { Game } from './Game';
 
 /**
- * Adapter STAR CLASH 3D (silnik z orbitalna-fala.zip) do runtime'u JoyPad.
+ * Adapter STAR CLASH 3D (silnik z archive/orbitalna-fala.zip) do runtime'u JoyPad.
  *
  * Silnik pochodzi z niezależnego projektu kosmicznego. Ten mostek zachowuje
  * jego bitwy, SI wrogów, rakietę z namierzaniem i efekty, a JoyPad zarządza
@@ -70,7 +70,7 @@ export class StarClashRound implements GameRound {
     const allyBots = Math.max(1, 5 - this.humans.length - difficulty);
     this.game.startBattleSquad(
       this.humans.map(h => ({ cls, up: null, name: h.name })),
-      { enemies, allyBots, difficulty },
+      { enemies, allyBots, difficulty, accents: this.humans.map(h => h.color) },
     );
     this.pushHud();
   }

@@ -19,13 +19,13 @@ export class SnakeRound extends CanvasRound {
   private target: number;
 
   constructor(canvas: HTMLCanvasElement, config: RoundConfig) {
-    super(canvas, config, 170);
-    this.target = [8, 12, 16][config.primary] ?? 12;
+    super(canvas, config, 200);
+    this.target = [1, 2, 3][config.primary] ?? 2;
     for (let x = 10; x <= 13; x++) { this.walls.add(this.key(x, 9)); this.walls.add(this.key(x + 14, 11)); }
     for (let y = 3; y <= 6; y++) { this.walls.add(this.key(18, y)); this.walls.add(this.key(19, 20 - y)); }
     for (let y = 13; y <= 15; y++) { this.walls.add(this.key(9, y)); this.walls.add(this.key(28, 20 - y)); }
-    this.serpents = config.players.map(p => ({ ...p, body: [], prevBody: [], dir: { x: 1, y: 0 }, next: { x: 1, y: 0 }, score: 0, hearts: 3, energy: 100, timer: 0, stepDuration: .145, respawn: 0, shield: 0 }));
-    for (const s of this.serpents) this.reset(s);
+    this.serpents = config.players.map(p => ({ ...p, body: [], prevBody: [], dir: { x: 1, y: 0 }, next: { x: 1, y: 0 }, score: 0, hearts: 3, energy: 100, timer: 0, stepDuration: .185, respawn: 0, shield: 0 }));
+    for (const s of this.serpents) { s.hearts = this.target; this.reset(s); }
     for (let i = 0; i < 6; i++) this.food.push(this.makeFood(i === 0));
   }
 
@@ -39,7 +39,7 @@ export class SnakeRound extends CanvasRound {
     s.body = Array.from({ length: 4 }, (_, i) => ({ x: clamp(start.x - s.dir.x * i, 0, COLS - 1), y: clamp(start.y - s.dir.y * i, 0, ROWS - 1) }));
     s.prevBody = s.body.map(cell => ({ ...cell }));
     s.timer = 0;
-    s.stepDuration = .145;
+    s.stepDuration = .185;
     s.energy = Math.max(35, s.energy);
     s.shield = 2; // krótka ochrona po odrodzeniu
   }
@@ -94,9 +94,9 @@ export class SnakeRound extends CanvasRound {
       this.chooseDirection(s);
       const inp = s.isBot ? null : this.input(s.slot);
       const boost = !!inp?.action && s.energy > 5;
-      s.energy = clamp(s.energy + dt * (boost ? -42 : 13), 0, 100);
+      s.energy = clamp(s.energy + dt * (boost ? -34 : 14), 0, 100);
       s.timer += dt;
-      const interval = boost ? .077 : s.isBot ? .17 : .145;
+      const interval = boost ? .11 : s.isBot ? .21 : .185;
       s.stepDuration = interval;
       if (s.timer < interval) continue;
       s.timer = Math.max(0, s.timer - interval);
@@ -118,23 +118,36 @@ export class SnakeRound extends CanvasRound {
         this.food.push(this.makeFood());
         if (!s.isBot) this.config.onFx(s.slot, 'pickup');
         gameAudio.pickup();
-        if (s.score >= this.target) {
-          this.finish({ title: this.isEnglish ? `${s.name} wins!` : `${s.name} wygrywa!`, subtitle: this.isEnglish ? `First to ${this.target} points on the steel arena.` : `Pierwszy zdobył ${this.target} punktów na stalowej arenie.`, winnerSlot: s.isBot ? null : s.slot, players: this.ranking() });
-        }
       } else s.body.pop();
     }
-    if (this.serpents.every(s => s.hearts <= 0)) this.timeout();
+    // Eliminacja: zwycięża ostatni żyjący wąż na arenie.
+    const alive = this.serpents.filter(s => s.hearts > 0);
+    if (alive.length === 1 && this.serpents.length > 1) {
+      const champion = alive[0];
+      this.finish({
+        title: this.isEnglish ? `${champion.name} outlasted everyone!` : `${champion.name} przetrwał wszystkich!`,
+        subtitle: this.isEnglish ? 'Last snake standing on the steel arena.' : 'Ostatni żyjący wąż na stalowej arenie.',
+        winnerSlot: champion.isBot ? null : champion.slot,
+        players: this.ranking(),
+      });
+    } else if (alive.length === 0) this.timeout();
   }
 
   private ranking(): RoundPlayer[] {
     return [...this.serpents].sort((a, b) => b.score - a.score || b.hearts - a.hearts).map(s => ({ slot: s.slot, name: s.name, color: s.color, score: s.score, detail: s.hearts ? (this.isEnglish ? `${s.hearts} lives · ${s.body.length} cells` : `${s.hearts} życia · ${s.body.length} pól`) : (this.isEnglish ? 'Eliminated' : 'Eliminacja'), value: Math.round(s.energy), maxValue: 100, isBot: s.isBot }));
   }
   protected hud(): RoundHud {
-    return { timeLeft: this.timeLeft, countdown: this.countdown, paused: this.paused, objective: this.isEnglish ? `First to ${this.target} points` : `Pierwszy do ${this.target} punktów`, status: this.isEnglish ? 'COLLECT ENERGY · AVOID CRASHES' : 'ZBIERAJ IMPULSY · UNIKAJ KOLIZJI', players: this.ranking() };
+    return { timeLeft: this.timeLeft, countdown: this.countdown, paused: this.paused, objective: this.isEnglish ? 'Last snake standing wins' : 'Ostatni żywy wygrywa', status: this.isEnglish ? 'ELIMINATION · COLLECT ENERGY' : 'ELIMINACJA · ZBIERAJ IMPULSY', players: this.ranking() };
   }
   protected timeout(): void {
     const rank = this.ranking();
-    this.finish({ title: this.isEnglish ? `${rank[0].name} wins!` : `${rank[0].name} wygrywa!`, subtitle: this.isEnglish ? `Most energy collected: ${rank[0].score}. Play again and beat the record!` : `Najwięcej impulsów: ${rank[0].score}. Spróbuj ponownie i pobij rekord!`, winnerSlot: rank[0].isBot ? null : rank[0].slot, players: rank });
+    const aliveTop = rank.find(p => p.detail !== (this.isEnglish ? 'Eliminated' : 'Eliminacja'));
+    this.finish({
+      title: this.isEnglish ? `${rank[0].name} wins!` : `${rank[0].name} wygrywa!`,
+      subtitle: this.isEnglish ? `Time is up · most energy: ${rank[0].score}.` : `Koniec czasu · najwięcej impulsów: ${rank[0].score}.`,
+      winnerSlot: aliveTop && !aliveTop.isBot ? aliveTop.slot : rank[0].isBot ? null : rank[0].slot,
+      players: rank,
+    });
   }
 
   protected render(ctx: CanvasRenderingContext2D): void {

@@ -8,7 +8,7 @@ import { readinessText } from '../console/sessionSummary';
 import { playableIndices } from '../console/navigation';
 import { Sheet } from '../console/Sheet';
 import { useCallback, useEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Crown, Expand, Home, LogOut, Maximize2, Menu, Pause, Play, QrCode, RotateCcw, Settings, Trophy } from 'lucide-react';
+import { ArrowLeft, Check, Crown, Expand, Home, LogOut, Maximize2, Menu, Pause, Play, QrCode, RotateCcw, Settings, Trophy } from 'lucide-react';
 import { GAMES, gameInfo, localizeGame } from '../arcade/catalog';
 import { useT } from '../platform/i18n';
 import { padClient, type PadClientState } from '../net/padClient';

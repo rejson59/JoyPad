@@ -26,7 +26,6 @@ Bez kont, bez instalacji, bez uprawnień — wszystko w przeglądarce.
 6. [Połączenie i prywatność](#połączenie-i-prywatność)
 7. [Publikacja na GitHub Pages](#publikacja-na-github-pages)
 8. [Dokumentacja](#dokumentacja)
-9. [Co dalej — v1.8](#co-dalej--v18)
 
 ---
 
@@ -180,7 +179,6 @@ Workflow `.github/workflows/deploy.yml` buduje stronę po pushu na **main** i pu
 | Dokument | Zakres |
 | --- | --- |
 | [docs/platform-update.md](docs/platform-update.md) | Funkcje platformy (pokój, Player Pass, Moments), uprawnienia, ograniczenia, checklisty wydania |
-| [docs/v1.8-planning.md](docs/v1.8-planning.md) | Plan v1.8: pomysły, statusy, stan wyjściowy |
 | [docs/game-building-prompts.md](docs/game-building-prompts.md) | Prompt dla nowych gier (Turbo League) i bezpieczna integracja ZIP |
 | [docs/moments-video.md](docs/moments-video.md) | Architektura i testy nagrywania Moments |
 | [docs/console-testing.md](docs/console-testing.md) | Sprawdzenia konsoli: automatyczne, sandbox, fizyczne urządzenia |

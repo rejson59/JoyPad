@@ -1,6 +1,7 @@
 import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: './tests', testMatch: 'moments.spec.ts', timeout: 90_000,
+  reporter: process.env.CI ? [['list'], ['./tests/github-annotations-reporter.ts']] : 'list',
   workers: 1, retries: 0, outputDir: '.cache/playwright',
   use: {
     baseURL: process.env.TEST_BASE_URL || 'http://localhost:5173',

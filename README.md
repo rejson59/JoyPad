@@ -186,11 +186,3 @@ Workflow `.github/workflows/deploy.yml` buduje stronę po pushu na **main** i pu
 | [docs/console-testing.md](docs/console-testing.md) | Sprawdzenia konsoli: automatyczne, sandbox, fizyczne urządzenia |
 | [docs/v1.6.md](docs/v1.6.md) | Archiwalny zakres v1.6 |
 | [public/previews/README.md](public/previews/README.md) | Informacje o nagraniach podglądów w bibliotece |
-
----
-
-## Co dalej — v1.8
-
-Najbliższa wersja jest w planowaniu: kandyzaty obejmują udostępnienie **Turbo League** jako 5. gry,
-**turniej całego wieczoru**, **tryb widza** i ulepszenia Moments. Pełna lista z wpływem na
-rozgrywkę, kosztem i ryzykiem: [docs/v1.8-planning.md](docs/v1.8-planning.md).

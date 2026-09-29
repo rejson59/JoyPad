@@ -1,9 +1,9 @@
 import { SessionNotifications } from '../platform/notifications';
-import { JoyPadLogo } from '../components/JoyPadLogo';
 import { lastGame } from '../console/history';
 import { Component, lazy, Suspense, useCallback, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
 import { ConsoleLibrary } from '../console/ConsoleLibrary';
 import { nextPlayable } from '../console/navigation';
+import { getPreferences, setPreferences } from '../console/preferences';
 import { systemSound } from '../console/sound';
 const TankApp = lazy(() => import('../App'));
 import { PLAYER_DEFS } from '../game/types';
@@ -15,6 +15,9 @@ import { BootSplash } from '../components/BootSplash';
 import { ConnectionsScreen } from '../components/ConnectionsScreen';
 import { JoyLab } from '../components/JoyLab';
 import { ScreenCurtain, useCurtain } from '../components/motion';
+import { LockScreen } from '../components/LockScreen';
+import { StartupOverlay } from '../platform/startup/StartupOverlay';
+import { shouldShowStartup } from '../platform/startup/startupState';
 import { GAMES, gameInfo, type GameId } from './catalog';
 import { ArcadeGameView } from './ArcadeGameView';
 import { useT, type Language } from '../platform/i18n';
@@ -47,10 +50,20 @@ class GameErrorBoundary extends Component<GameErrorBoundaryProps, GameErrorBound
   }
 }
 
+/** Pełny ekran na PC/TV — także z pada (przycisk X pilota administratora). */
+export function toggleFullscreen() {
+  const doc = document as Document & { webkitFullscreenElement?: Element; webkitExitFullscreen?: () => Promise<void> };
+  const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> };
+  const active = doc.fullscreenElement || doc.webkitFullscreenElement;
+  if (active) void (doc.exitFullscreen?.() ?? doc.webkitExitFullscreen?.());
+  else void (el.requestFullscreen?.() ?? el.webkitRequestFullscreen?.());
+}
+
 export default function JoypadApp() {
   const { language } = useT();
   const [selected, setSelected] = useState<GameId | null>(null);
   const [booted, setBooted] = useState(false);
+  const [showStartup, setShowStartup] = useState(shouldShowStartup);
   const [showConnections, setShowConnections] = useState(false);
   const [showLab, setShowLab] = useState(false);
   const overlay = useRef(false);
@@ -124,26 +137,39 @@ export default function JoypadApp() {
 
   useEffect(() => {
     const handle = (command: RemoteCommand) => {
-      if (padHost.session().room?.dimmed) {
+      if (padHost.session().room?.dimmed || document.querySelector('.joy-lockscreen')) {
         if (['select', 'back', 'home'].includes(command)) padHost.manageRoom({ kind: 'dimmed', value: false });
         return;
       }
       if (showLab) { if (command === 'back' || command === 'home' || command === 'select') closeLab(); return; }
       if (showConnections || overlay.current || document.querySelector('dialog[open], .boot-splash')) { window.dispatchEvent(new CustomEvent('joypad-dialog-command', { detail: command })); return; }
+      // v1.8: X = pełny ekran (działa też w trakcie gry), Y = kod QR we wspólnym ekranie.
+      if (command === 'x') { toggleFullscreen(); return; }
+      if (command === 'y') { setPreferences({ showQr: !getPreferences().showQr }); return; }
       if (selectedRef.current) { setRemote({ id: ++serial.current, command }); return; }
       const active = document.activeElement as HTMLElement | null;
-      if (command === 'up') { document.querySelector<HTMLElement>('.os-topbar nav button')?.focus(); return; }
-      if (command === 'down') { document.querySelector<HTMLElement>(`[data-game-index="${focusRef.current}"]`)?.focus(); return; }
+      // v1.8: nawigacja w stylu Tab — administrator dochodzi do KAŻDEGO przycisku, z owijaniem.
+      const focusables = () => Array.from(document.querySelectorAll<HTMLElement>(
+        '.os-library button:not(:disabled), .os-library select:not(:disabled), .os-library a[href], .os-library [tabindex]:not([tabindex="-1"])',
+      )).filter(el => el.offsetParent !== null && !el.closest('dialog'));
+      const step = (delta: number) => {
+        const items = focusables();
+        const at = items.indexOf(active as HTMLElement);
+        const target = at < 0 ? (delta > 0 ? 0 : items.length - 1) : (at + delta + items.length) % items.length;
+        items[target]?.focus();
+      };
+      if (command === 'up') { step(-1); return; }
+      if (command === 'down') { step(1); return; }
       if (command === 'left' || command === 'right') {
         if (active?.closest('.os-topbar')) {
           const buttons = Array.from(document.querySelectorAll<HTMLElement>('.os-topbar nav button'));
           const at = buttons.indexOf(active);
           buttons[(at + (command === 'left' ? -1 : 1) + buttons.length) % buttons.length]?.focus();
-        } else {
+        } else if (active?.closest('.os-game-rail')) {
           const next = nextPlayable(focusRef.current, command === 'left' ? -1 : 1);
           choose(next);
-          if (active?.closest('.os-game-rail')) document.querySelector<HTMLElement>(`[data-game-index="${next}"]`)?.focus({ preventScroll: true });
-        }
+          document.querySelector<HTMLElement>(`[data-game-index="${next}"]`)?.focus({ preventScroll: true });
+        } else step(command === 'left' ? -1 : 1);
       }
       if (command === 'select') {
         if (active?.closest('.os-topbar,.os-footer,.os-collection-heading,.os-session') && active.matches('button,a')) active.click();
@@ -158,7 +184,7 @@ export default function JoypadApp() {
     const key = (e: KeyboardEvent) => {
       if (selectedRef.current || document.querySelector('.boot-splash') || (e.target instanceof Element && e.target.closest('input,select,textarea,dialog'))) return;
       if ((e.code === 'Enter' || e.code === 'Space') && e.target instanceof Element && e.target.closest('button,a')) return;
-      const map: Record<string, RemoteCommand> = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', Enter: 'select', Escape: 'back' };
+      const map: Record<string, RemoteCommand> = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', Enter: 'select', Escape: 'back', KeyX: 'x', KeyY: 'y' };
       if (map[e.code]) { e.preventDefault(); handle(map[e.code]); }
     };
     window.addEventListener('keydown', key);
@@ -208,9 +234,15 @@ export default function JoypadApp() {
   return (
     <>
       {content}
+      {showStartup && !booted ? null : showStartup && <StartupOverlay onFinished={() => setShowStartup(false)} />}
       <ScreenCurtain state={curtain.state} />
       <SessionNotifications session={padHost.session()} />
-      {state.room.dimmed && <div className="joy-screen-rest"><JoyPadLogo size={150} /><span className="os-eyebrow">JOYPAD / {language === 'en' ? 'BREAK TIME' : 'CHWILA PRZERWY'}</span><h1>{language === 'en' ? 'The evening is still yours.' : 'Dobry wieczór trwa.'}</h1><p>{language === 'en' ? 'The crew is still connected. Come back whenever you like.' : 'Ekipa nadal jest połączona. Wróćcie, kiedy chcecie.'}</p><button onClick={() => padHost.manageRoom({ kind: 'dimmed', value: false })}>{language === 'en' ? 'Back to screen' : 'Wróć do ekranu'}</button><small>{language === 'en' ? 'The admin can also wake the screen from a phone.' : 'Administrator może też odsłonić ekran z telefonu.'}</small></div>}
+      {state.room.dimmed && <LockScreen
+        onConnections={() => { padHost.manageRoom({ kind: 'dimmed', value: false }); setShowConnections(true); }}
+        onLab={() => { padHost.manageRoom({ kind: 'dimmed', value: false }); openLab(); }}
+        onOpen={id => { padHost.manageRoom({ kind: 'dimmed', value: false }); open(id as GameId); }}
+        onWake={() => padHost.manageRoom({ kind: 'dimmed', value: false })}
+      />}
       {state.screen === 'game' && state.pads.some(p => p.inputStale) && <div className="os-link-state" role="status">{language === 'en' ? 'No signal' : 'Brak sygnału'}: {state.pads.filter(p => p.inputStale).map(p => p.nick).join(', ')} · {language === 'en' ? 'Controls stopped. Waiting for the connection to return.' : 'Sterowanie zatrzymane. Czekamy na powrót.'}</div>}
     </>
   );

@@ -19,11 +19,26 @@ export function GameSuggestions({ st }: { st: PadClientState }) {
   const selected = st.roster.find(p => p.slot === st.slot)?.suggestedGame;
   const { language } = useT();
   const en = language === 'en';
-  return <section className="lounge-suggestions" aria-label={en ? 'Game suggestions' : 'Propozycje gier'}><div className="lounge-heading"><span className="os-eyebrow">{en ? 'CREW VOTE' : 'GŁOS EKIPY'}</span><h2>{en ? 'What should we play?' : 'Co gramy?'}</h2><p>{st.room?.suggestions === false ? (en ? 'The admin paused suggestions.' : 'Administrator wstrzymał propozycje.') : (en ? 'Suggest a game. The admin makes the final choice.' : 'Zaproponuj tytuł. Ostateczny wybór należy do admina.')}</p></div><div>{GAMES.filter(g => !g.wip && g.id !== st.game).map(g => {
+  // v1.8: antyspam hosta — telefon pokazuje odliczanie zamiast milczącego braku reakcji.
+  const [now, setNow] = useState(() => Date.now());
+  const limited = st.rateLimitedUntil > now;
+  useEffect(() => {
+    setNow(Date.now());
+    if (st.rateLimitedUntil <= Date.now()) return;
+    const iv = window.setInterval(() => setNow(Date.now()), 400);
+    return () => window.clearInterval(iv);
+  }, [st.rateLimitedUntil]);
+  const wait = Math.max(1, Math.ceil((st.rateLimitedUntil - now) / 1000));
+  const hint = st.room?.suggestions === false
+    ? (en ? 'The admin paused suggestions.' : 'Administrator wstrzymał propozycje.')
+    : limited
+      ? (en ? `Easy there — next suggestion in ${wait} s.` : `Zwolnij trochę — kolejna propozycja za ${wait} s.`)
+      : (en ? 'Suggest a game. The admin makes the final choice.' : 'Zaproponuj tytuł. Ostateczny wybór należy do admina.');
+  return <section className="lounge-suggestions" aria-label={en ? 'Game suggestions' : 'Propozycje gier'}><div className="lounge-heading"><span className="os-eyebrow">{en ? 'CREW VOTE' : 'GŁOS EKIPY'}</span><h2>{en ? 'What should we play?' : 'Co gramy?'}</h2><p>{hint}</p></div><div>{GAMES.filter(g => !g.wip && g.id !== st.game).map(g => {
     const votes = st.roster.filter(p => p.suggestedGame === g.id);
     const game = localizeGame(g, language);
     const voteLabel = en ? `${votes.length} ${votes.length === 1 ? 'vote' : 'votes'}` : `${votes.length} głos${votes.length === 1 ? '' : 'y'}`;
-    return <button key={g.id} disabled={st.room?.suggestions === false} aria-pressed={selected === g.id} onClick={() => padClient.suggestGame(selected === g.id ? null : g.id)}><img src={`${import.meta.env.BASE_URL}${game.cover}`} alt="" loading="lazy" decoding="async" /><span><b>{game.title}</b><small>{votes.length ? `${voteLabel} · ${votes.map(p => p.nick).join(', ')}` : game.genre}</small></span>{selected === g.id ? <Check size={18} /> : <i>+</i>}</button>;
+    return <button key={g.id} disabled={st.room?.suggestions === false || limited} aria-pressed={selected === g.id} onClick={() => padClient.suggestGame(selected === g.id ? null : g.id)}><img src={`${import.meta.env.BASE_URL}${game.cover}`} alt="" loading="lazy" decoding="async" /><span><b>{game.title}</b><small>{votes.length ? `${voteLabel} · ${votes.map(p => p.nick).join(', ')}` : game.genre}</small></span>{selected === g.id ? <Check size={18} /> : <i>+</i>}</button>;
   })}</div></section>;
 }
 export function PlayerLounge({ st, onProfile }: { st: PadClientState; onProfile: (p: PlayerProfile) => void }) {

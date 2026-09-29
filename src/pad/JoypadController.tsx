@@ -8,7 +8,7 @@ import { readinessText } from '../console/sessionSummary';
 import { playableIndices } from '../console/navigation';
 import { Sheet } from '../console/Sheet';
 import { useCallback, useEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Crown, Home, LogOut, Maximize2, Menu, Pause, Play, RotateCcw, Settings, Trophy } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Crown, Expand, Home, LogOut, Maximize2, Menu, Pause, Play, QrCode, RotateCcw, Settings, Trophy } from 'lucide-react';
 import { GAMES, gameInfo, localizeGame } from '../arcade/catalog';
 import { useT } from '../platform/i18n';
 import { padClient, type PadClientState } from '../net/padClient';
@@ -59,23 +59,70 @@ function RemoteButton({
   );
 }
 
+/**
+ * v1.8: kompaktowy joystick nawigacji zamiast strzałek (D-pad). Pochylenie
+ * przekraczające próg wysyła komendę pilota i powtarza ją, dopóki trzymasz.
+ */
+function NavStick({ admin, accent }: { admin: boolean; accent: string }) {
+  const { t } = useT();
+  const ref = useRef<HTMLDivElement>(null);
+  const [knob, setKnob] = useState({ x: 0, y: 0 });
+  const [active, setActive] = useState(false);
+  const repeat = useRef(0);
+  const held = useRef<RemoteCommand | null>(null);
+
+  const stopRepeat = () => { window.clearInterval(repeat.current); repeat.current = 0; held.current = null; };
+  useEffect(() => stopRepeat, []);
+  const fire = (command: RemoteCommand) => { if (admin) send(command); };
+  const update = (e: RPointerEvent) => {
+    if (!admin || !ref.current) return;
+    e.preventDefault();
+    const rect = ref.current.getBoundingClientRect();
+    let dx = (e.clientX - (rect.left + rect.width / 2)) / (rect.width / 2);
+    let dy = (e.clientY - (rect.top + rect.height / 2)) / (rect.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > 1) { dx /= len; dy /= len; }
+    setKnob({ x: dx, y: dy });
+    const threshold = 0.38;
+    let command: RemoteCommand | null = null;
+    if (Math.abs(dx) > Math.abs(dy)) { if (dx < -threshold) command = 'left'; else if (dx > threshold) command = 'right'; }
+    else if (dy < -threshold) command = 'up';
+    else if (dy > threshold) command = 'down';
+    if (command !== held.current) {
+      stopRepeat();
+      if (command) {
+        held.current = command;
+        fire(command);
+        repeat.current = window.setInterval(() => fire(command as RemoteCommand), 340);
+      }
+    }
+  };
+  const release = () => { setKnob({ x: 0, y: 0 }); setActive(false); stopRepeat(); };
+  return <div className={`nav-stick ${active ? 'is-active' : ''}`} ref={ref} role="application"
+    aria-label={t('remote.adminNav')}
+    style={{ '--stick-accent': accent } as React.CSSProperties}
+    onPointerDown={e => { if (!admin) return; (e.target as HTMLElement).setPointerCapture?.(e.pointerId); setActive(true); update(e); }}
+    onPointerMove={e => { if (active) update(e); }}
+    onPointerUp={release} onPointerCancel={release} onLostPointerCapture={release}>
+    <i className="nav-stick-ring" aria-hidden="true" />
+    <span className="nav-stick-knob" style={{ transform: `translate(${knob.x * 26}px, ${knob.y * 26}px)` }} aria-hidden="true" />
+  </div>;
+}
+
 function RemoteNavigation({ admin, accent }: { admin: boolean; accent: string }) {
   const { t } = useT();
   return (
     <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
       <div className="mb-3 text-center text-[10px] font-black tracking-[.2em] text-slate-500">{t('remote.adminNav')}</div>
-      <div className="mx-auto grid w-[210px] grid-cols-3 gap-2">
-        <span />
-        <RemoteButton command="up" label={t('remote.up')} admin={admin}><ArrowUp size={22} /></RemoteButton>
-        <span />
-        <RemoteButton command="left" label={t('remote.left')} admin={admin}><ArrowLeft size={22} /></RemoteButton>
+      <div className="mx-auto flex w-[210px] items-center justify-center gap-3">
+        <NavStick admin={admin} accent={accent} />
+        <div className="grid grid-cols-1 gap-2">
+          <RemoteButton command="y" label={t('remote.y')} admin={admin}><QrCode size={17} /></RemoteButton>
+          <RemoteButton command="x" label={t('remote.x')} admin={admin}><Expand size={17} /></RemoteButton>
+        </div>
         <RemoteButton command="select" label={t('remote.select')} admin={admin} primary>
           <span className="text-[10px] font-black tracking-wider">OK</span>
         </RemoteButton>
-        <RemoteButton command="right" label={t('remote.right')} admin={admin}><ArrowRight size={22} /></RemoteButton>
-        <span />
-        <RemoteButton command="down" label={t('remote.down')} admin={admin}><ArrowDown size={22} /></RemoteButton>
-        <span />
       </div>
       <div className="mt-3 flex justify-center gap-2">
         <button type="button" onClick={() => send('back')} disabled={!admin} className="pad-secondary min-w-[112px] disabled:cursor-not-allowed disabled:opacity-40">
@@ -99,9 +146,9 @@ function LandscapeRemote({ st, onSettings, onRoom, onLounge, fullscreen }: { st:
   const game = localizeGame(st.game ? gameInfo(st.game) : GAMES[st.selection] ?? GAMES[0], language);
   return <div className="landscape-remote">
     <header><JoyPadLogo size={38} /><span>JOYPAD <small>{t('remote.controllerMode')}</small></span><div><button onClick={onLounge}>{t('remote.profile')}</button>{admin && <button onClick={onRoom}>{t('remote.room')}</button>}<button aria-label={t('remote.phoneSettings')} onClick={onSettings}><Settings size={17} /></button><button aria-label={t('arcadePad.fullscreen')} onClick={fullscreen}><Maximize2 size={17} /></button></div></header>
-    {admin ? <main className="landscape-controls"><div className="landscape-dpad"><span className="pad-shoulder">{t('remote.navShoulder')}</span><div className="physical-dpad"><RemoteButton command="up" label={t('remote.up')} admin><ArrowUp /></RemoteButton><RemoteButton command="left" label={t('remote.left')} admin><ArrowLeft /></RemoteButton><span className="dpad-hub" /><RemoteButton command="right" label={t('remote.right')} admin><ArrowRight /></RemoteButton><RemoteButton command="down" label={t('remote.down')} admin><ArrowDown /></RemoteButton></div></div>
+    {admin ? <main className="landscape-controls"><div className="landscape-dpad"><span className="pad-shoulder">{t('remote.navShoulder')}</span><NavStick admin={admin} accent={st.color} /></div>
       <div className="landscape-display"><span className="os-eyebrow">{st.screen === 'lobby' ? t('remote.lobby') : st.screen === 'over' ? t('remote.results') : t('remote.prep')}</span><h1>{game.title}</h1>{st.options ? <p>{st.options.primaryValue} · {st.options.secondaryValue}</p> : <p>{st.screen === 'over' ? t('remote.roundHint') : t('remote.selectHint')}</p>}<div><button onClick={() => send('home')}><Home size={16} /> {t('remote.games')}</button><button onClick={onRoom}><Crown size={16} /> {t('remote.adminRole')}</button></div><small>{t('remote.rotateHint')}</small></div>
-      <div className="landscape-ab"><span className="pad-shoulder">{t('remote.actionShoulder')}</span><button className="physical-b" aria-label={t('remote.back')} onClick={() => send('back')}>B<small>{t('remote.back')}</small></button><button className="physical-a" aria-label={t('remote.select')} onClick={() => send('select')}>A<small>{t('remote.select')}</small></button></div>
+      <div className="landscape-ab"><span className="pad-shoulder">{t('remote.actionShoulder')}</span><div className="landscape-xy"><button className="physical-y" aria-label={t('remote.y')} onClick={() => send('y')} disabled={!admin}><QrCode size={16} /><small>{t('remote.y')}</small></button><button className="physical-x" aria-label={t('remote.x')} onClick={() => send('x')} disabled={!admin}><Expand size={16} /><small>{t('remote.x')}</small></button></div><button className="physical-b" aria-label={t('remote.back')} onClick={() => send('back')}>B<small>{t('remote.back')}</small></button><button className="physical-a" aria-label={t('remote.select')} onClick={() => send('select')}>A<small>{t('remote.select')}</small></button></div>
     </main> : <main className="landscape-wait"><div><JoyPadLogo size={110} /><h1>{t('remote.playerPass')}</h1><p>{st.nick}, {t('remote.crewStarting')}</p><button onClick={onLounge}>{t('remote.customizePass')}</button>{st.game && ['menu', 'setup', 'over'].includes(st.screen) && <button onClick={() => { const kind = st.screen === 'over' ? 'rematch' : 'ready'; padClient.sendIntent(kind, !st.roster.find(p => p.slot === st.slot)?.[kind]); }}>{st.screen === 'over' ? t('remote.rematchIntent') : st.roster.find(p => p.slot === st.slot)?.ready ? t('remote.readyIntentDone') : t('remote.readyIntent')}</button>}</div>{['lobby', 'over'].includes(st.screen) && <GameSuggestions st={st} />}</main>}
     <footer><span>● {st.nick} / {t('remote.playerRole', { n: st.slot + 1 })}</span><span>{admin ? t('remote.footerAdmin') : t('remote.footerGuest')} · {st.code}</span></footer>
   </div>;

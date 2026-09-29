@@ -6,10 +6,10 @@ import { useReducedMotion } from '../lib/useReducedMotion';
 import { useConsolePreferences } from './preferences';
 import { useT } from '../platform/i18n';
 
-export const PREVIEW_GAMES = ['tanks', 'race', 'orbit'] as const;
+export const PREVIEW_GAMES = ['tanks', 'race', 'orbit', 'snake', 'league'] as const;
 /** Bump when public/previews/* is re-recorded: the files keep stable names, so a query
  *  string is what stops browsers and CDNs from serving a previous recording. */
-const PREVIEW_REVISION = '2';
+const PREVIEW_REVISION = '3';
 /** Recorded offline: never import an engine, connect a pad or advance a real match here. */
 export function GamePreview({ game, suspended, controlsTarget }: { game: GameInfo; suspended: boolean; controlsTarget: HTMLElement | null }) {
   const prefs = useConsolePreferences();

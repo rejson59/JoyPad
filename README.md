@@ -8,7 +8,7 @@
 Telefon jest bezprzewodowym kontrolerem, komputer lub TV wyświetla grę.
 Bez kont, bez instalacji, bez uprawnień — wszystko w przeglądarce.
 
-`v1.7` · JoyPad OS 02 · PL / EN
+`v1.8` · JoyPad OS 02 · PL / EN
 
 </div>
 
@@ -58,8 +58,8 @@ Bez kont, bez instalacji, bez uprawnień — wszystko w przeglądarce.
 | 01 | **Stalowy Front** | Bitwy czołgów: 3 mapy, rykoszety, niszczalne osłony, bonusy i boty | Jazda + wieża + ogień (twin-stick) |
 | 02 | **Neonowy Pęd** | Wyścig 3D nocnego miasta: mokry tor, drifty, rampy, turbo, itemy, split-screen | Kierunek jazdy + akcja (bonus/turbo) |
 | 03 | **Orbitalna Fala** | Kooperacyjna obrona przed falami dronów i asteroid; życia, osłony, naprawy, szybki ogień | Lot + celowanie + strzał |
-| 04 | **Wężowy Wir** *(beta)* | Taktyczna arena 2D: impulsy, przeszkody, boty, sprint | Cztery kierunki + sprint |
-| 05 | *Turbo League* | 🚧 Zapowiedź car-soccera (prototyp silnika już w repo, gra ukryta do czasu dopracowania) | — |
+| 04 | **Wężowy Wir** | Taktyczna stalowa arena 2D: impulsy, energia, sprint i eliminacja — wygrywa ostatni żywy wąż | Cztery kierunki + sprint |
+| 05 | **Nitro League** | Car-soccer 3D: 1–4 graczy + boty, split-screen, reflektory, wspomagania trudności, złoty gol | Kierunek jazdy + skok + turbo |
 | 06 | *BlockCraft* | 🚧 Zapowiedź sandboxa z budowaniem z bloków | — |
 
 Każda gra ma własny ekran wejścia, zasady, ustawienia rundy (np. limit punktów, liczba botów), HUD i ekran wyników. Silniki ładują się leniwie dopiero po wybraniu gry.

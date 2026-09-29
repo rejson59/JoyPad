@@ -105,6 +105,8 @@ export class PadHost {
   private adminId: string | null = null;
   private conns = new Map<string, PadLink>();
   private pads = new Map<string, PadInfo>();
+  /** v1.8: anty-spam propozycji per pad — kubełek 3 głosów na okno 10 s. */
+  private suggestRate = new Map<string, { tokens: number; updatedAt: number; denied: number; blockedUntil: number }>();
   /** pid telefonu -> connId jego aktywnego pada (anti-duplicate slot). */
   private returningSlots = new Map<string, { slot: number; until: number }>();
   private lastReminder = 0;
@@ -812,6 +814,26 @@ export class PadHost {
         const p = this.pads.get(id);
         if (!p || !this.room.suggestions || !['lobby', 'over'].includes(this.screen)) break;
         if (msg.game !== null && !GAMES.some(g => g.id === msg.game && !g.wip && g.id !== this.game)) break;
+        // v1.8: anty-spam — zmiana zdania kilka razy jest OK (kubełek 3/10 s),
+        // złośliwe rapid-fire jest ignorowane, a pad dostaje uczciwy komunikat.
+        const now = performance.now();
+        const rate = this.suggestRate.get(id) ?? { tokens: 3, updatedAt: now, denied: 0, blockedUntil: 0 };
+        this.suggestRate.set(id, rate);
+        rate.tokens = Math.min(3, rate.tokens + (now - rate.updatedAt) / 4000);
+        rate.updatedAt = now;
+        if (now < rate.blockedUntil) {
+          this.send(id, { t: 'rateLimited', scope: 'suggest', retryAfter: Math.max(1, Math.ceil((rate.blockedUntil - now) / 1000)) });
+          break;
+        }
+        if (rate.tokens < 1) {
+          rate.denied++;
+          const wait = Math.max(1, Math.ceil((1 - rate.tokens) * 4));
+          this.send(id, { t: 'rateLimited', scope: 'suggest', retryAfter: rate.denied >= 6 ? 20 : wait });
+          if (rate.denied >= 6) rate.blockedUntil = now + 20000;
+          break; // roster pozostaje bez zmian
+        }
+        rate.tokens -= 1;
+        rate.denied = 0;
         p.suggestedGame = msg.game ?? undefined;
         this.emit(); this.broadcastSession();
         break;
@@ -872,6 +894,7 @@ export class PadHost {
     this.relayLinks.delete(connId);
     this.hudTimers.delete(connId);
     this.lastInputMessageAt.delete(connId);
+    this.suggestRate.delete(connId);
     if (p) {
       this.pads.delete(connId);
       if (this.adminId === connId) this.adminId = null;

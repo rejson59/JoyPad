@@ -19,12 +19,15 @@ try {
  // Software rendering in CI/sandboxes can take seconds per frame; never fail a long recording early.
  page.setDefaultTimeout(Number(process.env.CAPTURE_TIMEOUT || 180000));
  await page.route('**/capture-frame', route => route.fulfill({contentType:'text/html',body:'<!doctype html><html><body></body></html>'}));
- for (const id of (process.env.CAPTURE_GAME ? [process.env.CAPTURE_GAME] : ['tanks','race','orbit'])) {
+ for (const id of (process.env.CAPTURE_GAME ? [process.env.CAPTURE_GAME] : ['tanks','race','orbit','snake','league'])) {
   await page.goto(base+'/capture-frame');
   await page.evaluate(async ({ id, width, height, fps }) => {
    // Isolated canvas and manual simulation clock; no network, input or results side effects.
    document.body.innerHTML=`<div id="capture" style="width:${width}px;height:${height}px;position:relative"><canvas></canvas></div>`;
-   document.body.style.margin='0'; window.requestAnimationFrame=()=>0;
+   // v1.8: czarne tło i brak przewijania — zero białych szczelin w kadrze (bug starego podglądu orbit).
+   document.body.style.margin='0'; document.body.style.background='#000'; document.body.style.overflow='hidden';
+   document.documentElement.style.background='#000';
+   window.requestAnimationFrame=()=>0;
    const root=document.getElementById('capture'), canvas=root.querySelector('canvas');
    const {gameAudio}=await import('/src/game/audio.ts');gameAudio.setMuted(true);
    let step;
@@ -41,6 +44,19 @@ try {
     g.karts.forEach(k=>k.cfg.isPlayer=false);g.phase='race';g.phaseTime=4;g.readInput=()=>{};
     for(let n=0;n<120;n++)g.update(1/60);
     step=()=>{g.update(1/(fps*2));g.update(1/(fps*2));g.composer.render(1/fps);return g.renderer.domElement;};
+   } else if(id==='snake') {
+    const {SnakeRound}=await import('/src/arcade/games/Snake.ts');
+    const {COLORS}=await import('/src/arcade/runtime.ts');
+    canvas.width=width;canvas.height=height;
+    const round=new SnakeRound(canvas,{players:[0,1,2,3].map(i=>({slot:i,name:['AZOR','BUREK','FIKUS','LUNA'][i],color:COLORS[i],isBot:true})),padInputs:[],primary:2,secondary:3,quality:'quality',language:'pl',onHud(){},onFinish(){},onFx(){}});
+    round.countdown=0;
+    for(let n=0;n<120;n++)round.stepOnce(1/60);
+    step=()=>round.stepOnce(1/(fps*2));
+   } else if(id==='league') {
+    const {Game}=await import('/src/arcade/nitro/Game.ts');
+    const g=new Game(root,{},{quality:1,volume:0,music:false,fov:76,shake:false});
+    g.startCaptureMatch(fps);
+    step=()=>g.captureFrame(fps);
    } else {
     const {Game}=await import('/src/arcade/starclash/Game.ts');const g=new Game(root,{lowFx:false});g.padMode=true;
     g.startBattleSquad([{cls:'fighter',up:null,name:'BOT'}],{enemies:6,allyBots:3,difficulty:1});

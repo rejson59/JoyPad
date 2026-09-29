@@ -63,6 +63,35 @@ export interface GameRound {
   togglePause(): void;
 }
 
+/**
+ * v1.8: układy podziału ekranu. `auto`: 2 graczy → 2 kolumny, 3 → 3 kolumny,
+ * 4 → 2×2. `columns`: równe kolumny. `tiles`: siatka 2×2 (3 graczy → dwa
+ * kafle u góry i jeden szeroki na dole). `splitRects` zwraca dokładne
+ * prostokąty w pikselach kanwy — bez pustych kafelków i bez nakładania.
+ */
+export type SplitLayout = 'auto' | 'columns' | 'tiles';
+
+export function splitRects(count: number, layout: SplitLayout, width: number, height: number): { x: number; y: number; width: number; height: number }[] {
+  const n = Math.min(4, Math.max(2, count));
+  if (layout === 'columns' || (layout === 'auto' && n <= 3)) {
+    const w = width / n;
+    return Array.from({ length: n }, (_, i) => ({ x: i * w, y: 0, width: w, height }));
+  }
+  if (n === 3) {
+    return [
+      { x: 0, y: 0, width: width / 2, height: height / 2 },
+      { x: width / 2, y: 0, width: width / 2, height: height / 2 },
+      { x: 0, y: height / 2, width, height: height / 2 },
+    ];
+  }
+  return [
+    { x: 0, y: 0, width: width / 2, height: height / 2 },
+    { x: width / 2, y: 0, width: width / 2, height: height / 2 },
+    { x: 0, y: height / 2, width: width / 2, height: height / 2 },
+    { x: width / 2, y: height / 2, width: width / 2, height: height / 2 },
+  ];
+}
+
 export interface RoundConfig {
   players: Racer[];
   padInputs: PadInput[];
@@ -70,6 +99,8 @@ export interface RoundConfig {
   secondary: number;
   /** Shared arena is the default; split uses lightweight local viewports. */
   displayMode?: DisplayMode;
+  /** v1.8: układ podziału ekranu — kolumny, kafle lub auto (domyślnie). */
+  splitLayout?: SplitLayout;
   /** The 2D+ renderer can stay crisp without pushing small devices too hard. */
   quality?: RenderQuality;
   language?: Language;
@@ -206,23 +237,18 @@ export abstract class CanvasRound implements GameRound {
 
   /**
    * A real split surface rather than a CSS stretch. Each viewport is clipped and
-   * gets its own camera pass. Existing arenas share the world, while the new
-   * 3D-lite games use the same pass for a calm, low-cost couch mode.
+   * gets its own camera pass. v1.8: układy do wyboru (kolumny / kafle / auto)
+   * i zero pustych kafelków — prostokąty liczy splitRects, ten sam kod zasil
+   * podgląd układu w opcjach przed grą.
    */
   private drawSplit() {
     const count = Math.min(4, Math.max(2, this.config.players.length));
-    const columns = count <= 2 ? count : 2;
-    const rows = Math.ceil(count / columns);
-    const panelWidth = this.canvas.width / columns;
-    const panelHeight = this.canvas.height / rows;
     this.ctx.fillStyle = '#07090d';
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
+    const rects = splitRects(count, this.config.splitLayout ?? 'auto', this.canvas.width, this.canvas.height);
     for (let panel = 0; panel < count; panel++) {
-      const column = panel % columns;
-      const row = Math.floor(panel / columns);
-      const x = column * panelWidth;
-      const y = row * panelHeight;
+      const { x, y, width: panelWidth, height: panelHeight } = rects[panel];
       const scale = Math.min(panelWidth / WIDTH, panelHeight / HEIGHT);
       const ox = x + (panelWidth - WIDTH * scale) / 2;
       const oy = y + (panelHeight - HEIGHT * scale) / 2;
@@ -276,6 +302,20 @@ export abstract class CanvasRound implements GameRound {
     }
     if (!this.finished) this.raf = requestAnimationFrame(this.frame);
   };
+
+  /**
+   * Nagrywanie podglądów biblioteki: jeden pełny kadr (symulacja + render) bez pętli rAF.
+   * Używane wyłącznie przez scripts/previews/capture.mjs.
+   */
+  stepOnce(dt: number): HTMLCanvasElement {
+    this.clock += dt;
+    this.update(dt);
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    if (this.config.displayMode === 'split' && this.config.players.length > 1) this.drawSplit();
+    else this.drawShared();
+    return this.canvas;
+  }
 
   /** Komputer może sterować slotami równolegle z telefonami. W grach arcade joystick jest kierunkowy. */
   protected input(slot: number): InputState {

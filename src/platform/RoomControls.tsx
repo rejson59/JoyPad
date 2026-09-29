@@ -1,18 +1,31 @@
 import { PlayerAvatar } from './PlayerAvatar';
-import { useState } from 'react';
-import { Crown, LockKeyhole, Monitor, Users, UserMinus } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Crown, Expand, LockKeyhole, Monitor, QrCode, Users, UserMinus } from 'lucide-react';
+import { toggleFullscreen } from '../arcade/JoypadApp';
 import { DEFAULT_ROOM, type RoomAction, type SessionState } from '../net/protocol';
 import { normalizeProfile } from './profile';
+import { setPreferences, useConsolePreferences } from '../console/preferences';
 import { useT } from './i18n';
 
 export function RoomControls({ session, onAction }: { session: SessionState; onAction: (action: RoomAction) => void }) {
   const [confirmation, setConfirmation] = useState<{ kind: 'kick' | 'transfer'; slot: number } | null>(null);
-  const { t } = useT();
+  const { t, language } = useT();
+  const prefs = useConsolePreferences();
   const room = session.room ?? DEFAULT_ROOM;
   const target = session.roster.find(p => p.slot === confirmation?.slot);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const sync = () => setIsFullscreen(!!(document.fullscreenElement || (document as Document & { webkitFullscreenElement?: Element }).webkitFullscreenElement));
+    document.addEventListener('fullscreenchange', sync);
+    document.addEventListener('webkitfullscreenchange', sync);
+    return () => { document.removeEventListener('fullscreenchange', sync); document.removeEventListener('webkitfullscreenchange', sync); };
+  }, []);
   return <section className="room-controls">
     <p className="os-note">{t('room.intro')}</p>
+    <h3 className="room-section-title">{t('room.sectionSwitches')}</h3>
     <div className="room-switches">
+      <button role="switch" aria-checked={isFullscreen} onClick={toggleFullscreen}><Expand /><span>{t('room.fullscreen')}<small>{isFullscreen ? t('room.fullscreenOn') : t('room.fullscreenOff')}</small></span><i /></button>
+      <button role="switch" aria-checked={prefs.showQr} onClick={() => setPreferences({ showQr: !prefs.showQr })}><QrCode /><span>{language === 'en' ? 'QR code in the shared screen' : 'Kod QR we wspólnym ekranie'}<small>{prefs.showQr ? (language === 'en' ? 'Visible — everyone can join' : 'Widoczny — każdy może dołączyć') : (language === 'en' ? 'Hidden by host' : 'Schowany przez gospodarza')}</small></span><i /></button>
       <button role="switch" aria-checked={room.locked} onClick={() => onAction({ kind: 'locked', value: !room.locked })}><LockKeyhole /><span>{t('room.lock')}<small>{room.locked ? t('room.locked') : t('room.open')}</small></span><i /></button>
       <button role="switch" aria-checked={room.suggestions} onClick={() => onAction({ kind: 'suggestions', value: !room.suggestions })}><Users /><span>{t('room.voice')}<small>{t('room.voteInfo')}</small></span><i /></button>
       <button role="switch" aria-checked={room.dimmed} disabled={session.screen === 'game'} onClick={() => onAction({ kind: 'dimmed', value: !room.dimmed })}><Monitor /><span>{t('room.dim')}<small>{session.screen === 'game' ? t('room.dimGame') : t('room.dimInfo')}</small></span><i /></button>

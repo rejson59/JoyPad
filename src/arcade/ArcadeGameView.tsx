@@ -19,7 +19,7 @@ import { localizeGame, gameInfo, type GameId } from './catalog';
 import { nextTournamentRound, type MatchMode } from './matchModes';
 import { useMenuMusic } from '../lib/useMenuMusic';
 import { useT, type Language } from '../platform/i18n';
-import { COLORS, type DisplayMode, type GameRound, type Racer, type RenderQuality, type RoundConfig, type RoundHud, type RoundResult } from './runtime';
+import { COLORS, type DisplayMode, type GameRound, type Racer, type RenderQuality, type RoundConfig, type RoundHud, type RoundResult, splitRects, type SplitLayout } from './runtime';
 
 type ArcadeId = Exclude<GameId, 'tanks' | 'blockcraft'>;
 type Stage = 'menu' | 'game' | 'over';
@@ -38,8 +38,8 @@ const RULES: Record<ArcadeId, Record<Language, GameRules>> = {
     en: { primaryLabel: 'SCORE TO WIN', primary: ['8 points', '12 points', '16 points'], secondaryLabel: 'AI RIVALS', secondary: ['No bots', '1 bot', '2 bots', '3 bots'], hint: 'Tap a direction on your phone or use the keyboard. Collect energy, avoid steel obstacles and rivals. Hold SPRINT to speed up — it uses energy.', action: 'SPRINT', win: 'First to the score target wins.' },
   },
   league: {
-    pl: { primaryLabel: 'LIMIT GOLI', primary: ['3 gole', '5 goli', '7 goli'], secondaryLabel: 'RYWALE SI', secondary: ['Bez botów', '1 bot', '2 boty', '3 boty'], hint: 'Pchaj piłkę do bramki. Joystick steruje autem, AKCJA to boost. Odbicia i turbo mają większą siłę niż zwykła jazda.', action: 'TURBO', win: 'Pierwsza drużyna do limitu wygrywa.' },
-    en: { primaryLabel: 'GOAL LIMIT', primary: ['3 goals', '5 goals', '7 goals'], secondaryLabel: 'AI RIVALS', secondary: ['No bots', '1 bot', '2 bots', '3 bots'], hint: 'Drive the ball into the goal. Steer with the stick and hold ACTION to boost. Bounces and turbo hits carry more force than regular driving.', action: 'TURBO', win: 'First team to the goal limit wins.' },
+    pl: { primaryLabel: 'LIMIT GOLI', primary: ['3 gole', '5 goli', '7 goli'], secondaryLabel: 'RYWALE SI', secondary: ['Bez botów', '1 bot', '2 boty', '3 boty'], hint: 'Gałka prowadzi auto, AKCJA to boost. Pchnięcie drugiej gałki w górę = skok, w dół = drift. Wspomagania (skok do piłki, powrót na koła) działają zawsze.', action: 'BOOST', win: 'Pierwsza drużyna do limitu wygrywa.' },
+    en: { primaryLabel: 'GOAL LIMIT', primary: ['3 goals', '5 goals', '7 goals'], secondaryLabel: 'AI RIVALS', secondary: ['No bots', '1 bot', '2 bots', '3 bots'], hint: 'The stick drives, ACTION boosts. Flick the right stick up to jump, down to drift. Assists (ball jump, auto-flip) are always on.', action: 'BOOST', win: 'First team to the goal limit wins.' },
   },
 };
 
@@ -81,7 +81,8 @@ async function createRound(id: ArcadeId, canvas: HTMLCanvasElement, config: Roun
       // Wężowy Wir pozostaje celowo lekki: zawsze renderuje się w Canvas 2D.
       return new (await import('./games/Snake')).SnakeRound(canvas, config);
     case 'league': {
-      if (hasWebGL2(canvas)) return new (await import('./webgl/League3D')).League3DRound(canvas, config);
+      // Nitro League (v1.8): pełny car-soccer 3D. Bez WebGL2 zostaje lekki fallback Canvas 2D.
+      if (hasWebGL2(canvas)) return new (await import('./nitro/NitroRound')).NitroRound(canvas, config);
       return new (await import('./games/League')).LeagueRound(canvas, config);
     }
   }
@@ -104,6 +105,21 @@ function Segmented<T extends string>({ title, values, value, onChange, accent, l
     <div className="mt-3 text-center text-[11px] text-slate-500">{descriptions[value] || ''}</div></div>;
 }
 
+/** v1.8: mini-podgląd układu podziału ekranu w opcjach przed grą — te same prostokąty, co w grze. */
+function SplitLayoutPreview({ count, layout, accent, label }: { count: number; layout: SplitLayout; accent: string; label: string }) {
+  const W = 96, H = 60;
+  const rects = splitRects(count, layout, W, H);
+  return <span className="split-preview" role="img" aria-label={`${label}: ${layout}`}>
+    <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} aria-hidden="true">
+      {rects.map((r, i) => <g key={i}>
+        <rect x={r.x + 1} y={r.y + 1} width={Math.max(0, r.width - 2)} height={Math.max(0, r.height - 2)} rx={3} fill={`${accent}22`} stroke={`${accent}66`} strokeWidth={1} />
+        <text x={r.x + 7} y={r.y + 14} fontSize={8} fill={`${accent}cc`} fontFamily="inherit">P{i + 1}</text>
+      </g>)}
+    </svg>
+    <small>{label}</small>
+  </span>;
+}
+
 export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: () => void; remote: RemoteEvent | null }) {
   const { language, t } = useT();
   const info = localizeGame(gameInfo(id), language), rules = RULES[id][language];
@@ -111,6 +127,7 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   const [primary, setPrimary] = useState(() => readChoice(`${id}.primary`, rules.primary.map((_, i) => i), id === 'race' || id === 'snake' || id === 'league' ? 1 : 0));
   const [secondary, setSecondary] = useState(() => readChoice(`${id}.secondary`, rules.secondary.map((_, i) => i), id === 'race' || id === 'league' ? 2 : 1));
   const [displayMode, setDisplayMode] = useState<DisplayMode>(() => readPreference('joypad-display-mode', 'shared', ['shared', 'split'] as const));
+  const [splitLayout, setSplitLayout] = useState<SplitLayout>(() => readPreference('joypad-split-layout', 'auto', ['auto', 'columns', 'tiles'] as const));
   const [quality, setQuality] = useState<RenderQuality>(() => readPreference('joypad-render-quality', 'balanced', ['performance', 'balanced', 'quality'] as const));
   const [matchMode, setMatchMode] = useState<MatchMode>(() => readPreference('joypad-match-mode', 'classic', ['classic', 'tournament', '2v2'] as const));
   const [tournamentRound, setTournamentRound] = useState(() => { try { return Number(localStorage.getItem(`joypad-tournament-${id}`) || 0) % 3; } catch { return 0; } });
@@ -150,10 +167,10 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
    * Refy aktualizują się w efekcie (nie w trakcie renderu), a kolejność
    * deklaracji PRZED efektem silnika gwarantuje świeżą migawkę na starcie.
    */
-  const roundSetupRef = useRef({ participants, primary, secondary, displayMode, quality, language });
+  const roundSetupRef = useRef({ participants, primary, secondary, displayMode, splitLayout, quality, language });
   useEffect(() => {
     stageRef.current = stage;
-    roundSetupRef.current = { participants, primary, secondary, displayMode, quality, language };
+    roundSetupRef.current = { participants, primary, secondary, displayMode, splitLayout, quality, language };
   });
 
   const stepPrimary = useCallback((step: number) => setPrimary(i => (i + step + rules.primary.length) % rules.primary.length), [rules.primary.length]);
@@ -206,7 +223,7 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
 
   useEffect(() => {
     padHost.setMenuOptions(stage === 'menu' ? {
-      revision: `${displayMode}/${quality}`,
+      revision: `${displayMode}/${splitLayout}/${quality}`,
       primaryLabel: rules.primaryLabel, primaryValue: rules.primary[primary],
       secondaryLabel: rules.secondaryLabel, secondaryValue: rules.secondary[secondary],
       mode: matchMode, tournamentRound: matchMode === 'tournament' ? tournamentRound + 1 : undefined,
@@ -222,19 +239,19 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
         }
       }
     } else padHost.setScreen(stage);
-  }, [stage, result, primary, secondary, rules, displayMode, quality, matchMode, tournamentRound, id]);
+  }, [stage, result, primary, secondary, rules, displayMode, splitLayout, quality, matchMode, tournamentRound, id]);
 
   useEffect(() => {
     if (stage !== 'game' || !roundKey || !canvas.current) return;
     let cancelled = false;
-    const { participants, primary, secondary, displayMode, quality, language } = roundSetupRef.current;
+    const { participants, primary, secondary, displayMode, splitLayout, quality, language } = roundSetupRef.current;
     const recording = beginRecording(language);
     const recorder = recording.events;
     recorder.observe({ timeLeft: 0, countdown: 3, paused: false, players: participants.map(p => ({ ...p, score: 0 })) });
     const config = {
       onFrame: recording.video.frame,
       onMoment: (event: MomentEvent) => recorder.record(event),
-      players: participants, padInputs: padHost.inputs, primary, secondary, displayMode, quality, language,
+      players: participants, padInputs: padHost.inputs, primary, secondary, displayMode, splitLayout, quality, language,
       onHud: (next: RoundHud) => {
         if (cancelled) return;
         recording.video.setPaused(next.paused || next.countdown > 0);
@@ -300,12 +317,14 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   const cssVars = { '--game-accent': info.accent, '--game-soft': info.accentSoft } as React.CSSProperties;
   const modeLabels = language === 'en' ? { classic: 'QUICK MATCH', tournament: 'TOURNAMENT', '2v2': '2V2 / TEAMS' } : { classic: 'ZWYKŁA RUNDA', tournament: 'TURNIEJ', '2v2': '2V2 / DRUŻYNY' };
   const displayLabels = language === 'en' ? { shared: 'SHARED', split: 'SPLIT-SCREEN' } : { shared: 'WSPÓLNY', split: 'PODZIELONY EKRAN' };
+  const layoutLabels: Record<SplitLayout, string> = language === 'en' ? { auto: 'AUTO', columns: 'COLUMNS', tiles: 'TILES' } : { auto: 'AUTO', columns: 'KOLUMNY', tiles: 'KAFL' + 'E' };
   const qualityLabels = language === 'en' ? { performance: 'PERFORMANCE', balanced: 'BALANCED', quality: 'QUALITY' } : { performance: 'PŁYNNOŚĆ', balanced: 'BALANS', quality: 'DETAL' };
   const modeTag = matchMode === 'tournament' ? t('game.matchTournament', { n: tournamentRound + 1 }) : matchMode === '2v2' ? '2V2' : displayMode === 'split' ? (language === 'en' ? 'SPLIT' : 'PODZIELONY') : (language === 'en' ? 'SHARED' : 'WSPÓLNY');
 
   if (stage === 'menu') return <>
     <GameSetup info={info} music={menuMusicOn} onMusic={() => toggleMenuMusic(!menuMusicOn)} onExit={onExit} onStart={start} onPads={() => setShowPads(true)} hint={rules.hint} win={rules.win}>
-      <OptionStepper title={rules.primaryLabel} value={rules.primary[primary]} accent={info.accent} change={stepPrimary} help={language === 'en' ? 'Remote: ← / →' : 'Pilot: ← / →'} language={language} /><OptionStepper title={rules.secondaryLabel} value={rules.secondary[secondary]} accent={info.accent} change={stepSecondary} help={language === 'en' ? 'Remote: ↑ / ↓' : 'Pilot: ↑ / ↓'} language={language} /><Segmented title={language === 'en' ? 'ARENA VIEW' : 'WIDOK ARENY'} values={['shared', 'split'] as const} value={displayMode} onChange={changeDisplay} accent={info.accent} labels={displayLabels} language={language} /><Segmented title={language === 'en' ? 'HARDWARE PROFILE' : 'PROFIL SPRZĘTU'} values={['performance', 'balanced', 'quality'] as const} value={quality} onChange={changeQuality} accent={info.accent} labels={qualityLabels} language={language} /><Segmented title={language === 'en' ? 'MATCH FORMAT' : 'FORMAT MECZU'} values={['classic', 'tournament', '2v2'] as const} value={matchMode} onChange={changeMatchMode} accent={info.accent} labels={modeLabels} language={language} />
+      <OptionStepper title={rules.primaryLabel} value={rules.primary[primary]} accent={info.accent} change={stepPrimary} help={language === 'en' ? 'Remote: ← / →' : 'Pilot: ← / →'} language={language} /><OptionStepper title={rules.secondaryLabel} value={rules.secondary[secondary]} accent={info.accent} change={stepSecondary} help={language === 'en' ? 'Remote: ↑ / ↓' : 'Pilot: ↑ / ↓'} language={language} /><Segmented title={language === 'en' ? 'ARENA VIEW' : 'WIDOK ARENY'} values={['shared', 'split'] as const} value={displayMode} onChange={changeDisplay} accent={info.accent} labels={displayLabels} language={language} />
+          {displayMode === 'split' && <div className="split-layout-row"><Segmented title={language === 'en' ? 'SCREEN LAYOUT' : 'UKŁAD EKRANU'} values={['auto', 'columns', 'tiles'] as const} value={splitLayout} onChange={layout => { setSplitLayout(layout); try { localStorage.setItem('joypad-split-layout', layout); } catch { /* prywatny tryb */ } }} accent={info.accent} labels={layoutLabels} language={language} /><SplitLayoutPreview count={Math.max(2, Math.min(4, participants.length))} layout={splitLayout} accent={info.accent} label={language === 'en' ? 'PREVIEW' : 'PODGLĄD'} /></div>}<Segmented title={language === 'en' ? 'HARDWARE PROFILE' : 'PROFIL SPRZĘTU'} values={['performance', 'balanced', 'quality'] as const} value={quality} onChange={changeQuality} accent={info.accent} labels={qualityLabels} language={language} /><Segmented title={language === 'en' ? 'MATCH FORMAT' : 'FORMAT MECZU'} values={['classic', 'tournament', '2v2'] as const} value={matchMode} onChange={changeMatchMode} accent={info.accent} labels={modeLabels} language={language} />
     </GameSetup>
     {showPads && <ConnectionsScreen onClose={() => setShowPads(false)} />}
     <ScreenCurtain state={curtain.state} />

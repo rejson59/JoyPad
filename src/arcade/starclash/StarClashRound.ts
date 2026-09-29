@@ -70,7 +70,7 @@ export class StarClashRound implements GameRound {
     const allyBots = Math.max(1, 5 - this.humans.length - difficulty);
     this.game.startBattleSquad(
       this.humans.map(h => ({ cls, up: null, name: h.name })),
-      { enemies, allyBots, difficulty },
+      { enemies, allyBots, difficulty, accents: this.humans.map(h => h.color) },
     );
     this.pushHud();
   }

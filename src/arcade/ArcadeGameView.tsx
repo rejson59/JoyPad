@@ -70,7 +70,7 @@ async function createRound(id: ArcadeId, canvas: HTMLCanvasElement, config: Roun
       return new (await import('./games/Race')).RaceRound(canvas, config);
     }
     case 'orbit': {
-      // Orbitalna Fala = STAR CLASH 3D z orbitalna-fala.zip. Bez WebGL2 zostaje klasyczny Orbit 2D.
+      // Orbitalna Fala = STAR CLASH 3D (źródła: archive/orbitalna-fala.zip). Bez WebGL2 zostaje klasyczny Orbit 2D.
       if (hasWebGL2(canvas)) {
         try { return new (await import('./starclash/StarClashRound')).StarClashRound(canvas, config); }
         catch (error) { console.warn('STAR CLASH WebGL niedostępny — używam fallbacku Canvas', error); }

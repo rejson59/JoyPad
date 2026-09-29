@@ -4,5 +4,7 @@ dist
 *.log
 .DS_Store
 *.zip
+# Zintegrowane paczki źródłowe gier trzymamy w archive/ (patrz archive/README.md).
+!archive/*.zip
 .env.local
 .cache

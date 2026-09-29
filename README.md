@@ -5,6 +5,7 @@
 JoyPad v1.7 rozwija wspólną konsolę: rozbudowana **Moments Gallery**, pełne interfejsy **PL/EN**, pewniejsze prowadzenie w **Neonowym Pędzie**, nowa stalowa arena 2D **Wężowego Wiru**, płynniejsze przejścia oraz lżejsze sterowanie na telefonach. W bibliotece pojawia się też wyłącznie zapowiedź **BlockCraft** — bez grywalnego silnika.
 
 - [Opis funkcji, ograniczenia i testy platformy](docs/platform-update.md)
+- [v1.8 — planowanie: pomysły, statusy i stan wyjściowy](docs/v1.8-planning.md)
 - [Prompt dla Turbo League i bezpieczna integracja ZIP](docs/game-building-prompts.md)
 - [Moments Video — architektura, ograniczenia i testy nagrywania](docs/moments-video.md)
 - [JoyPad v1.6 — archiwalny zakres i ograniczenia beta](docs/v1.6.md)

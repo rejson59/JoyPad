@@ -4,7 +4,7 @@ import type { GameRound, Racer, RoundConfig, RoundHud, RoundPlayer } from '../ru
 import { Game } from './Game';
 
 /**
- * Adapter STAR CLASH 3D (silnik z orbitalna-fala.zip) do runtime'u JoyPad.
+ * Adapter STAR CLASH 3D (silnik z archive/orbitalna-fala.zip) do runtime'u JoyPad.
  *
  * Silnik pochodzi z niezależnego projektu kosmicznego. Ten mostek zachowuje
  * jego bitwy, SI wrogów, rakietę z namierzaniem i efekty, a JoyPad zarządza

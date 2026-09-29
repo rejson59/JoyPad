@@ -6,7 +6,7 @@
 
 1. Skopiuj **cały blok** wybranej gry do osobnej sesji Arena.ai. Każdy jest samowystarczalny: zawiera wymagania gry, kontrakt hosta, testy i pakowanie.
 2. Najlepiej dołącz `src/arcade/runtime.ts`, `src/net/protocol.ts`, `src/platform/momentRecorder.ts` i tę dokumentację, nawet jeśli nie udostępniasz całego repo.
-3. Pobierz ZIP ze źródłami. Skopiuj go do repo JoyPad (ZIP-y są ignorowane przez Git) lub załącz w nowej sesji.
+3. Pobierz ZIP ze źródłami. Skopiuj go do repo JoyPad (ZIP-y są ignorowane przez Git) lub załącz w nowej sesji. Po udanej integracji przenieś paczkę do `archive/` — zintegrowane źródła tam trzymamy dla historii (patrz [archive/README.md](../archive/README.md)).
 4. Użyj promptu integracyjnego na końcu pliku. Integracja to przegląd i zmiana kodu, **nie instalacja paczki przez stronę**. Agent ma zweryfikować API na aktualnej gałęzi; kontrakt może się zmienić w kolejnych aktualizacjach.
 5. Nie nadpisuj całego repo wyeksportowaną aplikacją demo. Importuj moduł, assety i adapter.
 

@@ -17,7 +17,10 @@ body { background:var(--os-bg); }
 .os-icon { width:44px; height:44px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; background:#ffffff07; border:1px solid #ffffff12; color:var(--os-text); }
 .os-icon:hover,.os-add:hover { background:#ffffff12; border-color:#ffffff40; }
 .os-add { display:flex; align-items:center; gap:9px; border:1px solid #ffffff25; background:#11111470; padding:12px 18px; border-radius:30px; font-size:13px; }
-.os-stage { display:grid; grid-template-columns:1fr 306px; gap:60px; align-items:center; min-height:510px; padding:45px 0 30px; }
+/* Bez stałego `min-height`: 510 px + paddingi pchały treść poza ekran na typowych
+   laptopach, a wtedy mechanizm dopasowania pomniejszał całość i po bokach zostawały
+   paski. Wysokość sceny wynika z treści, a odstępy skalują się z oknem (viewport.css). */
+.os-stage { display:grid; grid-template-columns:1fr 306px; gap:clamp(24px,3.4vw,60px); align-items:center; min-height:0; padding:clamp(14px,2.6dvh,44px) 0 clamp(10px,1.8dvh,30px); }
 .os-eyebrow { font-size:10px; font-weight:600; letter-spacing:2.4px; color:var(--os-secondary); display:flex; align-items:center; gap:12px; }
 .os-dash { width:25px; height:2px; background:var(--os-accent); display:inline-block; }
 .os-muted { color:var(--os-muted); }
@@ -171,7 +174,7 @@ html[data-motion="reduced"] .plamek-orbit-ball { scale: 1; }
 .os-error { color:#e5be92!important; }
 @keyframes os-copy { from { opacity:.3; transform:translateY(7px); } to { opacity:1; transform:translateY(0); } }
 @keyframes os-sheet-in { from { opacity:0; transform:translateX(24px); } to { opacity:1; transform:translateX(0); } }
-@media(min-width:1700px) { .os-stage { min-height:600px; }.os-game-tile{height:220px;} }
+@media(min-width:1700px) { .os-game-tile{height:clamp(150px,17dvh,240px);} }
 @media(max-width:1000px) { .os-stage{gap:30px;grid-template-columns:1fr 280px;}.os-feature h1{font-size:54px;}.os-wordmark small,.os-network{display:none;}.os-feature-tags{gap:10px;font-size:10px;}.os-feature-tags span+span::before{margin-right:10px;} }
 @media(max-width:720px) { .os-topbar{height:86px;gap:12px;}.os-add{padding:11px;}.os-add span{display:none;}.os-stage{grid-template-columns:1fr;padding-top:34px;gap:28px;}.os-feature h1{font-size:54px;}.os-feature p{font-size:14px;}.os-session{padding:20px;}.os-pairing{gap:11px;padding:11px;}.os-session h2{margin-top:10px;}.os-game-rail{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;padding:8px 6px 16px;}.os-game-tile{min-width:260px;scroll-snap-align:center;height:170px;}.os-collection{margin-top:22px;}.os-footer-brand,.os-footer .os-muted{display:none;}.os-footer>div{gap:13px;}.os-footer{gap:12px;}.os-wallpaper{height:700px;}.os-genre{font-size:12px;} }
 /* Shared system surfaces — games retain their identity, controls don't. */

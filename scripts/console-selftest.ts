@@ -998,10 +998,21 @@ console.log('UI CONTROL SELFTEST: OK (martwa strefa, rytm powtórzeń, wybór ce
   const fitSource = readFileSync('src/console/FitScreen.tsx', 'utf8');
   assert.ok(/data-fit/.test(viewportCssNoComments) && /\.fit-frame\s*\{/.test(viewportCssNoComments) && /\.fit-scale\s*\{/.test(viewportCssNoComments),
     'ramka dopasowania ma style i stany `data-fit`');
-  assert.ok(/Math\.min\(availableWidth \/ neededWidth, availableHeight \/ neededHeight\)/.test(fitSource),
+  assert.ok(/Math\.min\(availableWidth \/ naturalWidth, availableHeight \/ naturalHeight\)/.test(fitSource),
     'skala liczy się z obu wymiarów — treść musi zmieścić się i wszerz, i wzdłuż');
   assert.ok(/fit >= \.995/.test(fitSource) && /fit < minScale/.test(fitSource),
-    ' trzy stany: mieści się bez zmian, pomniejszone, awaryjne przewijanie');
+    'trzy stany: mieści się bez zmian, pomniejszone, awaryjne przewijanie');
+  assert.ok(/FIT_SLACK_PX/.test(fitSource),
+    'drobny nadmiar (cienie, zaokrąglenia) nie może uruchamiać skalowania');
+  assert.ok(/availableWidth \/ rough/.test(fitSource) && /content\.style\.width = /.test(fitSource),
+    'przy pomniejszaniu układ dostaje płótno `okno / skala`, żeby po przeskalowaniu zająć pełną szerokość (bez czarnych pasów po bokach)');
+  assert.ok(/transform-origin:\s*top left/.test(viewportCssNoComments),
+    'skala zaczyna się w lewym górnym rogu — inaczej pomniejszona treść ucieka w prawo i pasy wracają');
+  // Nagłówek biblioteki nie może być przycięty do kolumny: na szerokim ekranie zostawiał czarne pasy.
+  assert.ok(!/max-width:\s*(?:1[0-9]{3}|[2-9][0-9]{3})px/.test(viewportCssNoComments),
+    'żaden kontener nie ma limitu szerokości w tysiącach pikseli — treść zajmuje całe okno, szerokość ogranicza tylko padding');
+  assert.ok(!/\.os-stage\s*\{[^}]*min-height:\s*[3-9][0-9]{2}px/.test(readFileSync('src/console/console.css', 'utf8')),
+    'scena nie ma stałego min-height w setkach pikseli — pchała treść poza ekran');
   // `transform` tworzy blok zawierający dla `position: fixed` — okna systemowe muszą stać obok.
   const librarySource = readFileSync('src/console/ConsoleLibrary.tsx', 'utf8');
   const fitClose = librarySource.indexOf('</FitScreen>');

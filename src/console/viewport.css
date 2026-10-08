@@ -28,9 +28,10 @@
 .fit-frame[data-fit="scroll"] { overflow-y:auto; overflow-x:hidden; scrollbar-width:thin; }
 .fit-frame[data-fit="scroll"]::-webkit-scrollbar { width:8px; }
 .fit-frame[data-fit="scroll"]::-webkit-scrollbar-thumb { background:#ffffff1f; border-radius:8px; }
-/* Skalowana treść: naturalna wysokość (mierzymy ją w JS), wyśrodkowana w poziomie,
-   żeby przy pomniejszeniu nie zostawiać całego zapasu po prawej stronie. */
-.fit-scale { transform-origin:top center; }
+/* Skalowana treść: naturalna wysokość mierzona w JS. Lewy górny róg jest początkiem
+   skali, bo przy pomniejszaniu układ dostaje płótno szersze od okna (`okno / skala`) —
+   wtedy po przeskalowaniu treść zajmuje dokładnie całą szerokość, bez pasów po bokach. */
+.fit-scale { transform-origin:top left; }
 .os-library-root { position:relative; min-height:100dvh; background:var(--os-bg); color:var(--os-text); font-family:var(--font-joy); }
 .os-library { min-height:100dvh; display:grid; grid-template-rows:auto minmax(0,1fr) auto auto; overflow:hidden; }
 .os-stage { min-height:0; padding:clamp(14px,2.6dvh,44px) 0 clamp(10px,1.8dvh,30px); }
@@ -64,12 +65,13 @@ html[data-profile="tv"] .os-footer kbd { min-width:26px; font-size:12px; padding
 html[data-profile="tv"] .os-collection-heading h2 { font-size:clamp(18px,1.35vw,26px); }
 /* Na TV treść jest pomniejszana, więc pasek pojawia się tylko awaryjnie (data-fit="scroll"). */
 
-/* --- Komputer: ten sam układ, ale treść nie rozjeżdża się po szerokim monitorze */
+/* --- Komputer: pełna szerokość okna -----------------------------------------
+   Wcześniej kontenery miały `max-width:1720px` i wyśrodkowanie. Na szerokim
+   monitorze zostawiało to CZARNE PASY po bokach (zgłoszenie użytkownika: „nie jest
+   na swojej pełnej możliwej szerokości”). Teraz szerokość ogranicza wyłącznie
+   padding, który rośnie z oknem — treść zajmuje cały ekran, a marginesy po bokach
+   są zamierzone i proporcjonalne, nie „puste pole”. */
 html[data-profile="desktop"] .os-library { padding:0 clamp(28px,4.6vw,120px); }
-html[data-profile="desktop"] .os-topbar,
-html[data-profile="desktop"] .os-stage,
-html[data-profile="desktop"] .os-collection,
-html[data-profile="desktop"] .os-footer { width:100%; max-width:1720px; margin-inline:auto; }
 html[data-profile="desktop"] .os-footer { margin-top:clamp(10px,1.6dvh,22px); }
 
 /* --- Tablet: gra jak na dużym ekranie, ale wszystko pod palec -------------- */

@@ -1,36 +1,46 @@
 /**
- * Ekran dopasowany do okna (runda 17) — „pomniejszaj, aż wszystko pasuje”.
+ * Ekran dopasowany do okna (rundy 17–18) — „pomniejszaj, aż wszystko pasuje,
+ * ale nie zostawiaj pustych pasów po bokach”.
  *
- * Zgłoszenie z przeglądu: *„teraz elementy najeżdżają na siebie! Napraw to żeby się
- * dostosowywały do ekranu i np. pomniejszały tak żeby wszystko pasowało”*. Poprzednia
- * próba (runda 16) dała bibliotece **sztywną wysokość** `100dvh` z elastycznym wierszem
- * `minmax(0, 1fr)`: gdy treść nie mieściła się w oknie, wiersz kurczył się poniżej swojej
- * treści, a nadmiar malował się NA kafelkach i stopce. Sztywna wysokość + elastyczny
- * wiersz = nakładanie się elementów, zawsze.
+ * Historia tego pliku to historia dwóch zgłoszeń:
  *
- * Tutaj jest odwrotnie: **układ jest naturalny** (nic nie jest ściskane ani przycinane),
- * a gdy treść jest wyższa od okna, całość zmniejsza się transformacją, aż wejdzie.
- * Trzy stany widoczne w `data-fit` na ramce:
+ * 1. Runda 16 dała bibliotece sztywną wysokość `100dvh` z elastycznym wierszem —
+ *    treść nie mieściła się, wiersz kurczył się poniżej swojej treści i elementy
+ *    **nachodziły na siebie**.
+ * 2. Runda 17 naprawiła to naturalnym układem i pomniejszaniem całości, ale skalowanie
+ *    „w miejscu” zostawiało **czarne pasy po bokach** (pomniejszona treść nie zajmowała
+ *    całej szerokości okna).
  *
- * - `full`   — treść mieści się bez zmian (skala 1);
- * - `scaled` — treść pomniejszona o policzony współczynnik, wyśrodkowana w poziomie;
- * - `scroll` — miejsca brakuje tak bardzo, że pomniejszanie zabiłoby czytelność
- *              (poniżej `minScale`); wtedy wraca przewijanie. To bezpiecznik, nie plan.
+ * Rozwiązanie: przy pomniejszaniu układ dostaje **szersze płótno** — dokładnie
+ * `okno / skala` — więc po przeskalowaniu zajmuje pełną szerokość okna. `transform-origin`
+ * jest w lewym górnym rogu, dzięki czemu skalowana treść zaczyna się w (0,0) i kończy
+ * dokładnie na krawędzi okna: zero pasów, zero przycięcia.
  *
- * Skalowanie jest **jednoprzebiegowe**, więc nie ma pętli sprzężenia: `scrollWidth`
- * i `scrollHeight` opisują układ, a `transform: scale()` nie zmienia układu, więc pomiar
- * nie zależy od zastosowanej skali i nie oscyluje (efekt „drgającej” skali byłby gorszy
- * niż sam problem).
+ * Trzy stany w `data-fit` na ramce:
+ * - `full`   — treść mieści się bez zmian (skala 1, także przy drobnym nadmiarze < `FIT_SLACK_PX`);
+ * - `scaled` — treść na szerszym płótnie, pomniejszona do okna, wyrównana do lewej góry;
+ * - `scroll` — brakuje tak dużo, że pomniejszanie zabiłoby czytelność (< `minScale`);
+ *              wtedy wraca przewijanie. To bezpiecznik, nie plan.
+ *
+ * Pomiar jest **jednoprzebiegowy** (jedno powtórzenie po poszerzeniu płótna, bez pętli):
+ * `scrollWidth`/`scrollHeight` opisują układ, a `transform` układem nie rusza, więc
+ * pomiar nie zależy od zastosowanej skali i nie „drga”.
  *
  * Ważne dla potomków: `transform` tworzy blok zawierający dla `position: fixed`, więc
  * wszystko, co ma być przyklejone do okna (arkusze, toasty, podpowiedź telefonu), musi
- * stać **poza** tym komponentem. W bibliotece tak właśnie jest: skalowana jest treść,
- * a okna systemowe renderują się obok.
+ * stać **poza** tym komponentem.
  */
 import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 
 /** Poniżej tej skali lepiej pozwolić przewinąć niż pomniejszać tekst do nieczytelności. */
 export const FIT_MIN_SCALE = .72;
+/** Nadmiar mniejszy niż tyle pikseli traktujemy jako zmieszczenie (cienie, zaokrąglenia). */
+export const FIT_SLACK_PX = 8;
+/**
+ * Górny limit płótna przy pomniejszaniu. Bez niego bardzo niski, a szeroki ekran
+ * rozciągnąłby układ do absurdalnych szerokości (np. 6000 px) i popsuł proporcje.
+ */
+export const FIT_MAX_CANVAS_PX = 3200;
 
 export interface FitScreenProps {
   children: ReactNode;
@@ -53,24 +63,36 @@ export function FitScreen({ children, className = '', minScale = FIT_MIN_SCALE, 
     if (!box || !content) return;
     const availableWidth = Math.max(1, box.clientWidth);
     const availableHeight = Math.max(1, box.clientHeight);
-    // `scroll*` czyta układ, a nie to, co widać — dlatego mierzymy naturalny rozmiar treści,
-    // niezależnie od już zastosowanej skali.
-    const neededWidth = Math.max(1, content.scrollWidth);
-    const neededHeight = Math.max(1, content.scrollHeight);
-    const fit = Math.min(availableWidth / neededWidth, availableHeight / neededHeight);
+    const clear = (state: 'full' | 'scroll') => {
+      if (content.style.width) content.style.width = '';
+      if (content.style.transform) content.style.transform = '';
+      box.dataset.fit = state;
+    };
 
-    if (fit >= .995) {
-      if (content.style.transform) content.style.transform = '';
-      box.dataset.fit = 'full';
+    // 1. Naturalny pomiar: `scroll*` czyta układ, nie to, co widać.
+    content.style.width = '';
+    const naturalWidth = Math.max(1, content.scrollWidth);
+    const naturalHeight = Math.max(1, content.scrollHeight);
+    if (naturalWidth <= availableWidth + FIT_SLACK_PX && naturalHeight <= availableHeight + FIT_SLACK_PX) {
+      clear('full');
       return;
     }
-    if (fit < minScale) {
-      // Treść jest zbyt duża, żeby pomniejszanie miało sens — zostaje przewijanie
-      // (nic nie nachodzi na siebie, bo układ pozostaje naturalny).
-      if (content.style.transform) content.style.transform = '';
-      box.dataset.fit = 'scroll';
-      return;
+
+    // 2. Skala „na oko”, a potem płótno o szerokości `okno / skala`: po pomniejszeniu
+    //    treść zajmie pełną szerokość, więc nie zostaną żadne paski po bokach.
+    const rough = Math.min(availableWidth / naturalWidth, availableHeight / naturalHeight);
+    let fit = rough;
+    if (rough >= minScale && rough < 1) {
+      const canvas = Math.min(availableWidth / rough, FIT_MAX_CANVAS_PX);
+      content.style.width = `${Math.round(canvas)}px`;
+      const wideWidth = Math.max(1, content.scrollWidth);
+      const wideHeight = Math.max(1, content.scrollHeight);
+      fit = Math.min(availableWidth / wideWidth, availableHeight / wideHeight);
     }
+
+    if (fit >= .995) { clear('full'); return }
+    if (fit < minScale) { clear('scroll'); return }
+    content.style.width = `${Math.round(Math.min(availableWidth / fit, FIT_MAX_CANVAS_PX))}px`;
     content.style.transform = `scale(${Number(fit.toFixed(4))})`;
     box.dataset.fit = 'scaled';
   }, [minScale]);

@@ -37,8 +37,12 @@ Działające rozwiązanie (runda 17) opiera się na dwóch zasadach:
    nic nie jest ściskane ani przycinane, więc nakładanie jest niemożliwe z definicji.
 2. **Gdy treść jest wyższa od okna, całość się pomniejsza** (`src/console/FitScreen.tsx`).
    Ramka `.fit-frame` ma dokładnie rozmiar okna, a `.fit-scale` dostaje
-   `transform: scale(min(oknoW / treśćW, oknoH / treśćH))`, wyśrodkowany w poziomie.
-   Skala nigdy nie przekracza 1 (nic nie powiększamy), a trzy stany widać w `data-fit`:
+   `transform: scale(min(oknoW / płótnoW, oknoH / treśćH))`. Żeby pomniejszenie nie
+   zostawiało **czarnych pasów po bokach**, układ dostaje najpierw szersze płótno
+   (`okno / skala`, maks. `FIT_MAX_CANVAS_PX`), a `transform-origin` siedzi w lewym górnym
+   rogu — po przeskalowaniu treść sięga dokładnie krawędzi okna. Drobny nadmiar
+   (do `FIT_SLACK_PX = 8` px) w ogóle nie uruchamia skalowania. Skala nigdy nie przekracza
+   1 (nic nie powiększamy), a trzy stany widać w `data-fit`:
 
    | `data-fit` | Kiedy | Co robi CSS |
    | --- | --- | --- |
@@ -75,7 +79,7 @@ z nieco wyższą dolną granicą skali (`.78`), bo tam jest drobny tekst i przyc
 | Typografia | większe minimum (nagłówek, stopka, kbd, eyebrow) | jak dotąd | między TV a telefonem |
 | Kafelki | wyższe, grubszy pierścień fokusa | elastyczne | 3 kolumny (2 w pionie) |
 | Przyciski | ikony 54 px, „Dodaj gracza” 15 px | standard | minimum 46–56 px pod palec |
-| Układ | pełna szerokość, stopka z większymi klawiszami | treść w kontenerze `max-width: 1720px` (żeby nie rozjeżdżała się po ultrapanoramie) | jedna kolumna w pionie |
+| Układ | pełna szerokość, stopka z większymi klawiszami | pełna szerokość okna (szerokość ogranicza tylko padding, proporcjonalny do okna) | jedna kolumna w pionie |
 | Dodatki | pasek przewijania ukryty | — | podpowiedź „Obróć tablet poziomo” |
 
 Telefon na ekranie głównym dostaje pływający przycisk **„Otwórz kontroler na telefonie”**

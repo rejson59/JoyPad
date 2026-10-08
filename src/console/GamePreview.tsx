@@ -29,7 +29,12 @@ export function GamePreview({ game, suspended, controlsTarget }: { game: GameInf
   const [ratio, setRatio] = useState('16 / 9');
   useEffect(() => {
     // Big screens (TV browsers report a coarse pointer) autoplay too; phones and metered links do not.
-    const media = matchMedia('(min-width: 1000px) and (pointer: fine), (min-width: 1400px)');
+    // `matchMedia` bywa nieobecne w osadzonych widokach (podgląd w ramce, starsze
+    // przeglądarki telewizorów). Bez tego wyjątek w efekcie gasił całą aplikację —
+    // wolimy brak autoodtwarzania niż czarny ekran.
+    const media = typeof window.matchMedia === 'function'
+      ? window.matchMedia('(min-width: 1000px) and (pointer: fine), (min-width: 1400px)')
+      : { matches: false, addEventListener: () => {}, removeEventListener: () => {} };
     const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string; addEventListener?: (name: string, fn: () => void) => void; removeEventListener?: (name: string, fn: () => void) => void } }).connection;
     const update = () => setAutomatic(media.matches && !connection?.saveData && !['slow-2g', '2g', '3g'].includes(connection?.effectiveType || ''));
     const visibility = () => setForeground(!document.hidden);

@@ -9,19 +9,27 @@ import { padHost } from '../net/padHost';
 import { GamePreview } from './GamePreview';
 import { hasHistory, lastGame } from './history';
 import { useViewport } from './useViewport';
+import { scrollToSafe } from './scrollSafe';
 import { useEffect, useState, type CSSProperties } from 'react';
-import { Archive, ArrowRight, Gamepad2, Plus, Settings2, Smartphone, Volume2, VolumeX, Wifi, Zap } from 'lucide-react';
+import { Archive, ArrowRight, Clapperboard, Eye, Gamepad2, Plus, RefreshCw, Settings2, Smartphone, TabletSmartphone, Volume2, VolumeX, Wifi, Zap } from 'lucide-react';
 import { GAMES, localizeGame, type GameId } from '../arcade/catalog';
 import { usePadHost } from '../pad/PadHostPanel';
 import { PLAYER_DEFS } from '../game/types';
 import { padUrlFor } from '../net/protocol';
+import { pairingMode } from './pairingOffer';
 import { QrFrame } from '../components/QrFrame';
+import { linkProgress } from './connectionProgress';
 import { Sheet } from './Sheet';
+import { UiHints } from './UiHints';
+import { pushUiContext } from './uiContext';
+import { setPreferences, useConsolePreferences } from './preferences';
 import { ConsoleSettings } from './Settings';
 import { systemSound } from './sound';
+import { openCinema } from '../cinema/store';
 import { useMenuMusic } from '../lib/useMenuMusic';
 import { sessionSummary } from './sessionSummary';
 import { playableIndices } from './navigation';
+import { FitScreen } from './FitScreen';
 import { useT } from '../platform/i18n';
 
 export function ConsoleLibrary({ focus, onFocus, onOpen, onConnections, onLab, onOverlayChange, suspended = false }: {
@@ -37,21 +45,59 @@ export function ConsoleLibrary({ focus, onFocus, onOpen, onConnections, onLab, o
   const [panel, setPanel] = useState<'settings' | 'soon' | 'help' | 'room' | 'gallery' | 'news' | null>(() => shouldShowWhatsNew() ? 'news' : null);
   const [music, toggleMusic] = useMenuMusic();
   const [qr, setQr] = useState('');
+  const [qrNonce, setQrNonce] = useState(0);
   const [previewControls, setPreviewControls] = useState<HTMLSpanElement | null>(null);
+  const prefs = useConsolePreferences();
+  // Skróty X/Y należą do powierzchni, na której właśnie jesteśmy — ten sam mechanizm
+  // napędza pasek podpowiedzi na dole, więc opis i działanie nigdy się nie rozjadą.
+  useEffect(() => {
+    if (panel === 'room') {
+      return pushUiContext({
+        source: 'sheet:room',
+        x: { label: t('room.lock'), run: () => { padHost.manageRoom({ kind: 'locked', value: !state.room.locked }); systemSound('confirm'); } },
+        y: { label: t('library.qrRefresh'), run: () => { padHost.refreshJoinToken('manual'); systemSound('confirm'); } },
+      });
+    }
+    if (panel === 'settings') {
+      return pushUiContext({
+        source: 'sheet:settings',
+        x: { label: t('settings.motion'), run: () => setPreferences({ motion: prefs.motion === 'reduced' ? 'system' : 'reduced' }) },
+        y: { label: t('settings.sound'), run: () => { setPreferences({ sound: !prefs.sound }); systemSound('confirm'); } },
+      });
+    }
+    if (panel) return pushUiContext({ source: `sheet:${panel}`, x: null, y: null });
+    return pushUiContext({
+      source: 'library',
+      x: { label: t('library.addPlayer'), run: onConnections },
+      y: { label: t('uiHints.sound'), run: () => toggleMusic(!music) },
+    });
+  }, [music, onConnections, panel, prefs.motion, prefs.sound, state.room.locked, t, toggleMusic]);
   const url = state.code ? padUrlFor(state.code, state.joinToken) : '';
   const ready = state.status === 'ready' || state.relay === 'online';
   const session = sessionSummary(state.pads.length, ready, language);
+  const pairing = pairingMode(ready, state.room.pairing);
   useEffect(() => { onOverlayChange(panel !== null); return () => onOverlayChange(false); }, [panel, onOverlayChange]);
+  // Pierścień fokusa świeci kolorem gry — stąd, bo to biblioteka zna podświetlony tytuł.
+  useEffect(() => {
+    document.documentElement.style.setProperty('--os-nav-accent', game.accent);
+    return () => { document.documentElement.style.removeProperty('--os-nav-accent'); };
+  }, [game.accent]);
+  // Kod na ekranie nigdy nie może „zestarzeć się": klucz dołączania wymienia host,
+  // a my tylko rysujemy PNG ponownie. Przy brzydkim błędzie generowania próbujemy raz jeszcze.
   useEffect(() => {
     let active = true;
     setQr('');
-    if (url && ready) void import('qrcode').then(({ default: QR }) => QR.toDataURL(url, { width: 256, margin: 2 })).then(src => { if (active) setQr(src); }).catch(() => {});
+    if (!url || !ready || pairing === 'hidden') return;
+    void import('qrcode')
+      .then(({ default: QR }) => QR.toDataURL(url, { width: 420, margin: 2 }))
+      .then(src => { if (active) setQr(src); })
+      .catch(() => { if (active) window.setTimeout(() => { if (active) setQrNonce(value => value + 1); }, 4000); });
     return () => { active = false; };
-  }, [url, ready]);
+  }, [url, ready, pairing, qrNonce]);
   useEffect(() => {
     const tile = document.querySelector<HTMLElement>(`[data-game-index="${focus}"]`);
     const rail = tile?.parentElement;
-    if (tile && rail) rail.scrollTo({ left: tile.offsetLeft - (rail.clientWidth - tile.offsetWidth) / 2, behavior: 'instant' });
+    if (tile && rail) scrollToSafe({ el: rail, left: tile.offsetLeft - (rail.clientWidth - tile.offsetWidth) / 2 });
   }, [focus, viewport.width]);
   const panelTitle = panel === 'room' ? (language === 'en' ? 'Room controls' : 'Centrum pokoju.')
     : panel === 'settings' ? (language === 'en' ? 'Make it yours.' : 'Po swojemu.')
@@ -59,37 +105,54 @@ export function ConsoleLibrary({ focus, onFocus, onOpen, onConnections, onLab, o
         : panel === 'gallery' ? `${t('common.gallery')}.` : t('library.helpTitle');
   const closeWhatsNew = () => { markWhatsNewSeen(); setPanel(null); };
 
-  return <div className="os-library" style={{ '--game-accent': game.accent } as CSSProperties}>
+  return <div className="os-library-root" style={{ '--game-accent': game.accent } as CSSProperties}>
+    {/* Skalowana jest WYŁĄCZNIE treść biblioteki. Okna systemowe (`Sheet`, „Co nowego?”)
+        i podpowiedź telefonu stoją obok, bo `transform` czyni z siebie blok zawierający
+        dla `position: fixed` — arkusz w środku byłby pomniejszony razem z treścią. */}
+    <FitScreen label={t('library.aria')}>
+    <div className="os-library">
     <GamePreview key={game.id} game={game} suspended={suspended || panel !== null} controlsTarget={previewControls} />
     <header className="os-topbar">
       <a className="os-wordmark" href="#" aria-label={t('library.aria')}><JoyPadLogo />JoyPad<span>.</span><small>PLAY SYSTEM</small></a>
       <nav aria-label={t('library.system')}>
         <span ref={setPreviewControls} className="os-preview-controls" />
         <span className="os-network"><i className={ready ? 'is-ready' : ''} />{state.room.locked ? t('library.roomLocked') : ready ? t('library.roomReady') : t('library.roomConnecting')}</span>
-        <button className="os-icon" aria-label={music ? t('library.musicOff') : t('library.musicOn')} aria-pressed={music} onClick={() => toggleMusic(!music)}>{music ? <Volume2 size={19} /> : <VolumeX size={19} />}</button>
-        <button className="os-icon" onClick={() => setPanel('gallery')} aria-label={t('common.gallery')}><Archive size={19} /></button>
-        <button className="os-icon" onClick={() => setPanel('settings')} aria-label={t('library.settings')}><Settings2 size={20} /></button>
-        <button className="os-room-button" onClick={() => setPanel('room')}>{t('library.room')}<span>{state.pads.length}/4</span></button>
-        <button className="os-add" onClick={onConnections}><Plus size={18} /><span>{t('library.addPlayer')}</span></button>
+        <button className="os-icon lg-pill" aria-label={music ? t('library.musicOff') : t('library.musicOn')} aria-pressed={music} onClick={() => toggleMusic(!music)}>{music ? <Volume2 size={19} /> : <VolumeX size={19} />}</button>
+        <button className="os-icon lg-pill" onClick={() => setPanel('gallery')} aria-label={t('common.gallery')}><Archive size={19} /></button>
+        <button className="os-icon lg-pill" onClick={() => setPanel('settings')} aria-label={t('library.settings')}><Settings2 size={20} /></button>
+        <button className="os-room-button lg-pill lg-sheen" onClick={() => setPanel('room')}>{t('library.room')}<span>{state.pads.length}/4</span></button>
+        <button className="os-add lg-pill lg-sheen" onClick={onConnections}><Plus size={18} /><span>{t('library.addPlayer')}</span></button>
       </nav>
     </header>
     <main className="os-stage">
       <section className="os-feature" aria-labelledby="game-title">
         <div className="os-eyebrow"><span className="os-dash" /> {t('library.heading')} <span className="os-muted">/ {String(playableIndices.indexOf(focus) + 1).padStart(2, '0')}</span></div>
-        <div key={game.id} className="os-game-copy">
+        <div key={game.id} className="os-game-copy lg-enter">
           <div className="os-genre">{game.genre} <span>•</span> {game.players}</div>
           <h1 id="game-title" style={{ viewTransitionName: 'game-title' }}>{game.title}</h1>
           <p>{game.description}</p>
-          <button className="os-play" onClick={() => onOpen(game.id)}><span className="os-play-symbol">▶</span>{t('library.launch')}<ArrowRight size={20} /></button>
+          <button className="os-play lg-sheen" onClick={() => onOpen(game.id)}><span className="os-play-symbol">▶</span>{t('library.launch')}<ArrowRight size={20} /></button>
           {hasHistory() && game.id === lastGame() && <button className="os-again" onClick={() => onOpen(game.id)}>{t('library.playAgain')} <span>{t('library.lastSettings')}</span></button>}
           <div className="os-feature-tags">{game.features.map(f => <span key={f}>{f}</span>)}</div>
         </div>
       </section>
-      <aside className={`os-session ${session.count ? 'has-crew' : ''}`} aria-label={t('library.session')}>
+      <aside className={`os-session lg-card lg-sheen ${session.count ? 'has-crew' : ''}`} aria-label={t('library.session')}>
         <div className="os-session-heading"><span className="os-eyebrow">{t('library.sharedScreen')}</span><Wifi size={15} /></div>
         <h2>{session.title}</h2>
-        <p className="os-session-status" role="status">{session.status}</p><p>{session.count ? t('library.chooseAndPrepare') : session.pairing}</p>
-        {!session.count && ready && <div className="os-pairing"><QrFrame src={qr} size={136} /><div><span>{t('library.roomCode')}</span><strong>{state.code || '·····'}</strong><a href="#pad" target="_blank" rel="noopener noreferrer"><Smartphone size={14} /> {t('library.openPad')}</a></div></div>}
+        <p className="os-session-status" role="status">{session.status}</p><p>{session.count || pairing === 'hidden' ? t('library.chooseAndPrepare') : session.pairing}</p>
+        {pairing === 'hidden'
+          ? <div className="os-pairing os-pairing--hidden lg-enter"><p>{t('library.qrHidden')}</p><button className="os-secondary lg-pill" onClick={() => { padHost.manageRoom({ kind: 'pairing', value: true }); systemSound('confirm'); }}><Eye size={15} /> {t('library.qrShow')}</button></div>
+          : <div className="os-pairing lg-enter">
+            <QrFrame src={qr} size={420} fit loadingLabel={t('library.qrConnecting')} progress={linkProgress(state)} />
+            <div className="os-pairing-side">
+              <span>{t('library.roomCode')}</span>
+              <strong>{state.code || '·····'}</strong>
+              <div className="os-pairing-foot">
+                <button className="os-icon lg-pill" aria-label={t('library.qrRefreshAria')} onClick={() => { padHost.refreshJoinToken('manual'); systemSound('confirm'); }}><RefreshCw size={15} /></button>
+                <p className="os-pairing-note">{pairing === 'qr' ? t('library.qrReady') : t('library.qrManualHint')}</p>
+              </div>
+            </div>
+          </div>}
         <div className="os-roster">{PLAYER_DEFS.map((p, slot) => {
           const pad = state.pads.find(p => p.slot === slot);
           return <div key={slot} className={`os-player ${pad ? 'is-connected' : ''}`} style={{ '--player-color': p.color } as CSSProperties}><span>{pad ? <PlayerAvatar avatar={normalizeProfile(pad.profile).avatar} size={20} /> : <Gamepad2 size={18} />}</span><div><b>{pad?.nick || (language === 'en' ? `Slot ${slot + 1}` : `Miejsce ${slot + 1}`)}</b><small>{pad ? state.adminSlot === slot ? t('library.admin') : t('library.connected') : t('library.waitingPlayer')}</small></div>{pad && <i />}</div>;
@@ -100,6 +163,7 @@ export function ConsoleLibrary({ focus, onFocus, onOpen, onConnections, onLab, o
         {state.error && <details className="os-connection-detail"><summary>{t('library.connectionIssue')}</summary><p className="os-error">{state.error}</p></details>}
       </aside>
     </main>
+    <p className="os-hint-rotate"><TabletSmartphone size={18} /> {t('library.rotateTablet')}</p>
     <section className="os-collection" aria-label={t('library.availableGames')}>
       <div className="os-collection-heading"><h2>{t('library.chooseWorld')}</h2><button onClick={() => setPanel('soon')}>{t('library.upcoming')} <span>{GAMES.filter(g => g.wip).length}</span><ArrowRight size={14} /></button></div>
       <div className="os-game-rail">{playableIndices.map(i => {
@@ -110,10 +174,15 @@ export function ConsoleLibrary({ focus, onFocus, onOpen, onConnections, onLab, o
         </button>;
       })}</div>
     </section>
-    <footer className="os-footer"><div><span><kbd>←</kbd><kbd>→</kbd> {t('library.choose')}</span><span><kbd>Enter</kbd> {t('library.start')}</span><span className="os-muted">{t('library.remoteHint')}</span></div><div className="flex items-center gap-4"><button onClick={() => setPanel('news')}>{t('library.whatsNew')}</button><button onClick={() => setPanel('help')}>{t('library.howToStart')}</button><span className="os-footer-brand">{t('library.version')}</span></div></footer>
+    <footer className="os-footer"><div><UiHints />{panel === null && <span className="os-muted">{t('library.remoteHint')}</span>}</div><div className="flex items-center gap-4"><button onClick={() => setPanel('news')}>{t('library.whatsNew')}</button><button onClick={() => { systemSound('confirm'); openCinema('manual'); }}>{t('library.tutorial')}</button><button onClick={() => setPanel('help')}>{t('library.howToStart')}</button><span className="os-footer-brand">{t('library.version')}</span></div></footer>
+    </div>
+    </FitScreen>
+    {/* Okna systemowe stoją POZA skalowaną treścią: `position: fixed` wewnątrz
+        transformowanego rodzica nie przykleja się do okna (patrz FitScreen). */}
     {panel && panel !== 'news' && <Sheet title={panelTitle} wide={panel === 'gallery'} onClose={() => { systemSound('back'); setPanel(null); }}>
-      {panel === 'room' ? <RoomControls session={padHost.session()} onAction={action => padHost.manageRoom(action)} /> : panel === 'settings' ? <><ConsoleSettings /><button className="os-secondary" onClick={() => toggleMusic(!music)}>{music ? t('library.musicDisable') : t('library.musicEnable')} {t('library.libraryMusic')}</button></> : panel === 'soon' ? <><p className="os-note">{t('library.soonNote')}</p><div className="os-upcoming">{GAMES.filter(g => g.wip).map(g => { const localized = localizeGame(g, language); return <div key={g.id}><img src={`${import.meta.env.BASE_URL}${g.cover}`} alt="" loading="lazy" decoding="async" /><div><h3>{localized.title}</h3><span>{localized.genre} · {t('library.inDevelopment')}</span><p>{localized.description}</p></div></div>; })}</div></> : panel === 'gallery' ? <MomentsGallery /> : <ol className="os-help"><li><b>{t('library.helpScreenTitle')}</b><p>{t('library.helpScreen')}</p></li><li><b>{t('library.helpPhoneTitle')}</b><p>{t('library.helpPhone')}</p></li><li><b>{t('library.helpGameTitle')}</b><p>{t('library.helpGame')}</p></li></ol>}
+      {panel === 'room' ? <RoomControls session={padHost.session()} onAction={action => padHost.manageRoom(action)} /> : panel === 'settings' ? <><ConsoleSettings /><button className="os-secondary" onClick={() => toggleMusic(!music)}>{music ? t('library.musicDisable') : t('library.musicEnable')} {t('library.libraryMusic')}</button></> : panel === 'soon' ? <><p className="os-note">{t('library.soonNote')}</p><div className="os-upcoming">{GAMES.filter(g => g.wip).map(g => { const localized = localizeGame(g, language); return <div key={g.id}><img src={`${import.meta.env.BASE_URL}${g.cover}`} alt="" loading="lazy" decoding="async" /><div><h3>{localized.title}</h3><span>{localized.genre} · {t('library.inDevelopment')}</span><p>{localized.description}</p></div></div>; })}</div></> : panel === 'gallery' ? <MomentsGallery /> : <><ol className="os-help"><li><b>{t('library.helpScreenTitle')}</b><p>{t('library.helpScreen')}</p></li><li><b>{t('library.helpPhoneTitle')}</b><p>{t('library.helpPhone')}</p></li><li><b>{t('library.helpGameTitle')}</b><p>{t('library.helpGame')}</p></li></ol><button type="button" className="os-secondary lg-pill" onClick={() => { systemSound('confirm'); setPanel(null); openCinema('manual'); }}><Clapperboard size={16} /> {t('library.tutorialWatch')}</button></>}
     </Sheet>}
+    <a className="os-hint-phone" href="#pad"><Smartphone size={18} /> {t('library.phoneHint')}</a>
     <WhatsNew open={panel === 'news'} onClose={closeWhatsNew} />
   </div>;
 }

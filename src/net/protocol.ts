@@ -112,8 +112,9 @@ export const ZERO_INPUT: PadInput = { fwd: 0, turn: 0, fire: false };
 export type PadFx = 'fire' | 'hit' | 'kill' | 'dead' | 'pickup' | 'shield' | 'respawn' | 'win' | 'lose';
 
 export type HostScreen = 'lab' | 'lobby' | 'menu' | 'setup' | 'game' | 'over';
-export type RemoteCommand = 'left' | 'right' | 'up' | 'down' | 'select' | 'back' | 'pause' | 'restart' | 'home';
-export const REMOTE_COMMANDS: readonly RemoteCommand[] = ['left', 'right', 'up', 'down', 'select', 'back', 'pause', 'restart', 'home'];
+/** `x`/`y` to skróty kontekstowe interfejsu, `fullscreen` — pełny ekran telewizora (tylko admin). */
+export type RemoteCommand = 'left' | 'right' | 'up' | 'down' | 'select' | 'back' | 'pause' | 'restart' | 'home' | 'x' | 'y' | 'fullscreen';
+export const REMOTE_COMMANDS: readonly RemoteCommand[] = ['left', 'right', 'up', 'down', 'select', 'back', 'pause', 'restart', 'home', 'x', 'y', 'fullscreen'];
 export interface RemoteEvent { id: number; command: RemoteCommand }
 
 export interface ArcadeHud {
@@ -138,9 +139,12 @@ export interface SessionOptions {
   tournamentRound?: number;
 }
 
-export interface RoomSettings { locked: boolean; suggestions: boolean; dimmed: boolean }
-export const DEFAULT_ROOM: RoomSettings = { locked: false, suggestions: true, dimmed: false };
-export type RoomAction = { kind: 'locked' | 'suggestions' | 'dimmed'; value: boolean } | { kind: 'kick' | 'transfer'; slot: number };
+/** Ustawienia pokoju. `pairing` decyduje, czy kod QR zostaje na dużym ekranie. */
+export interface RoomSettings { locked: boolean; suggestions: boolean; dimmed: boolean; pairing: boolean }
+export const DEFAULT_ROOM: RoomSettings = { locked: false, suggestions: true, dimmed: false, pairing: true };
+export type RoomAction = { kind: 'locked' | 'suggestions' | 'dimmed' | 'pairing'; value: boolean } | { kind: 'kick' | 'transfer'; slot: number }
+  /** Kłódka na propozycje jednego gracza — połączenie i gra zostają, znika tylko jego głos. */
+  | { kind: 'muted'; slot: number; value: boolean };
 
 export interface SessionState {
   room?: RoomSettings;
@@ -148,7 +152,7 @@ export interface SessionState {
   screen: HostScreen;
   selection: number;
   adminSlot: number | null;
-  roster: { slot: number; nick: string; ready?: boolean; rematch?: boolean; suggestedGame?: GameId; profile?: PlayerProfile }[];
+  roster: { slot: number; nick: string; ready?: boolean; rematch?: boolean; suggestedGame?: GameId; muted?: boolean; profile?: PlayerProfile }[];
   options?: SessionOptions;
 }
 
@@ -182,7 +186,9 @@ export type HostMessage =
   | { t: 'fx'; fx: PadFx }
   | { t: 'pong'; at: number }
   | { t: 'achievement'; id: import('../platform/profile').AchievementId }
-  | { t: 'roundResult'; game: GameId; won: boolean };
+  | { t: 'roundResult'; game: GameId; won: boolean }
+  /** Odpowiedź na propozycję: przyjęte albo powód odmowy i ile sekund jeszcze czekać. */
+  | { t: 'suggestAck'; verdict: import('./antiSpam').SuggestVerdict; retryInMs: number };
 
 export const PROTOCOL_VERSION = 1;
 
@@ -199,9 +205,10 @@ export function isPadMessage(value: unknown): value is PadMessage {
   if (msg.t === 'hello') return typeof msg.nick === 'string' && msg.nick.length <= 64 && typeof msg.v === 'number';
   if (msg.t === 'nick') return typeof msg.nick === 'string' && msg.nick.length <= 64;
   if (msg.t === 'ping') return typeof msg.at === 'number' && Number.isFinite(msg.at);
+  if (msg.t === 'suggest') return msg.game === null || typeof msg.game === 'string';
   if (msg.t === 'command') return typeof msg.command === 'string';
   if (msg.t === 'choose') return typeof msg.index === 'number' && Number.isFinite(msg.index);
-  return ['profile', 'room', 'suggest', 'remind', 'intent', 'pause'].includes(msg.t);
+  return ['profile', 'room', 'remind', 'intent', 'pause'].includes(msg.t);
 }
 
 export function isHostMessage(value: unknown): value is HostMessage {
@@ -213,6 +220,7 @@ export function isHostMessage(value: unknown): value is HostMessage {
   if (msg.t === 'nick') return typeof msg.nick === 'string';
   if (msg.t === 'screen') return ['lab', 'lobby', 'menu', 'setup', 'game', 'over'].includes(msg.screen as string);
   if (msg.t === 'session') return Boolean(msg.session && typeof msg.session === 'object');
+  if (msg.t === 'suggestAck') return typeof msg.verdict === 'string' && typeof msg.retryInMs === 'number';
   if (msg.t === 'arcadeHud') return Boolean(msg.hud && typeof msg.hud === 'object' && typeof (msg.hud as Record<string, unknown>).score === 'number' && typeof (msg.hud as Record<string, unknown>).timeLeft === 'number');
   if (msg.t === 'hud') return typeof msg.hp === 'number' && typeof msg.maxHp === 'number' && typeof msg.alive === 'boolean';
   if (msg.t === 'fx') return ['fire', 'hit', 'kill', 'dead', 'pickup', 'shield', 'respawn', 'win', 'lose'].includes(msg.fx as string);

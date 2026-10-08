@@ -340,7 +340,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .boot-splash-compact .boot-scan { animation-duration:450ms; animation-delay:80ms; }
 .boot-splash-compact .boot-kicker { margin-top:7px; font-size:9px; letter-spacing:.25em; animation-duration:350ms; animation-delay:90ms; }
 .boot-splash-compact .boot-skip { bottom:max(18px,env(safe-area-inset-bottom)); padding:7px 10px; font-size:9px; animation-delay:140ms; }
-.boot-splash-reduced::before,.boot-splash-reduced .boot-halo>span { animation:none!important; }
+.boot-splash-reduced::before,.boot-splash-reduced .boot-halo>span,.boot-splash-reduced .plamek-orbit-run,.boot-splash-reduced .plamek-orbit-echo,.boot-splash-reduced .plamek-orbit-ball { animation:none!important; }
 .boot-splash-reduced .boot-logo,.boot-splash-reduced .boot-brand,.boot-splash-reduced .boot-scan,.boot-splash-reduced .boot-kicker,.boot-splash-reduced .boot-step,.boot-splash-reduced .boot-skip { animation:none!important; opacity:1; transform:none; }
 @keyframes boot-step-in { from { opacity:0; transform:translateY(9px); } to { opacity:1; transform:translateY(0); } }
 @keyframes boot-sweep { from { transform:translateX(-35%); opacity:.15; } to { transform:translateX(35%); opacity:.6; } }

@@ -70,6 +70,8 @@ export interface PadClientState {
   arcadeHud: ArcadeHud | null;
   latency: number;
   result: { winnerName?: string; winnerColor?: string; youWon?: boolean } | null;
+  /** Ostatnia odmowa propozycji: powód i ile sekund czekać (null = nic nie wisi). */
+  suggestNote: { verdict: import('./antiSpam').SuggestRejection; retryInMs: number; at: number } | null;
   /** Aktywne połączenie leci przez awaryjny przekaźnik (nie przez WebRTC). */
   viaRelay: boolean;
 }
@@ -170,7 +172,7 @@ export class PadClient {
     signaling: this.signaling.label,
     slot: -1, name: '', nick: '', color: '#fbbf24', darkColor: '#78350f',
     screen: 'lobby', game: null, adminSlot: null, selection: 0, roster: [],
-    hud: null, arcadeHud: null, latency: 0, result: null, viaRelay: false,
+    hud: null, arcadeHud: null, latency: 0, result: null, viaRelay: false, suggestNote: null,
   };
 
   onFx: ((fx: PadFx) => void) | null = null;
@@ -481,7 +483,7 @@ export class PadClient {
         this.set({
           status: 'connected', slot: msg.slot, name: msg.name, nick: connectedNick, color: msg.color, darkColor: msg.darkColor,
           screen: msg.screen, error: null, progress: '', phase: 'idle', elapsed: 0, lastFailure: null,
-          viaRelay: link.kind === 'relay',
+          viaRelay: link.kind === 'relay', suggestNote: null,
         });
         this.setProfile(loadProfile());
         break;
@@ -513,6 +515,10 @@ export class PadClient {
         });
         break;
       }
+      case 'suggestAck':
+        // Odmowa jest krótka i bez dramatyzmu; przyjęcie kasuje komunikat do zera.
+        this.set({ suggestNote: msg.verdict === 'accepted' ? null : { verdict: msg.verdict, retryInMs: msg.retryInMs, at: Date.now() } });
+        break;
       case 'readyReminder':
         window.dispatchEvent(new Event('joypad-ready-reminder'));
         break;

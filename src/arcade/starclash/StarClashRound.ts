@@ -2,6 +2,7 @@ import type { PadInput } from '../../net/protocol';
 import { gameAudio } from '../../game/audio';
 import type { GameRound, Racer, RoundConfig, RoundHud, RoundPlayer } from '../runtime';
 import { Game } from './Game';
+import { uiOwnsKeyboard } from '../../lib/inputOwnership';
 
 /**
  * Adapter STAR CLASH 3D (silnik z orbitalna-fala.zip) do runtime'u JoyPad.
@@ -89,6 +90,11 @@ export class StarClashRound implements GameRound {
   }
 
   private keyDown = (e: KeyboardEvent) => {
+    // Nad areną stoi okienko (pauza, regulacje, wyniki) albo gracz coś wpisuje —
+    // klawiatura jest wtedy własnością interfejsu. Bez tego warunki nakładały się:
+    // `Esc` zamykał okienko (czyli wznawiał grę) i *jednocześnie* przełączał pauzę,
+    // a strzałki nie mogły przewinąć modalu ani przestawić `<select>` w ustawieniach.
+    if (uiOwnsKeyboard(e)) return;
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
     if ((e.code === 'KeyP' || e.code === 'Escape') && !e.repeat) this.togglePause();
     this.keys.add(e.code);

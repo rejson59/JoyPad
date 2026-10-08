@@ -1,10 +1,11 @@
 /** Offline tests of authority, room state, profile validation and real-event highlights. */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import type { PadLink } from '../src/net/links';
 import type { HostMessage, PadMessage } from '../src/net/protocol';
 import { MomentRecorder, momentTime } from '../src/platform/momentRecorder';
 import { loadProfile, normalizeProfile, saveProfile, recordGamePlayed, recordWin } from '../src/platform/profile';
-import { isPadMessage, padCodeFromHash, padTokenFromHash, padUrlFor } from '../src/net/protocol';
+import { isHostMessage, isPadMessage, padCodeFromHash, padTokenFromHash, padUrlFor } from '../src/net/protocol';
 
 Object.defineProperty(globalThis, 'window', { value: globalThis, configurable: true });
 Object.defineProperty(globalThis, 'location', { value: { search: '', hash: '', origin: 'https://example.com', pathname: '/JoyPad/' }, configurable: true });
@@ -73,7 +74,176 @@ c.send({ t: 'room', action: { kind: '__proto__', value: true } } as unknown as P
 c.send({ t: 'room', action: { kind: 'locked', value: 'yes' } } as unknown as PadMessage);
 assert.equal(host.session().room?.locked, false);
 assert.equal(Object.getPrototypeOf(host.session().room!), Object.prototype);
-console.log('ROOM SELFTEST: OK (authority, transfer, lock, reconnection, kick, suggestions, dimming, malformed messages)');
+// Widoczność kodu QR na telewizorze jest ustawieniem administratora, nie stanem połączenia.
+assert.equal(host.session().room?.pairing, true, 'domyślnie kod QR zostaje na ekranie');
+c.send({ t: 'room', action: { kind: 'pairing', value: false } });
+assert.equal(host.session().room?.pairing, false, 'admin chowa kod');
+c.send({ t: 'room', action: { kind: 'pairing', value: true } });
+const guestPair = pair('Wczasowicz');
+guestPair.send({ t: 'room', action: { kind: 'pairing', value: false } });
+assert.equal(host.session().room?.pairing, true, 'gość nie może schować kodu QR');
+wire.dropConn(guestPair.link.id);
+console.log('ROOM SELFTEST: OK (authority, transfer, lock, reconnection, kick, suggestions, dimming, pairing, malformed messages)');
+
+/* ── ANTY-SPAM ─────────────────────────────────────────────────────────────
+   Dwie warstwy: czyste liczby (`net/antiSpam`) i prawdziwy host, który ich
+   pilnuje. Telefon nie może ufać własnym timerom, więc licznik mieszka po stronie
+   telewizora — tu sprawdzamy dokładnie tę stronę, a liczby osobno. */
+const { EMPTY_SUGGEST, judgeSuggest, ANTI_SPAM, isSilenced } = await import('../src/net/antiSpam');
+const T0 = 1_000_000;
+
+// Pierwsza propozycja zawsze wchodzi, licznik startuje.
+const first = judgeSuggest({ game: 'neon', now: T0, muted: false, counters: EMPTY_SUGGEST });
+assert.equal(first.accept, true, 'pierwsza propozycja nie ma powodu do odmowy');
+assert.equal(first.counters.count, 1);
+assert.equal(first.reply, true, 'przyjęcie też dostaje odpowiedź — telefon kasuje swój komunikat');
+
+// Ta sama gra wraca do puli dopiero po oknie duplikatu, inna — po cooldownie.
+const dup = judgeSuggest({ game: 'neon', now: T0 + ANTI_SPAM.cooldownMs + 1, muted: false, counters: first.counters });
+assert.equal(dup.accept, false); assert.equal(dup.verdict, 'duplicate');
+assert.ok(dup.retryInMs >= 171_000 && dup.retryInMs <= 172_000, 'duplikat liczy pełne okno');
+const cold = judgeSuggest({ game: 'snake', now: T0 + 1_000, muted: false, counters: first.counters });
+assert.equal(cold.accept, false); assert.equal(cold.verdict, 'cooldown'); assert.equal(cold.retryInMs, 7_000);
+assert.equal(cold.counters.count, 1, 'odrzucona propozycja nie zjada limitu');
+
+// Wycofanie głosu jest wolne od kar: nawet wyciszony gracz zdjąć swój głos może.
+assert.equal(judgeSuggest({ game: undefined, now: T0 + 500, muted: true, counters: first.counters }).accept, true);
+assert.equal(judgeSuggest({ game: null as unknown as undefined, now: T0 + 500, muted: true, counters: first.counters }).accept, true,
+  'null z sieci znaczy dokładnie to samo co brak gry');
+
+// Sufit ilościowy w oknie przesuwnym: pięć tytułów na minutę, szósty wypada za oknem.
+let windowed = EMPTY_SUGGEST;
+for (let i = 0; i < ANTI_SPAM.maxPerWindow; i++) {
+  const step = judgeSuggest({ game: `gra${i}`, now: T0 + i * (ANTI_SPAM.cooldownMs + 1), muted: false, counters: windowed });
+  assert.equal(step.accept, true, `gra ${i} mieści się w oknie`);
+  windowed = step.counters;
+}
+const over = judgeSuggest({ game: 'gra9', now: T0 + ANTI_SPAM.maxPerWindow * (ANTI_SPAM.cooldownMs + 1), muted: false, counters: windowed });
+assert.equal(over.accept, false); assert.equal(over.verdict, 'limit');
+assert.equal(judgeSuggest({ game: 'gra9', now: T0 + ANTI_SPAM.windowMs + 1, muted: false, counters: windowed }).accept, true,
+  'okno się zawija i licznik startuje od zera');
+
+// Eskalacja: uparte bicie w ten sam mur wycisza gracza; sama odmowa nie dzwoni co chwilę.
+let struck = first.counters;
+const verdicts: string[] = [];
+for (let i = 0; i < ANTI_SPAM.strikeLimit; i++) {
+  const step = judgeSuggest({ game: `upór${i}`, now: T0 + i * 100, muted: false, counters: struck });
+  assert.equal(step.accept, false);
+  verdicts.push(step.verdict);
+  struck = step.counters;
+}
+assert.ok(verdicts.every(v => v === 'cooldown'), 'bez czekania wszystkie trzy biją w cooldown');
+assert.equal(struck.mutedUntil, T0 + (ANTI_SPAM.strikeLimit - 1) * 100 + ANTI_SPAM.autoMuteMs, 'eskalacja zakłada kłódkę');
+assert.equal(struck.strikes, 0, 'wyciszony zaczyna od czystego licznika uderzeń');
+const silenced = judgeSuggest({ game: 'spokoj', now: T0 + 1_000, muted: false, counters: struck });
+assert.equal(silenced.verdict, 'muted');
+assert.equal(silenced.reply, false, 'telefon nie potrzebuje tej samej odmowy w każdej wiadomości');
+assert.equal(isSilenced(struck, false, T0 + 1_000), true);
+assert.equal(isSilenced(struck, false, struck.mutedUntil + 1), false, 'auto-kłódka schodzi sama');
+assert.equal(isSilenced(EMPTY_SUGGEST, true, struck.mutedUntil + 10), true, 'wyciszenie od admina nie ma daty ważności');
+
+// Host: liczniki są na padzie, nie w powietrzu — i przeżywają reconnect.
+const host2 = new PadHost();
+const wire2 = host2 as unknown as { conns: Map<string, PadLink>; onMessage: (link: PadLink, msg: PadMessage) => void; dropConn: (id: string) => void };
+type SuggestAck = Extract<HostMessage, { t: 'suggestAck' }>;
+function pairAt(id: string, pid = id) {
+  const sent: HostMessage[] = [];
+  const link: PadLink = { id, kind: 'webrtc', open: true, send: msg => sent.push(msg as HostMessage), onMessage() {}, onClosed() {}, close() {} };
+  wire2.conns.set(id, link);
+  wire2.onMessage(link, { t: 'hello', nick: id, ua: 'test', v: 1, pid });
+  return {
+    link,
+    sent,
+    send: (msg: PadMessage) => wire2.onMessage(link, msg),
+    broadcasts: () => sent.filter(m => m.t === 'session').length,
+    refusals: () => sent.filter(m => m.t === 'suggestAck' && (m as SuggestAck).verdict !== 'accepted') as SuggestAck[],
+  };
+}
+const adminPad = pairAt('Admin');
+const spammer = pairAt('Marcin');
+const quiet = pairAt('Ewa');
+const realNow = Date.now;
+// Zegar podszywamy od „teraźniejszości": host wybierze administratora ze starszeństwa
+// połączenia, a sztuczny rok 1970 przywróciłby prymat ostatniego, nie pierwszego pada.
+let fakeNow = realNow();
+Date.now = () => fakeNow;
+try {
+  adminPad.send({ t: 'suggest', game: 'race' });
+  assert.equal(host2.session().roster[0].suggestedGame, 'race', 'admin też może proponować');
+
+  spammer.send({ t: 'suggest', game: 'snake' });
+  assert.equal(host2.session().roster[1].suggestedGame, 'snake');
+  quiet.send({ t: 'suggest', game: 'tanks' });
+  assert.equal(host2.session().roster[2].suggestedGame, 'tanks', 'limit jest na gracza, nie na pokój');
+
+  // Seria Marcina w jednym takcie: ekran drga raz na przyjęty głos, nigdy na odmowę.
+  const before = spammer.broadcasts();
+  spammer.send({ t: 'suggest', game: 'race' });
+  spammer.send({ t: 'suggest', game: 'tanks' });
+  spammer.send({ t: 'suggest', game: 'orbit' });
+  assert.equal(host2.session().roster[1].suggestedGame, 'snake', 'odrzucone propozycje nie ruszają ekranu');
+  assert.equal(spammer.broadcasts(), before, 'sama odmowa nie rozgłasza stanu pokoju');
+  assert.equal(spammer.refusals().length, 1, 'telefon słyszy o odmowie raz, nie trzy razy');
+  spammer.send({ t: 'suggest', game: 'snake' });
+  assert.equal(host2.session().roster[1].muted, true, 'seria odmów wycisza gracza bez pytania nikogo');
+  assert.equal(spammer.broadcasts(), before + 1, 'pokój dowiaduje się tylko o samej kłódce');
+  assert.equal(host2.session().roster[1].suggestedGame, 'snake', 'wyciszenie zabiera prawo do nowych głosów, nie oddane');
+  assert.equal(host2.session().roster[0].muted, false, 'sąsiedzi nic nie czują');
+
+  // Wyciszony może za to zdjąć swój głos z ekranu.
+  spammer.send({ t: 'suggest', game: null });
+  assert.equal(host2.session().roster[1].suggestedGame, undefined, 'wycofanie działa zawsze');
+  spammer.send({ t: 'suggest', game: 'race' });
+  assert.equal(host2.session().roster[1].suggestedGame, undefined, 'wyciszony nie przebija się przez kłódkę');
+
+  // Kłódka od admina: jeden klik ją zakłada i jeden zdejmuje, zdjęcie zeruje liczniki.
+  adminPad.send({ t: 'room', action: { kind: 'muted', slot: 1, value: true } });
+  assert.equal(host2.session().roster[1].muted, true);
+  quiet.send({ t: 'room', action: { kind: 'muted', slot: 0, value: true } });
+  assert.equal(host2.session().roster[0].muted, false, 'gość nie wyciszy administratora');
+  adminPad.send({ t: 'room', action: { kind: 'muted', slot: 99, value: true } });
+  adminPad.send({ t: 'room', action: { kind: 'muted', slot: 1, value: false } });
+  assert.equal(host2.session().roster[1].muted, false, 'odmucenie wraca do gry');
+  fakeNow += ANTI_SPAM.autoMuteMs + 1; // skok względem siebie, nie względem epoki
+  spammer.send({ t: 'suggest', game: 'race' });
+  assert.equal(host2.session().roster[1].suggestedGame, 'race', 'po zdjęciu kłódki nie ma zaległego cooldownu');
+
+  // Reconnect to nie nowa tożsamość: wyciszenie wraca razem z telefonem.
+  adminPad.send({ t: 'room', action: { kind: 'muted', slot: 1, value: true } });
+  wire2.dropConn(spammer.link.id);
+  const back = pairAt('Marcin2', 'Marcin');
+  assert.equal(host2.session().roster.find(p => p.nick === 'Marcin2')?.muted, true, 'powrót nie kasuje kłódki');
+  back.send({ t: 'suggest', game: 'tanks' });
+  assert.equal(host2.session().roster.find(p => p.nick === 'Marcin2')?.suggestedGame, undefined);
+
+  // Śmieć w polu `game` nie dochodzi nawet do licznika.
+  assert.equal(isPadMessage({ t: 'suggest', game: 42 }), false, 'numerek zamiast tytułu odpada na bramce');
+  assert.equal(isPadMessage({ t: 'suggest', game: 'race' }), true);
+  assert.equal(isPadMessage({ t: 'suggest', game: null }), true);
+  adminPad.send({ t: 'suggest', game: '99' as never });
+  adminPad.send({ t: 'suggest', game: 'league' });
+  assert.equal(host2.session().roster[0].suggestedGame, 'race', 'nieznany tytuł ani zapowiedź nie zmieniają głosu');
+  assert.equal(isHostMessage({ t: 'suggestAck', verdict: 'cooldown', retryInMs: 8_000 }), true);
+  assert.equal(isHostMessage({ t: 'suggestAck', verdict: 'cooldown' }), false, 'odmowa bez czasu nie przechodzi');
+
+  // Wyłączenie głosowania kasuje również urazę w licznikach.
+  const late = pairAt('Oskar');
+  late.send({ t: 'suggest', game: 'race' });
+  assert.equal(host2.session().roster[3].suggestedGame, 'race');
+  late.send({ t: 'suggest', game: 'tanks' });
+  adminPad.send({ t: 'room', action: { kind: 'suggestions', value: false } });
+  assert.equal(host2.session().roster[3].suggestedGame, undefined, 'wyłączenie głosowania czyści ekrany');
+  adminPad.send({ t: 'room', action: { kind: 'suggestions', value: true } });
+  late.send({ t: 'suggest', game: 'tanks' });
+  assert.equal(host2.session().roster[3].suggestedGame, 'tanks', 'włączenie głosowania nie trzyma urazy');
+} finally {
+  Date.now = realNow;
+}
+const loungeSource = readFileSync('src/platform/PlayerLounge.tsx', 'utf8');
+const hostSource = readFileSync('src/net/padHost.ts', 'utf8');
+assert.ok(hostSource.includes("judgeSuggest({ game: typeof msg.game === 'string'"), 'anty-spam liczy telewizor, nie telefon');
+assert.ok(loungeSource.includes('disabled={blocked || muted}'), 'wyciszony telefon nie klika w kółko');
+console.log('ANTI-SPAM SELFTEST: OK (cooldown, duplikat, sufit w oknie, eskalacja i kłódka admina, reconnect, bramka protokołu)');
 
 const safeProfile = normalizeProfile({ avatar: '__proto__', theme: 'red' });
 assert.equal(safeProfile.avatar, 'smile'); assert.equal(safeProfile.theme, 'amber'); assert.ok(safeProfile.id);
@@ -88,6 +258,16 @@ assert.equal(loadProfile().theme, 'amber');
 // QR exposes only room capability data; no TURN credentials leak into the link.
 Object.defineProperty(globalThis, 'location', { value: { search: '?srv=https%3A%2F%2Fsignal.example&turnSecret=secret', hash: '#pad=AB234&key=abcdef123456' , origin: 'https://example.com', pathname: '/JoyPad/' }, configurable: true });
 const qr = padUrlFor('ab234', 'abcdef123456'); assert.ok(qr.includes('srv=')); assert.ok(qr.includes('key=abcdef123456')); assert.ok(!qr.includes('turnSecret'));
+// Kod QR leży na ekranie godzinami, więc jego klucz musi się starzeć bez odrzucania telefonów w drodze.
+const { joinTokenAccepted, joinTokenExpired, JOIN_TOKEN_GRACE_MS, JOIN_TOKEN_TTL_MS } = await import('../src/net/joinToken');
+assert.equal(joinTokenExpired(0, JOIN_TOKEN_TTL_MS + 1), false, 'brak daty wydania = brak wygaśnięcia');
+assert.equal(joinTokenExpired(1000, 1000 + JOIN_TOKEN_TTL_MS), true);
+assert.equal(joinTokenAccepted('nowy', 'nowy', 'stary', 5000, 5000), true);
+assert.equal(joinTokenAccepted('stary', 'nowy', 'stary', 5000, 5000 + JOIN_TOKEN_GRACE_MS - 1), true, 'dołączający telefon nie może zostać odproszony w połowie drogi');
+assert.equal(joinTokenAccepted('stary', 'nowy', 'stary', 5000, 5000 + JOIN_TOKEN_GRACE_MS), false, 'łaska nie jest wieczna');
+assert.equal(joinTokenAccepted('stary', 'nowy', '', 5000, 5000), false);
+assert.equal(joinTokenAccepted(undefined, 'nowy', 'stary', 5000, 5000), false);
+assert.equal(joinTokenAccepted('', '', 'stary', 5000, 5000), false, 'pokój bez klucza nie przyjmuje nikogo');
 assert.equal(padCodeFromHash(), 'AB234'); assert.equal(padTokenFromHash(), 'abcdef123456');
 assert.equal(isPadMessage({ t: 'input', fwd: 0, turn: 0, fire: false }), true); assert.equal(isPadMessage({ t: 'input', fwd: 'oops' }), false);
 console.log('PROTOCOL SELFTEST: OK (QR capability filtering and message guard)');
@@ -115,15 +295,7 @@ assert.equal(race.highlights()[0].kind, 'lap');
 assert.ok(!race.highlights().some(m => m.kind === 'lead'), 'lap counts cannot invent race overtakes');
 console.log('MOMENTS SELFTEST: OK (real FX, streaks, lead changes, timing, bounds, lap semantics, reset)');
 
-// Results can be operated from the pilot without a mouse or a forced rematch.
-const { navigateResults } = await import('../src/console/resultsNavigation');
-let clicked = -1;
-const fakeDocument = { activeElement: null as unknown, querySelectorAll: () => controls };
-const controls = [0, 1, 2].map(index => ({ focus() { fakeDocument.activeElement = this; }, click() { clicked = index; } }));
-Object.defineProperty(globalThis, 'document', { value: fakeDocument, configurable: true });
-assert.equal(navigateResults('select'), false, 'initial select preserves the original rematch shortcut');
-assert.equal(navigateResults('down'), true); assert.equal(fakeDocument.activeElement, controls[0]);
-assert.equal(navigateResults('select'), true); assert.equal(clicked, 0);
-navigateResults('up'); assert.equal(fakeDocument.activeElement, controls[2], 'focus wraps');
-assert.equal(navigateResults('home'), false, 'home remains a game-shell action');
-console.log('RESULTS NAVIGATION SELFTEST: OK (focus, select, wrap, home and default rematch)');
+// Ruch po ekranie wyników robi nawigacja przestrzenna (`focusSurface` + `useUiControls`),
+// więc płaska lista `navigateResults` została wycofana. Jej zamiennik testuje
+// `selftest:console` (sekcja UI CONTROL: powierzchnie menu gier, stepperzy i bramka
+// „pad gra / pilot steruje menu").

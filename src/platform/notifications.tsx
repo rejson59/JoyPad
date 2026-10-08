@@ -43,6 +43,10 @@ export function SessionNotifications({ session }: { session: SessionState }) {
         systemSound('join');
         notify(text('notifications.playerJoined', { name: p.nick }), text('notifications.playerConnected', { n: p.slot + 1 }), 'player');
       }
+      // Wyciszenie jest widoczne dla admina w załodze, ale dobrze, żeby padło też w strumień:
+      // inaczej nikt nie pamięta, czy to telewizor sam się zabezpieczył, czy ktoś kliknął.
+      else if (p.muted && !old.muted) notify(text('notifications.playerMuted', { name: p.nick }), text('notifications.playerMutedDetail'));
+      else if (!p.muted && old.muted) notify(text('notifications.playerUnmuted', { name: p.nick }), undefined, 'success');
       else if (p.suggestedGame && p.suggestedGame !== old.suggestedGame) notify(text('notifications.suggestsGame', { name: p.nick }), localizeGame(gameInfo(p.suggestedGame), language).title);
       else if (p.ready && !old.ready) notify(text('notifications.ready', { name: p.nick }), text('notifications.readyDetail'), 'success');
     }

@@ -30,7 +30,12 @@ export function useCurtain(sharedElements = false) {
   useEffect(() => () => { timers.current.forEach(clearTimeout); busy.current = false; }, []);
 
   const begin = useCallback((color: string, swap: () => void) => {
-    if (busy.current) return;
+    // Kurtyna jest kosmetyką, podmiana treści — faktem. Gdy jedno przejście już leci,
+    // żądanie NIE może zniknąć: tak gubiło się „Wróć do biblioteki" kliknięte w trakcie
+    // transferu (wejście w grę, rewanż). Wtedy podmieniamy od razu, bez animacji.
+    if (busy.current) { swap(); return; }
+    let swapped = false;
+    const run = () => { if (swapped) return; swapped = true; swap(); };
     let reduced = false;
     try { reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { /* brakuje API */ }
     if (reduced || getPreferences().motion === 'reduced') { swap(); return; }
@@ -38,15 +43,19 @@ export function useCurtain(sharedElements = false) {
     timers.current = [];
     busy.current = true;
     if (sharedElements && !document.querySelector('canvas,dialog[open]') && typeof document.startViewTransition === 'function') {
-      const transition = document.startViewTransition(() => { flushSync(swap); });
-      const timeout = window.setTimeout(() => transition.skipTransition(), 700);
-      timers.current.push(timeout);
-      void transition.finished.catch(() => {}).finally(() => { clearTimeout(timeout); busy.current = false; });
-      return;
+      try {
+        const transition = document.startViewTransition(() => { flushSync(run); });
+        const timeout = window.setTimeout(() => { run(); try { transition.skipTransition(); } catch { /* domknięte */ } }, 700);
+        timers.current.push(timeout);
+        // `finished` nie dojdzie do skutku, gdy przeglądarka odrzuci klatkę (karta w tle)
+        // albo gdy sam transition się posypie — `run()` i tak musi spełnić podmianę.
+        void transition.finished.catch(() => {}).finally(() => { clearTimeout(timeout); busy.current = false; run(); });
+        return;
+      } catch { /* API niedostępne w tej klatce — schodzimy do kurtyny CSS */ }
     }
     setState({ phase: 'cover', color });
     timers.current.push(window.setTimeout(() => {
-      swap();
+      run();
       setState({ phase: 'reveal', color });
     }, CURTAIN_COVER_MS));
     timers.current.push(window.setTimeout(() => {
@@ -121,7 +130,7 @@ export function SegmentedControl<T extends string>({
   const index = Math.max(0, options.findIndex(o => o.value === value));
   const n = options.length;
   return (
-    <div className="relative grid auto-cols-fr grid-flow-col items-center rounded-xl border border-white/10 bg-black/30 p-1" role="tablist" aria-label={label}>
+    <div className="relative grid auto-cols-fr grid-flow-col items-center rounded-full border border-white/10 bg-black/40 p-1 backdrop-blur-md" role="tablist" aria-label={label}>
       <span
         aria-hidden="true"
         className="absolute inset-y-1 rounded-lg border"
@@ -129,10 +138,10 @@ export function SegmentedControl<T extends string>({
           left: 4,
           width: `calc((100% - 8px) / ${n})`,
           transform: `translateX(${index * 100}%)`,
-          transition: 'transform 300ms var(--ease-out-quart), background 200ms, border-color 200ms, box-shadow 200ms',
-          background: `color-mix(in srgb, ${accent} 18%, rgba(0,0,0,.4))`,
-          borderColor: `color-mix(in srgb, ${accent} 55%, transparent)`,
-          boxShadow: `0 0 18px color-mix(in srgb, ${accent} 25%, transparent)`,
+          transition: 'transform 420ms var(--liquid-spring), background 240ms, border-color 240ms, box-shadow 240ms',
+          background: `linear-gradient(155deg, rgba(255,255,255,.2), transparent 58%), color-mix(in srgb, ${accent} 20%, rgba(0,0,0,.45))`,
+          borderColor: `color-mix(in srgb, ${accent} 58%, transparent)`,
+          boxShadow: `0 0 22px color-mix(in srgb, ${accent} 26%, transparent), inset 0 1px rgba(255,255,255,.28)`,
         }}
       />
       {options.map(o => {
@@ -144,7 +153,7 @@ export function SegmentedControl<T extends string>({
             role="tab"
             aria-selected={active}
             onClick={() => onChange(o.value)}
-            className={`press relative z-10 rounded-lg px-2 py-1.5 text-[11px] font-bold tracking-wide transition-colors ${active ? '' : 'text-slate-500 hover:text-slate-300'}`}
+            className={`press relative z-10 rounded-full px-3 py-1.5 text-[11px] font-bold tracking-wide transition-colors ${active ? '' : 'text-slate-500 hover:text-slate-300'}`}
             style={active ? { color: accent } : undefined}
           >
             {o.label}

@@ -52,6 +52,7 @@ To nadal aplikacja przeglądarkowa: Vibration API nie steruje amplitudą ani ada
 | **Neonowy Pęd** | Właściwy wyścig Three.js z miasta ZIP-a: mokry proceduralny tor, drifty, rampy, turbo, itemy i split-screen | Kierunek jazdy + akcja bonusu |
 | **Orbitalna Fala** | Kooperacyjna obrona przed kolejnymi falami dronów i asteroid; życia, osłony, naprawy i szybki ogień | Lot, celowanie i strzał |
 | **Wężowy Wir — beta** | Taktyczna arena 2D w stalowo-bursztynowej oprawie: impulsy, przeszkody, boty i sprint | Cztery kierunki + sprint |
+| **WEBZA — Nocna Dostawa** | Kurierzy pizzy huśtają się na sieci między dachami i trafiają w światło zamówień; współpraca z oceną zespołu albo rywalizacja o MVP | Joystick: bieg · AKCJA: sieć · pizza leci sama w klienta |
 | **BlockCraft — zapowiedź** | Planowany sandbox z budowaniem z bloków. To zapowiedź, niegrywalna gra nie jest jeszcze dostępna. | Szczegóły wkrótce |
 | **Turbo League — zapowiedź** | Planowany car soccer w perspektywie 3D-lite: auta, boost, odbicia i bramki | Szczegóły wkrótce |
 
@@ -59,7 +60,7 @@ Dostępne gry mają własny ekran wejściowy, zasady, ustawienia rundy, HUD i ek
 
 ### Grafika i wydajność
 
-`Neonowy Pęd` korzysta z Three.js, a `Orbitalna Fala` próbuje lekkiego WebGL2 z fallbackiem Canvas2D. Silniki ładują się leniwie po wybraniu gry; `Wężowy Wir` i `Stalowy Front` używają lekkiego Canvas 2D. Profile jakości ograniczają DPR i koszt efektów, animacja joysticka jest aktualizowana najwyżej raz na klatkę, a renderowanie zatrzymuje się po ukryciu karty. Wężowy Wir dodatkowo interpoluje ruch segmentów, zachowując niskie obciążenie.
+`Neonowy Pęd` i `WEBZA` korzystają z Three.js (WEBZA wymaga WebGL2 i nie ma wersji zastępczej), a `Orbitalna Fala` próbuje lekkiego WebGL2 z fallbackiem Canvas2D. Silniki ładują się leniwie po wybraniu gry; `Wężowy Wir` i `Stalowy Front` używają lekkiego Canvas 2D. Profile jakości ograniczają DPR i koszt efektów, animacja joysticka jest aktualizowana najwyżej raz na klatkę, a renderowanie zatrzymuje się po ukryciu karty. Wężowy Wir dodatkowo interpoluje ruch segmentów, zachowując niskie obciążenie.
 
 ## Jak zagrać
 

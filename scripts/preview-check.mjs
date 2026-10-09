@@ -79,6 +79,19 @@ for (const dir of ['images', 'brand']) {
 for (const name of ['tanks', 'race', 'orbit']) {
   for (const ext of ['mp4', 'webm']) await get(`/previews/${name}.${ext}`);
 }
+// 4b. Zasoby gier wciągniętych z paczek ZIP (public/games/<gra>/…): silnik ładuje je sam przez
+// BASE_URL, a gdy któregoś brak, WEBZA maluje miasto na płasko zamiast zgłosić błąd.
+async function walk(dir, prefix = '') {
+  const out = [];
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) out.push(...await walk(`${dir}/${entry.name}`, `${prefix}${entry.name}/`));
+    else out.push(`${prefix}${entry.name}`);
+  }
+  return out;
+}
+if (existsSync(`${PREVIEW}/games`)) {
+  for (const file of await walk(`${PREVIEW}/games`)) await get(`/games/${file}`);
+}
 // 5. Strona kontrolna podglądu — pierwszy ratunek, gdy coś nie działa.
 await get('/podglad.html');
 

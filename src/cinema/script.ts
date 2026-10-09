@@ -38,6 +38,8 @@
  *   ease: …    → krzywa wejścia, jedna z nazw w `EASE_NAMES` (bez odbić!).
  */
 
+import { GAMES } from '../arcade/catalog';
+
 export type Lang = 'pl' | 'en';
 
 export interface Text { pl: string; en: string }
@@ -154,6 +156,17 @@ export interface FilmScript {
 
 const t = (pl: string, en: string): Text => ({ pl, en });
 
+/**
+ * Liczba światów w napisach filmu pochodzi z katalogu gier, nie z ręcznego wpisu — dodanie
+ * gry do biblioteki nie może zostawić w poradniku starej liczby. (`selftest:cinema` pilnuje.)
+ */
+const WORLDS = GAMES.length;
+const WORLD_WORDS: Record<number, [string, string]> = {
+  5: ['Pięć', 'Five'], 6: ['Sześć', 'Six'], 7: ['Siedem', 'Seven'], 8: ['Osiem', 'Eight'], 9: ['Dziewięć', 'Nine'], 10: ['Dziesięć', 'Ten'],
+};
+const worldsPl = WORLD_WORDS[WORLDS]?.[0] ?? String(WORLDS);
+const worldsEn = WORLD_WORDS[WORLDS]?.[1] ?? String(WORLDS);
+
 /** Wersja skryptu: podbij, gdy zmienisz film na tyle, że warto zapytać ponownie. */
 export const FILM_VERSION = 1;
 
@@ -237,8 +250,8 @@ export const filmScript: FilmScript = {
       ms: 5200,
       label: t('BIBLIOTEKA', 'LIBRARY'),
       title: t('Wybierz świat.', 'Choose a world.'),
-      sub: t('Sześć światów na jednym ekranie — od czołgów po neonowe wyścigi.', 'Six worlds on one screen — from tanks to neon racing.'),
-      chips: [t('6 ŚWIATÓW', '6 WORLDS'), t('BEZ INSTALACJI', 'NOTHING TO INSTALL'), t('2–4 GRACZY', '2–4 PLAYERS')],
+      sub: t(`${worldsPl} światów na jednym ekranie — od czołgów po pizzę z dachów.`, `${worldsEn} worlds on one screen — from tanks to rooftop pizza.`),
+      chips: [t(`${WORLDS} ŚWIATÓW`, `${WORLDS} WORLDS`), t('BEZ INSTALACJI', 'NOTHING TO INSTALL'), t('2–4 GRACZY', '2–4 PLAYERS')],
       extra: {
         soonTag: t('ZAPOWIEDŹ', 'IN DEVELOPMENT'),
         // Legenda sterowania (runda 19). Poradnik pokazywał gry i pada, ale nigdy nie

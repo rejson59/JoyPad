@@ -15,6 +15,7 @@ import {
 } from '../src/cinema/timeline';
 import { sanitizeCinemaPrefs, shouldAskOnStart, defaultCinemaPrefs, setCinemaPrefs, getCinemaPrefs } from '../src/cinema/store';
 import { FILM_WARM_AFTER_MS, PANE_HOLD_MS } from '../src/cinema/ready';
+import { GAMES } from '../src/arcade/catalog';
 
 const timeline = buildTimeline(filmScript.scenes);
 
@@ -84,6 +85,19 @@ console.log('FILM DATA SELFTEST: OK (żadnego martwego pola w danych scen)');
     'numeracja scen w docs/cinema.md nie zgadza się ze skryptem');
 }
 console.log('FILM DOCS SELFTEST: OK (tabela scen w dokumentacji zgadza się ze skryptem)');
+
+/* --- ŚWIATY: poradnik nie może kłamać, ile gier ma biblioteka ------------ */
+/* Film mówi „N światów”. Liczba pochodzi z `GAMES.length`, a ta asercja pilnuje, żeby nikt
+   nie wpisał jej z powrotem na sztywno — nowa gra w katalogu zmienia napis sama. */
+{
+  const library = filmScript.scenes.find(scene => scene.id === 'library');
+  assert.ok(library, 'brak sceny biblioteki');
+  for (const lang of ['pl', 'en'] as const) {
+    assert.ok(library.chips?.[0]?.[lang].includes(String(GAMES.length)), `chip „${library.chips?.[0]?.[lang]}” (${lang}) nie zgadza się z liczbą gier w bibliotece (${GAMES.length})`);
+  }
+  assert.ok(!/Sześć|Six worlds/.test(JSON.stringify(library.sub)) || GAMES.length === 6, 'napis biblioteki ma starą liczbę światów');
+}
+console.log('FILM WORLDS SELFTEST: OK (liczba światów w poradniku = liczba gier w katalogu)');
 
 /* --- ŁADOWANIE: pobieranie musi zaczynać się PRZED odtwarzaniem --------- */
 /* Zgłoszenie z rundy 19: „coś się za długo wczytuje ten poradnik”. Przyczyny były

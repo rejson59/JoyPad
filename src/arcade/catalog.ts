@@ -1,6 +1,6 @@
 import type { Language } from '../platform/i18n';
 
-export const GAME_IDS = ['tanks', 'race', 'orbit', 'snake', 'league', 'blockcraft'] as const;
+export const GAME_IDS = ['tanks', 'race', 'orbit', 'snake', 'league', 'pizza', 'blockcraft'] as const;
 export type GameId = typeof GAME_IDS[number];
 
 export interface GameText {
@@ -96,7 +96,20 @@ export const GAMES: GameInfo[] = [
     }),
   },
   {
-    id: 'blockcraft', number: '06', title: 'BlockCraft', eyebrow: 'ZAPOWIEDŹ', genre: 'Sandbox / budowanie', wip: true,
+    id: 'pizza', number: '06', title: 'WEBZA', eyebrow: 'NOCNA DOSTAWA', genre: 'Dostawa pizzy 3D',
+    description: 'Noc, dachy i pizza, która nie może ostygnąć. Huśtaj się na sieci między budynkami i trafiaj w światło zamówień — im wyżej i bardziej widowiskowo, tym więcej punktów.',
+    teaser: 'Dachy • Sieć • Pizza', cover: 'images/webza.webp', accent: '#ff9a52', accentSoft: '#8a421c',
+    controls: 'Joystick: bieg · AKCJA: sieć (przytrzymaj) · pizza leci sama w klienta', players: '1–4 graczy (współpraca lub rywalizacja)',
+    features: ['Huśtanie na sieci', 'Zamówienia z dachów', 'Współpraca i rywalizacja'], renderTag: '3D',
+    english: english({
+      title: 'WEBZA', eyebrow: 'NIGHT DELIVERY', genre: '3D pizza delivery',
+      description: 'Night, rooftops and a pizza that must not go cold. Swing on your web between buildings and hit the light of every order — the higher and flashier, the more points.',
+      teaser: 'Rooftops • Web • Pizza', controls: 'Stick: run · ACTION: web (hold) · the pizza flies at the customer by itself', players: '1–4 players (co-op or versus)',
+      features: ['Web swinging', 'Rooftop orders', 'Co-op and versus'],
+    }),
+  },
+  {
+    id: 'blockcraft', number: '07', title: 'BlockCraft', eyebrow: 'ZAPOWIEDŹ', genre: 'Sandbox / budowanie', wip: true,
     description: 'Przygotowujemy sandbox z budowaniem z bloków: swobodną eksplorację, zbieranie surowców i wspólne tworzenie własnego świata. To zapowiedź — gra nie jest jeszcze dostępna.',
     teaser: 'Blokowy świat • Budowanie • Co-op', cover: 'images/blockcraft-cover.webp', accent: '#7cd67f', accentSoft: '#285d38',
     controls: 'Sterowanie i zasady gry są jeszcze w przygotowaniu', players: 'Szczegóły wkrótce',

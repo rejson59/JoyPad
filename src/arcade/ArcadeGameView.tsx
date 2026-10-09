@@ -42,6 +42,22 @@ const RULES: Record<ArcadeId, Record<Language, GameRules>> = {
     pl: { primaryLabel: 'LIMIT GOLI', primary: ['3 gole', '5 goli', '7 goli'], secondaryLabel: 'RYWALE SI', secondary: ['Bez botów', '1 bot', '2 boty', '3 boty'], hint: 'Pchaj piłkę do bramki. Joystick steruje autem, AKCJA to boost. Odbicia i turbo mają większą siłę niż zwykła jazda.', action: 'TURBO', win: 'Pierwsza drużyna do limitu wygrywa.' },
     en: { primaryLabel: 'GOAL LIMIT', primary: ['3 goals', '5 goals', '7 goals'], secondaryLabel: 'AI RIVALS', secondary: ['No bots', '1 bot', '2 bots', '3 bots'], hint: 'Drive the ball into the goal. Steer with the stick and hold ACTION to boost. Bounces and turbo hits carry more force than regular driving.', action: 'TURBO', win: 'First team to the goal limit wins.' },
   },
+  pizza: {
+    pl: { primaryLabel: 'DŁUGOŚĆ ZMIANY', primary: ['Krótka · 1:00', 'Zmiana · 2:00', 'Maraton · 3:00'], secondaryLabel: 'TRYB', secondary: ['Współpraca', 'Rywalizacja'], hint: 'Joystick: bieg. Przytrzymaj AKCJĘ — kurier wystrzeli sieć; puść w dole łuku, by nabrać rozpędu. Pizzę rzuca sam, gdy masz klienta przed sobą. Pusty plecak uzupełnisz przy furgonetce.', action: 'SIEĆ', win: 'Dowieźcie jak najwięcej pizz przed końcem zmiany.' },
+    en: { primaryLabel: 'SHIFT LENGTH', primary: ['Short · 1:00', 'Shift · 2:00', 'Marathon · 3:00'], secondaryLabel: 'MODE', secondary: ['Co-op', 'Versus'], hint: 'Stick: run. Hold ACTION — your courier shoots a web; let go at the bottom of the arc to gain speed. The pizza throws itself when a customer is ahead of you. Refill an empty bag at the van.', action: 'WEB', win: 'Deliver as many pizzas as you can before the shift ends.' },
+  },
+};
+
+/**
+ * Ustawienia rundy per gra: domyślne indeksy opcji (jak w `RULES`) i to, czy puste sloty
+ * zajmują boty. Jedna tabela zamiast rozsianych `id === 'race' || …` — nowa gra to jeden wiersz.
+ */
+const SETUP: Record<ArcadeId, { primary: number; secondary: number; bots: boolean }> = {
+  race: { primary: 1, secondary: 2, bots: true },
+  orbit: { primary: 0, secondary: 1, bots: false },
+  snake: { primary: 1, secondary: 1, bots: true },
+  league: { primary: 1, secondary: 2, bots: true },
+  pizza: { primary: 1, secondary: 0, bots: false },
 };
 
 const formatTime = (n: number) => `${Math.floor(n / 60)}:${String(Math.floor(n % 60)).padStart(2, '0')}`;
@@ -85,6 +101,12 @@ async function createRound(id: ArcadeId, canvas: HTMLCanvasElement, config: Roun
       if (hasWebGL2(canvas)) return new (await import('./webgl/League3D')).League3DRound(canvas, config);
       return new (await import('./games/League')).LeagueRound(canvas, config);
     }
+    case 'pizza': {
+      // WEBZA to czyste Three.js — bez WebGL2 nie ma wersji zastępczej, więc zgłaszamy to wprost
+      // (widok wraca do menu zamiast zawisnąć na pustym płótnie).
+      if (!hasWebGL2(canvas)) throw new Error('WEBZA wymaga WebGL2');
+      return new (await import('./pizza/PizzaRound')).PizzaRound(canvas, config);
+    }
   }
 }
 
@@ -124,8 +146,8 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   const { language, t } = useT();
   const info = localizeGame(gameInfo(id), language), rules = RULES[id][language];
   const [stage, setStage] = useState<Stage>('menu');
-  const [primary, setPrimary] = useState(() => readChoice(`${id}.primary`, rules.primary.map((_, i) => i), id === 'race' || id === 'snake' || id === 'league' ? 1 : 0));
-  const [secondary, setSecondary] = useState(() => readChoice(`${id}.secondary`, rules.secondary.map((_, i) => i), id === 'race' || id === 'league' ? 2 : 1));
+  const [primary, setPrimary] = useState(() => readChoice(`${id}.primary`, rules.primary.map((_, i) => i), SETUP[id].primary));
+  const [secondary, setSecondary] = useState(() => readChoice(`${id}.secondary`, rules.secondary.map((_, i) => i), SETUP[id].secondary));
   const [displayMode, setDisplayMode] = useState<DisplayMode>(() => readPreference('joypad-display-mode', 'shared', ['shared', 'split'] as const));
   const [quality, setQuality] = useState<RenderQuality>(() => readPreference('joypad-render-quality', 'balanced', ['performance', 'balanced', 'quality'] as const));
   const [matchMode, setMatchMode] = useState<MatchMode>(() => readPreference('joypad-match-mode', 'classic', ['classic', 'tournament', '2v2'] as const));
@@ -188,7 +210,7 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
       const pads = padHost.slots().filter((p): p is NonNullable<typeof p> => p !== null);
       const humans: Racer[] = pads.length ? pads.map(p => ({ slot: p.slot, name: p.nick, color: COLORS[p.slot], isBot: false })) : [{ slot: 0, name: language === 'en' ? 'PLAYER 1' : 'GRACZ 1', color: COLORS[0], isBot: false }];
       const bots: Racer[] = [];
-      if (id === 'race' || id === 'snake' || id === 'league') {
+      if (SETUP[id].bots) {
         for (let slot = 0; slot < 4 && bots.length < secondary; slot++) {
           if (humans.some(h => h.slot === slot)) continue;
           bots.push({ slot, name: `BOT ${bots.length + 1}`, color: COLORS[slot], isBot: true });

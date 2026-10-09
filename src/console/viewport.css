@@ -82,6 +82,8 @@ html[data-profile="tablet"] .os-footer button,
 html[data-profile="tablet"] .os-session-invite,
 html[data-profile="tablet"] .os-lab-link { min-height:46px; }
 html[data-profile="tablet"] .os-game-rail { grid-template-columns:repeat(3,minmax(0,1fr)); }
+/* Przy 7+ światach trzy kolumny dają trzy rzędy — niższe kafle trzymają wysokość biblioteki blisko dawnych dwóch rzędów. */
+html[data-profile="tablet"] .os-game-tile { height:clamp(92px,12.5dvh,176px); }
 html[data-profile="tablet"] .os-stage { grid-template-columns:minmax(0,1fr) minmax(250px,32%); gap:clamp(20px,3vw,40px); }
 @media (orientation:portrait) {
   html[data-profile="tablet"] .os-game-rail { grid-template-columns:repeat(2,minmax(0,1fr)); }

@@ -60,14 +60,14 @@ const typeOf = (file) => TYPES[path.extname(file).toLowerCase()] ?? 'application
  * Do rundy 16 serwer wysyłał `no-store` do wszystkiego — bezpieczne dla HTML, ale
  * zgubne dla filmu: klipy MP4 są wielomegabajtowe, a scena pokazująca nagrania
  * pobierała je od nowa przy KAŻDYM wejściu (użytkownik widział „nie wszystko się
- * ładuje"). Chunki mają hash w nazwie, a `assets/`, `previews/`, `images/` i `brand/`
+ * ładuje"). Chunki mają hash w nazwie, a `assets/`, `previews/`, `images/`, `brand/` i `games/`
  * zmieniają się tylko przy buildzie, więc mogą być cache'owane agresywnie — dokładnie
  * tak, jak robi to GitHub Pages w produkcji. HTML, manifest i strona kontrolna
  * zostają `no-store`, bo tam zawsze ma być najświeższa wersja.
  */
 function cacheHeadersFor(file) {
   const relative = path.relative(ROOT, file).split(path.sep)[0];
-  if (['assets', 'previews', 'images', 'brand'].includes(relative)) {
+  if (['assets', 'previews', 'images', 'brand', 'games'].includes(relative)) {
     // `assets/` ma hash w nazwie → `immutable`; reszta krócej, żeby podmiana pliku była widoczna.
     return relative === 'assets'
       ? 'public, max-age=31536000, immutable'

@@ -54,7 +54,7 @@ export default tseslint.config(
     // Testy silników 3D w node (bez GPU i przeglądarki): atrapy DOM/renderera i testy white-box
     // sięgają po prywatny stan silnika, a atrapy są z natury „uniwersalne” — `any` jest tu zamierzony.
     // Kod gier i adapterów (src/arcade/**) dalej podlega pełnym regułom.
-    files: ["scripts/headless.ts", "scripts/*-engine-selftest.ts", "scripts/pizza-selftest.ts"],
+    files: ["scripts/headless.ts", "scripts/*-engine-selftest.ts", "scripts/pizza-selftest.ts", "scripts/league-selftest.ts"],
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
     },

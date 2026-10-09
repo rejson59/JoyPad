@@ -10,7 +10,7 @@ Ten dokument opisuje, co zrobiono z archiwami leżącymi w `main` (runda 19), ja
 |---|---|---|
 | `orbitalna-fala.zip` | silnik STAR CLASH 3D | **już w bibliotece** jako *Orbitalna Fala* (`src/arcade/starclash/`; `audio.ts` identyczny bajt w bajt, `Game.ts` z adaptacją JoyPada) — bez duplikatu |
 | `multiplayer-superhero-pizza-delivery.zip` | WEBZA — „Nocna Dostawa”, kurierzy pizzy na dachach | **nowa gra** `pizza` (niżej) |
-| `nitro-league.zip` | samochodowa piłka nożna 3D | patrz sekcja *Turbo League* |
+| `nitro-league.zip` | samochodowa piłka nożna 3D (~6000 linii, własna fizyka) | **wypełnia slot Turbo League** (`league`, dotąd zapowiedź) — niżej |
 | `threejs-multiplayer-casino-game.zip` | „Bezdomni w Kasynie” (React Three Fiber) | patrz sekcja *Kasyno* |
 
 ## Przegląd przed uruchomieniem (wszystkie paczki)
@@ -76,3 +76,63 @@ Błąd ładowania (np. brak pamięci GPU) kończy się jednym, jasnym ekranem wy
 **Cofnięcie:** usuń `src/arcade/pizza/`, `public/games/pizza/`, `public/images/webza.webp`, `scripts/pizza-selftest.ts`
 (+ skrypt `selftest:pizza` w `package.json`), wpis `pizza` w `catalog.ts` (`GAME_IDS` i `GAMES`), `RULES.pizza`,
 `SETUP.pizza` i `case 'pizza'` w `ArcadeGameView.tsx` oraz wiersze w README i `platform-update.md`.
+
+## Turbo League (`league`) — silnik z `nitro-league.zip`
+
+**Dlaczego slot Turbo League, a nie nowy kafel:** biblioteka miała już zapowiedź „Turbo League” (`wip`), a paczka to
+dokładnie ten gatunek (car soccer 3D). Drugi kafel o tym samym gatunku byłby mylący, więc silnik wypełnia istniejący slot;
+**nazwa w grze to Turbo League** (napisy „NITRO LEAGUE” na tablicy wyników i ekranach LED stadionu zamieniono). Prosty
+prototyp Canvas 2D (`games/League.ts`) zostaje jako wersja tylko dla przeglądarek bez WebGL2; surowy prototyp WebGL
+(`webgl/League3D.ts`) usunięto jako martwy kod.
+
+**Źródło:** `src/arcade/league-next/` — silnik z paczki (`Car`, `Ball`, `physics`, `arena`, `stadium`, `ai`, `audio`,
+`carModel`, `textures`, `particles`…) plus nowe: `LeagueGame.ts` (przerobiony `Game.ts`), `bridge.ts` (czysta logika),
+`markers.ts` (etykiety nad autami), `LeagueRound.ts` (adapter `GameRound`). Bez nowych zależności i bez assetów — stadion i auta są proceduralne.
+
+**Co usunięto z paczki:** menu, garaż, ustawienia, tryb demo, kamerę pościgową jednego gracza, `InputManager`, `localStorage`
+i fonty Google. **Co zostało:** fizyka aut i piłki (krok 1/120 s), stadion, boost-pady, AI botów, demolki, powtórki goli, dźwięk.
+
+**Skład drużyn** (`assignTeams`; ludzie + boty z `RoundConfig.players`, razem maks. 4 auta): ludzie siadają naprzemiennie
+(niebiescy, pomarańczowi…), więc dwóch ludzi gra przeciw sobie; boty uzupełniają mniejszą drużynę, a przy remisie idą do niebieskich.
+
+| auta | skład |
+|---|---|
+| 1 człowiek | trening bez rywala (gole do pustej bramki liczą się normalnie) |
+| 2 | 1v1 |
+| 3 | 2v1 (człowiek + bot kontra bot; dwóch ludzi + bot: bot do niebieskich) |
+| 4 | 2v2 |
+
+**Zasady meczu:** `primary` = limit goli (3 / 5 / 7); mecz trwa 3:00; po czasie wygrywa więcej goli (gdy piłka dotknie ziemi),
+remis rozstrzyga **złoty gol w dogrywce z sufitem 2:00** — bez gola mecz kończy się remisem. Czas meczu nie płynie podczas oprawy
+gola (zwolnione tempo, powtórka ostatnich 4,5 s, wznowienie 3-2-1); powtórkę można pominąć przyciskiem. Samobój zalicza wynik rywalom.
+
+**Sterowanie (kontrakt „gałka + jeden przycisk”):** gałka wskazuje **kierunek jazdy w osiach ekranu** (góra = dalej od
+kamery) — auto samo skręca (`driveToward`: sterowanie proporcjonalne do kąta, zawracanie z poślizgiem) i przyspiesza, puszczona gałka
+hamuje; przycisk = **boost** (przytrzymaj). Brak skoku i trików powietrznych — pad ich nie obsłuży (zgodnie z promptem §1);
+w powietrzu auto samo się wyrównuje (`autoLevel`), a zablokowane na dachu odwraca się po 2,2 s.
+
+**Kamera wspólna:** po stronie +X, pod stałym kątem 56°, więc prawo ekranu to −Z — **niebiescy atakują w prawo, pomarańczowi w lewo**.
+Ostrość i dystans dobierane są tak, by piłka i auta ludzi zawsze mieściły się w kadrze (oddala się szybko, przybliża powoli, 30–92 m);
+boty daleko od akcji nie wymuszają oddalenia. Kąt jest stromy, bo nieprzezroczysty panel ściany sięga tylko 6,4 m (wyżej jest szkło),
+więc zasłania wąski pas przy samej bandzie. Auta są w kolorze **drużyny**, a gracz — w kolorze **slotu** (smuga i etykieta z nickiem
+nad dachem, o stałym rozmiarze na ekranie).
+
+**Poprawki fizyki z paczki** (znalezione przez `selftest:league`; oba zabezpieczone regresją):
+1. `Car.groundStep`: tarcie boczne dodawało całą utraconą prędkość boczną do prędkości do przodu, więc **każdy skręt pompował prędkość
+   wykładniczo** (~0,9·ω na sekundę) do limitu 23 m/s bez boosta — przy sterowaniu gałką, gdzie skręca się cały czas, boost byłby zbędny.
+   Teraz przejście energii jest energetyczne (z 10% strat); limit jazdy to 14,1 m/s, a boost dochodzi do 23.
+2. `Trail.update`: indeks poprzedniego punktu nie był przycięty do długości smugi, więc dla smugi krótszej od pojemności metoda rzucała wyjątek
+   w każdej klatce rozpędzania (w oryginale pętla gry łapała go i gubiła resztę klatki: kamerę, HUD i render).
+
+**Wyniki i kontrakt platformy:** `RoundResult` ma jedno `winnerSlot` i `allWon` dla całej ekipy, więc: wszyscy ludzie w zwycięskiej drużynie →
+`allWon: true`; ludzie po obu stronach → `winnerSlot` = najlepszy człowiek zwycięzców, a wynik drużynowy trafia do `detail` każdego gracza
+(przegrani nigdy nie dostają `allWon`); wygrały boty albo remis → brak zwycięzcy. **Znane ograniczenie:** gdy ludzie grają po obu stronach,
+pozostali zwycięzcy dostają haptykę „lose” (host wysyła `win` tylko `winnerSlot`). Minimalna przyszła zmiana kontraktu:
+`RoundResult.winnerSlots?: number[]` — nie wprowadzona, bo to zmiana platformy.
+
+**Ograniczenia:** brak split-screen (wspólna kamera), brak nagrania podglądu (okładka), wydajność GPU nie była mierzona
+(stadion generuje proceduralne tekstury przy starcie rundy — na słabym sprzęcie użyj profilu „płynność”).
+
+**Cofnięcie:** usuń `src/arcade/league-next/`, `scripts/league-selftest.ts` (+ `selftest:league` w `package.json` i wpis w override ESLint),
+w `ArcadeGameView.tsx` przywróć `case 'league'` (prototyp `games/League`), `RULES.league` i `SETUP.league`; w `catalog.ts` przywróć `wip: true`
+i dawne teksty; przywróć `webgl/League3D.ts` z historii gita, jeśli ma wrócić.

@@ -39,8 +39,8 @@ const RULES: Record<ArcadeId, Record<Language, GameRules>> = {
     en: { primaryLabel: 'SCORE TO WIN', primary: ['8 points', '12 points', '16 points'], secondaryLabel: 'AI RIVALS', secondary: ['No bots', '1 bot', '2 bots', '3 bots'], hint: 'Tap a direction on your phone or use the keyboard. Collect energy, avoid steel obstacles and rivals. Hold SPRINT to speed up — it uses energy.', action: 'SPRINT', win: 'First to the score target wins.' },
   },
   league: {
-    pl: { primaryLabel: 'LIMIT GOLI', primary: ['3 gole', '5 goli', '7 goli'], secondaryLabel: 'RYWALE SI', secondary: ['Bez botów', '1 bot', '2 boty', '3 boty'], hint: 'Pchaj piłkę do bramki. Joystick steruje autem, AKCJA to boost. Odbicia i turbo mają większą siłę niż zwykła jazda.', action: 'TURBO', win: 'Pierwsza drużyna do limitu wygrywa.' },
-    en: { primaryLabel: 'GOAL LIMIT', primary: ['3 goals', '5 goals', '7 goals'], secondaryLabel: 'AI RIVALS', secondary: ['No bots', '1 bot', '2 bots', '3 bots'], hint: 'Drive the ball into the goal. Steer with the stick and hold ACTION to boost. Bounces and turbo hits carry more force than regular driving.', action: 'TURBO', win: 'First team to the goal limit wins.' },
+    pl: { primaryLabel: 'LIMIT GOLI', primary: ['3 gole', '5 goli', '7 goli'], secondaryLabel: 'BOTY', secondary: ['Bez botów', '1 bot', '2 boty', '3 boty'], hint: 'Joystick wskazuje kierunek jazdy — auto samo skręca i przyspiesza, puszczona gałka hamuje. Przytrzymaj AKCJĘ, by użyć boosta; żółte pola uzupełniają paliwo. Niebiescy atakują w prawo, pomarańczowi w lewo.', action: 'BOOST', win: 'Pierwsza drużyna do limitu goli wygrywa; remis po 3 minutach rozstrzyga złoty gol.' },
+    en: { primaryLabel: 'GOAL LIMIT', primary: ['3 goals', '5 goals', '7 goals'], secondaryLabel: 'BOTS', secondary: ['No bots', '1 bot', '2 bots', '3 bots'], hint: 'The stick points where you want to drive — the car turns and accelerates by itself, and letting go brakes. Hold ACTION to boost; yellow pads refill it. Blue attacks to the right, orange to the left.', action: 'BOOST', win: 'First team to the goal limit wins; a tie after 3 minutes is settled by a golden goal.' },
   },
   pizza: {
     pl: { primaryLabel: 'DŁUGOŚĆ ZMIANY', primary: ['Krótka · 1:00', 'Zmiana · 2:00', 'Maraton · 3:00'], secondaryLabel: 'TRYB', secondary: ['Współpraca', 'Rywalizacja'], hint: 'Joystick: bieg. Przytrzymaj AKCJĘ — kurier wystrzeli sieć; puść w dole łuku, by nabrać rozpędu. Pizzę rzuca sam, gdy masz klienta przed sobą. Pusty plecak uzupełnisz przy furgonetce.', action: 'SIEĆ', win: 'Dowieźcie jak najwięcej pizz przed końcem zmiany.' },
@@ -98,7 +98,10 @@ async function createRound(id: ArcadeId, canvas: HTMLCanvasElement, config: Roun
       // Wężowy Wir pozostaje celowo lekki: zawsze renderuje się w Canvas 2D.
       return new (await import('./games/Snake')).SnakeRound(canvas, config);
     case 'league': {
-      if (hasWebGL2(canvas)) return new (await import('./webgl/League3D')).League3DRound(canvas, config);
+      // Turbo League = silnik z nitro-league.zip (src/arcade/league-next) renderujący na płótnie platformy.
+      // Prosty prototyp Canvas 2D zostaje wyłącznie tam, gdzie WebGL2 w ogóle nie istnieje — po nieudanym
+      // starcie WebGL płótno ma już kontekst 3D i nie da się na nim założyć 2D, więc wtedy zgłaszamy błąd.
+      if (hasWebGL2(canvas)) return new (await import('./league-next/LeagueRound')).LeagueNextRound(canvas, config);
       return new (await import('./games/League')).LeagueRound(canvas, config);
     }
     case 'pizza': {

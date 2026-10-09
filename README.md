@@ -52,15 +52,15 @@ To nadal aplikacja przeglądarkowa: Vibration API nie steruje amplitudą ani ada
 | **Neonowy Pęd** | Właściwy wyścig Three.js z miasta ZIP-a: mokry proceduralny tor, drifty, rampy, turbo, itemy i split-screen | Kierunek jazdy + akcja bonusu |
 | **Orbitalna Fala** | Kooperacyjna obrona przed kolejnymi falami dronów i asteroid; życia, osłony, naprawy i szybki ogień | Lot, celowanie i strzał |
 | **Wężowy Wir — beta** | Taktyczna arena 2D w stalowo-bursztynowej oprawie: impulsy, przeszkody, boty i sprint | Cztery kierunki + sprint |
+| **Turbo League** | Piłka samochodowa 3D na stadionie: pełna fizyka, boost z żółtych pól, odbicia od band, powtórki goli; mecz do 3/5/7 goli, złoty gol w dogrywce; skład 1v1–2v2 z botami | Joystick: kierunek jazdy · AKCJA: boost |
 | **WEBZA — Nocna Dostawa** | Kurierzy pizzy huśtają się na sieci między dachami i trafiają w światło zamówień; współpraca z oceną zespołu albo rywalizacja o MVP | Joystick: bieg · AKCJA: sieć · pizza leci sama w klienta |
 | **BlockCraft — zapowiedź** | Planowany sandbox z budowaniem z bloków. To zapowiedź, niegrywalna gra nie jest jeszcze dostępna. | Szczegóły wkrótce |
-| **Turbo League — zapowiedź** | Planowany car soccer w perspektywie 3D-lite: auta, boost, odbicia i bramki | Szczegóły wkrótce |
 
 Dostępne gry mają własny ekran wejściowy, zasady, ustawienia rundy, HUD i ekran wyników. Gry arcade obsługują 1–4 graczy (plus opcjonalne boty tam, gdzie pasują). W ustawieniach można przełączyć **wspólną arenę / split-screen**, a profil sprzętu ogranicza DPR canvasa do płynnego trybu, balansu albo ostrego trybu jakości. Stalowy Front zachowuje swoje zasady 2–4 uczestników; możesz dobrać boty, gdy grasz sam.
 
 ### Grafika i wydajność
 
-`Neonowy Pęd` i `WEBZA` korzystają z Three.js (WEBZA wymaga WebGL2 i nie ma wersji zastępczej), a `Orbitalna Fala` próbuje lekkiego WebGL2 z fallbackiem Canvas2D. Silniki ładują się leniwie po wybraniu gry; `Wężowy Wir` i `Stalowy Front` używają lekkiego Canvas 2D. Profile jakości ograniczają DPR i koszt efektów, animacja joysticka jest aktualizowana najwyżej raz na klatkę, a renderowanie zatrzymuje się po ukryciu karty. Wężowy Wir dodatkowo interpoluje ruch segmentów, zachowując niskie obciążenie.
+`Neonowy Pęd`, `Turbo League` i `WEBZA` korzystają z Three.js (WEBZA wymaga WebGL2 i nie ma wersji zastępczej; Turbo League ma prosty prototyp Canvas 2D tylko tam, gdzie WebGL2 w ogóle nie istnieje), a `Orbitalna Fala` próbuje lekkiego WebGL2 z fallbackiem Canvas2D. Silniki ładują się leniwie po wybraniu gry; `Wężowy Wir` i `Stalowy Front` używają lekkiego Canvas 2D. Profile jakości ograniczają DPR i koszt efektów, animacja joysticka jest aktualizowana najwyżej raz na klatkę, a renderowanie zatrzymuje się po ukryciu karty. Wężowy Wir dodatkowo interpoluje ruch segmentów, zachowując niskie obciążenie.
 
 ## Jak zagrać
 

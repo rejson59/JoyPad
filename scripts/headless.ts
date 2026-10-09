@@ -44,6 +44,11 @@ export function fakeContext2D(width = 8, height = 8): FakeContext2D {
     createLinearGradient: () => gradient,
     createPattern: () => ({}),
     getImageData: (_x: number, _y: number, w: number, h: number) => ({ data: new Uint8ClampedArray(Math.max(1, w * h * 4)), width: w, height: h }),
+    createImageData: (w: number | { width: number; height: number }, h?: number) => {
+      const width = typeof w === 'number' ? w : w.width;
+      const height = typeof w === 'number' ? (h ?? 1) : w.height;
+      return { data: new Uint8ClampedArray(Math.max(1, width * height * 4)), width, height };
+    },
     putImageData: () => undefined,
     canvas: { width, height },
   };
@@ -153,15 +158,20 @@ export function installBrowserFakes(options: { seed?: number } = {}): Harness {
     const store = new Map<string, string>();
     return { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => { store.set(k, v); }, removeItem: (k: string) => { store.delete(k); } };
   })());
+  // AudioContext: znane metody jawnie, każde inne `create*` oraz `listener` zwracają obiekt „na wszystko”,
+  // żeby dźwięk przestrzenny (panner, konwolwer, analizator…) nie wymagał dopisywania atrap jedna po drugiej.
   define('AudioContext', class {
-    state = 'running'; currentTime = 0; sampleRate = 44100; destination = universal();
+    state = 'running'; currentTime = 0; sampleRate = 44100; destination = universal(); listener = universal();
+    constructor() {
+      return new Proxy(this, {
+        get: (target, key) => {
+          if (key in target) return (target as Record<string | symbol, unknown>)[key];
+          return typeof key === 'string' && key.startsWith('create') ? () => universal() : undefined;
+        },
+      });
+    }
     createGain() { return { gain: universal(), connect: () => undefined, disconnect: () => undefined }; }
     createBuffer(_channels: number, length: number) { return { getChannelData: () => new Float32Array(length), length }; }
-    createOscillator() { return universal(); }
-    createBufferSource() { return universal(); }
-    createBiquadFilter() { return universal(); }
-    createDynamicsCompressor() { return universal(); }
-    createStereoPanner() { return universal(); }
     resume() { return Promise.resolve(); }
     close() { this.state = 'closed'; return Promise.resolve(); }
   });

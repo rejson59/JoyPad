@@ -30,6 +30,7 @@ Szczegóły i testy: [moments-video.md](moments-video.md).
 | Stalowy Front | eliminacje, szybkie serie, zmiana lidera punktowego, przejęte bonusy; dokładne dane eliminacji z `onKill` |
 | Orbitalna Fala | zestrzelenia, serie i bonusy zgłoszone przez silnik; **bez** fikcyjnego „lidera” w grze kooperacyjnej |
 | Neonowy Pęd | wzrost liczby okrążeń i zebrane bonusy; **bez** wymyślonych wyprzedzeń na podstawie samych punktów |
+| Turbo League | gole, asysty, wyrównanie w końcówce, złoty gol w dogrywce i obrony strzału w światło bramki; samobój nie jest nagradzany; demolka idzie przez haptykę `kill`/`dead`, nie przez Moments (bez dubli) |
 | WEBZA | serie dostaw ×5/×8/×12, dowiezione gorące zamówienia i perfekcyjne dostawy o dużej wartości; każde zdarzenie wynika z konkretnej dostawy w symulacji |
 
 Czas pochodzi z postępu czasu rundy; HUD jest próbkowany, więc znacznik FX może mieć dokładność interwału HUD-u. Seria oznacza kolejne eliminacje danego gracza z przerwami nie większymi niż 12 sekund (nie jest to obietnica „bez śmierci”). Zdarzenia są ważone, a bliskie akcje tego samego gracza deduplikowane. Bufor ma 64 wpisy, wynik maksymalnie 3. Bez zdarzeń pokazujemy uczciwy pusty stan. Ten mechanizm nie gwarantuje, że każda runda da trzy ciekawe akcje.

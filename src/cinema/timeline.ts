@@ -234,7 +234,12 @@ export function qualityTier(env: TierEnv): QualityTier {
   if (env.reduced) return 'static';
   if (env.saveData || env.slowLink) return 'lite';
   if (env.smallScreen) return 'lite';
-  if (typeof env.cores === 'number' && env.cores <= 4) return 'lite';
+  // 4 rdzenie to dziś typowy laptop z przeglądarką na wierzchu, a film jest zwykłym
+  // DOM-em i CSS-em — nie ma po co odbierać mu przez to ruchu i nagrań w kaflach
+  // (oglądający zgłaszał, że w normalnym trybie widzi mniej niż w statycznym).
+  // Progiem „słabego sprzętu" zostają 2 rdzenie; jeśli klatki naprawdę nie wyrabiają,
+  // tryb schodzi sam, mierzony na żywo (`downgradeTier`).
+  if (typeof env.cores === 'number' && env.cores <= 2) return 'lite';
   if (typeof env.memory === 'number' && env.memory <= 4) return 'lite';
   return 'high';
 }

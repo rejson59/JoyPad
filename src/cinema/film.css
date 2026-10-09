@@ -186,6 +186,26 @@ html[data-film] { overflow: hidden; }
 
 /* ------------------------------------------------------- 2. biblioteka --- */
 
+/* Legenda sterowania (runda 19): poradnik pokazywał pierścień fokusa, ale nigdy nie
+   mówił, co go prowadzi. Leży w prawym dolnym rogu — kopia sceny jest w lewym —
+   i celowo nie wchodzi do bloku tekstu, żeby nie zmienił jego wysokości. */
+.film-controls {
+  position: absolute; right: 96px; bottom: 96px; z-index: 4; display: flex; align-items: center; gap: 22px;
+  /* Własna ciemna podkładka: legenda stoi na ruchomej siatce tła, a ma być czytelna
+     z 10 stóp — bez tego małe podpisy gubiły się w kadrze. */
+  padding: 12px 18px; border-radius: 16px; border: 1px solid rgba(255, 255, 255, .08);
+  background: linear-gradient(135deg, rgba(8, 11, 16, .78), rgba(8, 11, 16, .52));
+}
+.film-control { display: inline-flex; align-items: center; gap: 9px; opacity: 0; }
+.film-controls.is-in .film-control { animation: filmRise .6s var(--film-ease) both; animation-delay: calc(var(--control-delay, 0ms) + 100ms); }
+.film-keycap {
+  display: inline-grid; place-items: center; min-width: 42px; height: 34px; padding: 0 11px; border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, .22); background: linear-gradient(180deg, rgba(26, 30, 38, .94), rgba(10, 13, 18, .94));
+  box-shadow: 0 10px 24px -14px #000, inset 0 1px rgba(255, 255, 255, .12);
+  font: 800 13px/1 var(--font-joy, system-ui); letter-spacing: .1em; color: #ffd9ad;
+}
+.film-control > small { font: 700 12px/1 var(--font-joy, system-ui); letter-spacing: .14em; text-transform: uppercase; color: rgba(238, 242, 246, .74); }
+
 .film-shelf { position: absolute; left: 0; top: 0; right: 0; bottom: 0; transform-origin: 1200px 50%; }
 .film-card {
   position: absolute; border-radius: 22px; overflow: hidden; background: #0b0f16;
@@ -308,6 +328,39 @@ html[data-film] { overflow: hidden; }
 .film-pane-video { z-index: 1; opacity: 0; transition: opacity 220ms ease; }
 .film-pane-video.is-loaded { opacity: 1; }
 
+/* ------------------------------------------------------- 6. klawiatura --- */
+
+/* Rekwizyt sceny „Albo klawiatura". Pozycję i wejście trzyma JS (inline), bo tak samo
+   robią to telefon i telewizor — animacja CSS nie może nadpisać `transform`, w którym
+   siedzi miejsce rekwizytu w kadrze. Klawisze dostają kolor wyliczony w JS,
+   więc arkusz tylko nadaje im kształt. */
+.film-kb { position: absolute; transform-origin: 50% 50%; }
+.film-kb-enter { position: absolute; inset: 0; }
+.film-kb-body {
+  position: absolute; inset: 0; border-radius: 26px;
+  background: linear-gradient(180deg, #171b23, #0a0d12 68%);
+  border: 1px solid rgba(255, 255, 255, .08);
+  box-shadow: 0 60px 120px -50px #000, inset 0 1px rgba(255, 255, 255, .06);
+}
+/* Podkład pod klawiszami: delikatna siatka, żeby rekwizyt nie był płaskim prostokątem. */
+.film-kb-deck { position: absolute; inset: 12px; border-radius: 18px; background: radial-gradient(120% 140% at 50% -20%, rgba(255, 255, 255, .05), transparent 62%); }
+.film-kb-key {
+  position: absolute; display: grid; place-items: center; border-radius: 11px; border: 1px solid rgba(255, 255, 255, .07);
+  font: 800 17px/1 var(--font-joy, system-ui); letter-spacing: .04em;
+}
+.film-kb-tag {
+  position: absolute; transform: translateX(-50%); padding: 8px 14px; border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .12); background: rgba(8, 11, 16, .72);
+  font: 800 13px/1 var(--font-joy, system-ui); letter-spacing: .22em; color: rgba(238, 242, 246, .86);
+  white-space: nowrap;
+}
+.film-kb-tag.is-action { color: #ffd9ad; border-color: rgba(246, 173, 85, .45); }
+.film-kb-note {
+  position: absolute; right: 96px; bottom: 96px; padding: 12px 18px; border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, .08); background: linear-gradient(135deg, rgba(8, 11, 16, .78), rgba(8, 11, 16, .52));
+  font: 600 15px/1.45 var(--font-joy, system-ui); color: rgba(238, 242, 246, .8); max-width: 420px;
+}
+
 /* ------------------------------------------------- 6. podzielony ekran --- */
 
 .film-grid-panes { position: absolute; inset: 0; }
@@ -398,12 +451,25 @@ html[data-film] { overflow: hidden; }
 
 /* --------------------------------------------------------- keyframes --- */
 
+/* UWAGA (runda 19): klatki MUSZĄ mieć jawny stan końcowy.
+   Wcześniej były tylko `from`, więc stanem końcowym była wartość bazowa — a elementy
+   mają `opacity: 0` w regule bazowej. Efekt: w trybie wysokim i lekkim etykiety, napisy,
+   chipy, a nawet MOCKUPY TELEWIZORA I TELEFONU zostawały niewidoczne; widać je było
+   wyłącznie w trybie statycznym, który ma dopisane `opacity: 1`. Zgłoszenie użytkownika:
+   „nie wszystko jest widoczne w poradniku (…) tylko na statycznym widać, co jest na
+   urządzeniach”.
+
+   Druga poprawka: animacje wejścia nie ruszają już `transform`, tylko niezależne
+   właściwości `translate`/`scale`. Telefon i telewizor pozycjonują się inline'owym
+   `transform: translate3d(...)`, a animacja `transform` zastępuje — mockup wjeżdżał
+   z narożnika zamiast pojawiać się na miejscu. Niezależne właściwości sumują się
+   z `transform`, więc pozycja zostaje, a skala i tak się animuje. */
 @keyframes filmWordUp { from { transform: translateY(116%); } }
-@keyframes filmRise { from { opacity: 0; transform: translateY(26px); } }
-@keyframes filmSlideIn { from { opacity: 0; transform: translateX(48px); } }
-@keyframes filmPopIn { from { opacity: 0; transform: scale(.9); } }
-@keyframes filmFadeIn { from { opacity: 0; } }
-@keyframes filmStamp { from { opacity: 0; transform: rotate(-3deg) scale(1.5); } }
+@keyframes filmRise { from { opacity: 0; translate: 0 26px; } to { opacity: 1; translate: 0 0; } }
+@keyframes filmSlideIn { from { opacity: 0; translate: 48px 0; } to { opacity: 1; translate: 0 0; } }
+@keyframes filmPopIn { from { opacity: 0; scale: .9; } to { opacity: 1; scale: 1; } }
+@keyframes filmFadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes filmStamp { from { opacity: 0; scale: 1.5; } to { opacity: 1; scale: 1; } }
 @keyframes filmGrain { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-2px, 1px, 0); } }
 
 /* --------------------------------------- tryb statyczny / oszczędny --- */
@@ -430,6 +496,7 @@ html[data-film] { overflow: hidden; }
 [data-tier='static'] .film-moment-taglist.is-in,
 [data-tier='static'] .film-glass-card.is-in,
 [data-tier='static'] .film-grid-pane.is-in,
+[data-tier='static'] .film-controls.is-in .film-control,
 [data-tier='static'] .film-outro-mark.is-in,
 [data-tier='static'] .film-outro-tag.is-in,
 [data-tier='static'] .film-outro-version.is-in { animation: none; opacity: 1; }

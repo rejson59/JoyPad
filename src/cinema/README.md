@@ -1,6 +1,6 @@
 # Film „Poznaj JoyPad" — jak to działa i jak dodać scenę
 
-Krótki film (ok. 46 s) pokazywany przy pierwszym wejściu oraz z ustawień.
+Krótki film (ok. 51 s) pokazywany przy pierwszym wejściu oraz z ustawień.
 Jest równocześnie reklamą i poradnikiem: pokazuje parowanie telefonu,
 kontroler w telefonie, wspólny i podzielony ekran oraz Momenty.
 
@@ -20,8 +20,8 @@ src/cinema/
 
 ## Jak dodać nową scenę
 
-1. **Wybierz `view`.** Gotowe: `coldOpen`, `library`, `pair`, `handoff`, `play`,
-   `split`, `moments`, `outro`. Jeśli nowa scena ma wyglądać inaczej, dopisz
+1. **Wybierz `view`.** Gotowe: `coldOpen`, `library`, `pair`, `handoff`, `keyboard`,
+   `play`, `split`, `moments`, `outro`. Jeśli nowa scena ma wyglądać inaczej, dopisz
    komponent w `scenes.tsx` i wpisz go do rejestru `SCENE_VIEWS`.
 2. **Wstaw obiekt sceny** do `filmScript.scenes` w kolejności odtwarzania.
    Czas liczony jest kumulatywnie — nie podajesz go globalnie, tylko `ms`.
@@ -53,9 +53,28 @@ src/cinema/
 - **Czas idzie z osi, wygląd z klas CSS.** To, co płynne (przesuw półki, lot
   kontrolera, sweep joysticka), liczymy w JS z postępu `cue`; resztę animuje
   CSS po przełączeniu klasy `is-in` w chwili startu cue.
-- **Stan końcowy w regule, stan początkowy w `@keyframes { from }`.** Dzięki
-  temu tryb statyczny (`data-tier="static"`, m.in. `prefers-reduced-motion`)
-  wyłącza animacje i nadal pokazuje pełną kompozycję, a nie pustkę.
+- **Stan końcowy w regule, stan początkowy w `@keyframes { from }` — i to
+  dosłownie.** Jeśli klatka gasi `opacity` w `from`, musi je zapalić w `to`.
+  Elementy wejścia mają `opacity: 0` w regule bazowej, a animacja z `both`
+  trzyma stan końcowy, więc brak `to { opacity: 1 }` zostawia je **niewidoczne
+  przez cały film** — i to tylko w trybach animowanych, bo `data-tier="static"`
+  (`prefers-reduced-motion`) ma dopisane jawne `opacity: 1`. Dokładnie tak było
+  z telefonem, telewizorem, kaflami i menu (runda 19); pilnuje tego sekcja
+  *VISIBILITY* w `selftest:cinema`.
+- **Animacje wejścia nie ruszają `transform`.** Używaj `translate`/`scale`;
+  telefon i telewizor trzymają pozycję w inline'owym `transform`, który animacja
+  by nadpisała (mockup wjeżdżał z narożnika). `is-in` wpisuj z cue, nigdy
+  na sztywno — inaczej treść zapala się na starcie sceny, ignorując własny czas.
+- **Pobieraj, zanim zapytasz.** Panel ma rozdzielone `preload` (montuje `<video>` od wejścia
+  w scenę) i `play` (gra, gdy cue pozwoli). Nigdy nie rób `preload` zależnego od `play` —
+  bramka gotowości czekałaby na plik, którego nikt jeszcze nie pobiera. Poradnik grzeje się
+  wcześniej przez `warmCinema()` (fragment, QR, okładki) i pobiera klipy dalszych scen
+  w tle od 2,5 s. Wszystko pilnuje sekcja *LOADING* w `selftest:cinema`.
+- **Ucz, zanim ozdobisz.** Poradnik ma uczyć obsługi, nie tylko pokazywać grę:
+  scena `library` wystawia legendę sterowania (`extra.keyMove`/`keySelect`/`keyBack`/`keyShort`),
+  której podpisy muszą zgadzać się z prawdziwymi przypisaniami z `uiControl.ts`. Każde pole
+  `extra` musi być przez scenę przeczytane — pilnuje tego `selftest:cinema` (sekcja *DATA*),
+  bo pole bez użycia to obietnica bez pokrycia.
 - **Determinizm**: żadnego `Date.now()` ani `Math.random()` w kompozycjach.
   Drobiny losujemy przez `seededUnit(index, salt)`, więc klatka 1200 wygląda
   identycznie w podglądzie i w eksporcie.

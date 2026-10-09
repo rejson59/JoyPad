@@ -595,7 +595,7 @@ słabych urządzeń, a w kadrze — kontroler wpadający w ekran telefonu i Plam
 
 **Czego nie sprawdzono:** film nie był obejrzany (brak Chromium w sandboxie, `ECONNRESET`
 z CDN Playwrighta). Sprawdzone maszynowo: `selftest:cinema` (kontrakt skryptu) i
-`selftest:cinema-render` (776 renderów: brak NaN w geometrii, podpisy scen, język, tryby awaryjne).
+`selftest:cinema-render` (860 renderów: brak NaN w geometrii, podpisy scen, język, tryby awaryjne).
 
 **Bramka po zmianach:** lint i typy bez błędów; cinema 9 + cinema‑render 1 + console 12 +
 platform 5 + arcade 7 + replay/v16/relay po 1 — **37 pakietów OK**. Produkcyjny build 8.03 s

@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { MonitorPlay, QrCode, Smartphone, Sparkles } from 'lucide-react';
 import { Sheet } from '../console/Sheet';
 import { PlamekOrbit } from '../console/PlamekOrbit';
 import { useT } from '../platform/i18n';
 import { filmScript, pick } from './script';
+import { warmCinema } from './warm';
 
 /**
  * Ekran powitalny: pytanie o poradnik przy pierwszym wejściu.
@@ -20,6 +21,9 @@ import { filmScript, pick } from './script';
 export function Welcome({ onWatch, onDecline }: { onWatch: () => void; onDecline: () => void }) {
   const { language } = useT();
   const [step, setStep] = useState<'ask' | 'warn'>('ask');
+  // Rozgrzewka: pytanie i tak chwilę wisi na ekranie, więc film, kod QR i okładki
+  // niech lecą już teraz — po „Tak" nie ma na co czekać (patrz `warm.ts`).
+  useEffect(() => { warmCinema(); }, []);
   const copy = filmScript.welcome;
   const t = (text: Parameters<typeof pick>[0]) => pick(text, language);
   const peeks = [

@@ -23,16 +23,31 @@ export const PANE_READY_EVENT = 'joypad-film-pane-ready';
 
 /**
  * Ile milisekund zegar filmu czeka na pierwszą klatkę nagrań w nowej scenie.
- * 1,6 s to kompromis: w typowej sieci wystarcza na `loadeddata` z pamięci podręcznej,
- * a gdy klipu nie ma — widz traci mniej niż dwie sekundy, nie całą scenę.
+ *
+ * Runda 19: skrócone z 1,6 s do 0,9 s. Powód jest podwójny — oba końce czekania
+ * zostały naprawione u źródła:
+ *   • panele montują `<video>` **od wejścia w scenę** (`preload`), więc klip pobiera się
+ *     równolegle z pierwszymi animacjami sceny, a nie dopiero po tym, jak cue pozwoli
+ *     odtwarzać. Gdy plik jest w pamięci podręcznej (a jest — `prefetch` scen z klipami
+ *     idzie przez cały film), `loadeddata` przychodzi w milisekundach;
+ *   • panel zgłasza zwolnienie także przy **błędzie** pobierania, więc zepsuty klip nie
+ *     blokuje zegara na zapas.
+ * Zostaje 0,9 s jako siatka bezpieczeństwa dla wolnej sieci — i nigdy więcej niż raz na scenę.
  */
-export const PANE_HOLD_MS = 1600;
+export const PANE_HOLD_MS = 900;
 
 /**
  * Po ilu milisekundach od wejścia w scenę wolno pobierać klip NASTĘPNEJ sceny.
  * Pół sekundy wystarcza, żeby klip bieżącej sceny ruszył pierwszy i nie dzielił pasma.
  */
 export const PANE_PREFETCH_AFTER_MS = 500;
+
+/**
+ * Po ilu milisekundach od startu filmu wolno pobierać nagrania **dalszych** scen
+ * (tryb pełny). Pierwsze sceny filmu są lekkie — iskra, okładki biblioteki, kod QR —
+ * więc całe pasmo jest wolne i klipy zdążą dojść, zanim widz dojdzie do rozgrywki.
+ */
+export const FILM_WARM_AFTER_MS = 2500;
 
 /** Znacznik zdarzenia: nazwa sceny, w której panel się wczytał. */
 export function announcePaneReady(sceneId: string): void {

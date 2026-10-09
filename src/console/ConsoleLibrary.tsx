@@ -24,6 +24,7 @@ import { UiHints } from './UiHints';
 import { pushUiContext } from './uiContext';
 import { setPreferences, useConsolePreferences } from './preferences';
 import { ConsoleSettings } from './Settings';
+import { warmCinema } from '../cinema/warm';
 import { systemSound } from './sound';
 import { openCinema } from '../cinema/store';
 import { useMenuMusic } from '../lib/useMenuMusic';
@@ -82,6 +83,13 @@ export function ConsoleLibrary({ focus, onFocus, onOpen, onConnections, onLab, o
     document.documentElement.style.setProperty('--os-nav-accent', game.accent);
     return () => { document.documentElement.style.removeProperty('--os-nav-accent'); };
   }, [game.accent]);
+  // Rozgrzewka poradnika: biblioteka jest już na ekranie i ustabilizowana, więc fragment
+  // filmu, generator kodu QR i okładki mogą polecieć w tle. Dzięki temu przycisk
+  // „Poradnik" (stopka i Ustawienia) otwiera film bez ekranu ładowania — patrz `cinema/warm.ts`.
+  useEffect(() => {
+    const timer = window.setTimeout(() => warmCinema(), 1500);
+    return () => window.clearTimeout(timer);
+  }, []);
   // Kod na ekranie nigdy nie może „zestarzeć się": klucz dołączania wymienia host,
   // a my tylko rysujemy PNG ponownie. Przy brzydkim błędzie generowania próbujemy raz jeszcze.
   useEffect(() => {

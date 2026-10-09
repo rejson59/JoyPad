@@ -5,7 +5,7 @@ import { PLAYER_DEFS } from '../game/types';
 import { GAMES, gameInfo, localizeGame, type GameId } from '../arcade/catalog';
 import { clamp01, lerp } from '../console/plamek';
 import { CinemaPlamek } from './CinemaPlamek';
-import { ControllerMock, PadUi, PhoneMock, TvMock, VideoPane } from './mocks';
+import { ControllerMock, KB_LAYOUT, KB_TEACH_ORDER, KeyboardMock, PadUi, PhoneMock, TvMock, VideoPane } from './mocks';
 import { pick, type Lang, type Text, type ViewId } from './script';
 import { lerp as mix, readCue, seededUnit, type CueState, type FilmFrame, type QualityTier, type TimedScene } from './timeline';
 
@@ -238,6 +238,15 @@ function LibraryScene({ frame, scene, language, tier, deviceScale }: SceneProps)
   const shelf = readCue(frame, 'shelf');
   const focus = readCue(frame, 'focus');
   const plamek = readCue(frame, 'plamek');
+  const controls = readCue(frame, 'controls');
+  // Legenda sterowania: cztery pary „klawisz → co robi". Kolejność jest kolejnością
+  // nauki: najpierw ruch, potem zatwierdzenie, powrót i skróty kontekstowe.
+  const legend = [
+    { cap: scene.extra?.keyMove, note: scene.extra?.keyMoveNote },
+    { cap: scene.extra?.keySelect, note: scene.extra?.keySelectNote },
+    { cap: scene.extra?.keyBack, note: scene.extra?.keyBackNote },
+    { cap: scene.extra?.keyShort, note: scene.extra?.keyShortNote },
+  ];
   const hop = focus.repeat;
   const floatIndex = hop === 0
     ? lerp(-2.1, FOCUS_ORDER[0], shelf.p)
@@ -302,6 +311,14 @@ function LibraryScene({ frame, scene, language, tier, deviceScale }: SceneProps)
           deviceScale={deviceScale}
         />
       )}
+      <div className={`film-controls ${controls.on ? 'is-in' : ''}`}>
+        {legend.map((item, index) => (
+          <span className="film-control" key={index} style={{ '--control-delay': `${index * 70}ms` } as CSSProperties}>
+            <b className="film-keycap"><Localized text={item.cap ?? { pl: '', en: '' }} /></b>
+            <small><Localized text={item.note ?? { pl: '', en: '' }} /></small>
+          </span>
+        ))}
+      </div>
       <CopyBlock scene={scene} frame={frame} accent={ORANGE} />
     </div>
   );
@@ -499,7 +516,99 @@ function HandoffScene({ frame, scene, tier, deviceScale }: SceneProps) {
 }
 
 /* ------------------------------------------------------------------ */
-/* 5. Runda (wspólny ekran)                                            */
+/* 5. Klawiatura (bez telefonu też się gra)                            */
+/* ------------------------------------------------------------------ */
+
+const KB_X = 1180;
+const KB_Y = 402;
+
+/**
+ * Scena „Albo klawiatura".
+ *
+ * Domknięcie ślepej uliczki: film opowiadał, że telefon staje się kontrolerem,
+ * i na tym poprzestawał — a JoyPad od zawsze ma pełne sterowanie z klawiatury
+ * (`library.helpScreen`: „Możesz grać na klawiaturze"). Bez tej sceny ktoś bez
+ * telefonu pod ręką mógłby uznać, że nie ma czym zagrać.
+ *
+ * Klawisze zapalają się falą według `KB_TEACH_ORDER`, czyli w kolejności nauki,
+ * a nie w kolejności na klawiaturze: najpierw WASD pierwszego gracza, potem
+ * strzałki drugiego, na końcu spacja — ogień. Blask liczymy z `cue.p`, który jest
+ * już wygładzony krzywą z osi czasu, więc nic tu nie ma prawa się odbić.
+ */
+function KeyboardScene({ frame, scene, tier, deviceScale }: SceneProps) {
+  const kb = readCue(frame, 'kb');
+  const keys = readCue(frame, 'keys');
+  const plamek = readCue(frame, 'plamek');
+  const press = readCue(frame, 'press');
+  const hint = readCue(frame, 'hint');
+
+  // Fala po klawiszach: każdy kolejny wchodzi z opóźnieniem. Błysk przy `press`
+  // to sinus (rośnie i gaśnie), a mocniej dostaje tylko spacja — bo to ona jest ogniem;
+  // reszta klawiatury tylko rozjaśnia się razem z nią, żeby kadr nie migał.
+  const pulse = press.on ? Math.sin(clamp01(press.p) * Math.PI) : 0;
+  const lit: Record<string, number> = {};
+  KB_TEACH_ORDER.forEach((label, index) => {
+    lit[label] = clamp01((keys.p - index * .07) / .3) * .85 + pulse * (label === 'SPACJA' ? 1 : .22);
+  });
+
+  // Plamek idzie po klawiszach: siedzi nad WASD i przy błysku przeskakuje na spację.
+  const glide = clamp01(press.p * 1.2);
+  const zoneX = lerp(KB_LAYOUT.zones.wasd.x, KB_LAYOUT.zones.space.x, glide);
+  const kbLeft = KB_X - KB_LAYOUT.width / 2;
+  const kbTop = KB_Y - KB_LAYOUT.height / 2;
+  const squash = pulse * .2;
+
+  return (
+    <div className="film-scene is-keyboard">
+      <Backdrop accent={ORANGE} grid intensity={.45} />
+      <KeyboardMock
+        x={KB_X}
+        y={KB_Y}
+        rot={-1.1}
+        lit={lit}
+        style={{
+          opacity: String(clamp01(kb.p * 1.5)),
+          transform: `translate3d(0, ${lerp(56, 0, clamp01(kb.p)).toFixed(1)}px, 0) scale(${lerp(.94, 1, clamp01(kb.p)).toFixed(3)})`,
+        }}
+      />
+      {tier !== 'static' && (
+        <CinemaPlamek
+          x={kbLeft + zoneX}
+          y={kbTop - 22}
+          r={42}
+          sx={1 + squash}
+          sy={1 - squash}
+          wob={.42}
+          spin={frame.t / 1300}
+          mood={press.on ? 'happy' : 'curious'}
+          blink={Math.sin(frame.t / 610) > .88 ? 1 : 0}
+          gaze={{ x: .2, y: .7 }}
+          opacity={clamp01(plamek.p * 1.2)}
+          paint={ORANGE}
+          weight={.5}
+          deviceScale={deviceScale}
+        />
+      )}
+      {press.p > 0 && <Ring x={kbLeft + KB_LAYOUT.zones.space.x} y={kbTop + KB_LAYOUT.zones.space.y} p={press.p} from={40} to={300} accent="rgba(246, 173, 85, .55)" />}
+      <span className="film-kb-tag" style={{ left: kbLeft + KB_LAYOUT.zones.wasd.x, top: kbTop - 112, opacity: String(clamp01((keys.p - .05) * 2.2)) }}>
+        <Localized text={scene.extra?.tagMove ?? { pl: '', en: '' }} />
+      </span>
+      <span className="film-kb-tag" style={{ left: kbLeft + KB_LAYOUT.zones.arrows.x, top: kbTop - 112, opacity: String(clamp01((keys.p - .45) * 2.2)) }}>
+        <Localized text={scene.extra?.tagSecond ?? { pl: '', en: '' }} />
+      </span>
+      <span className="film-kb-tag is-action" style={{ left: kbLeft + KB_LAYOUT.zones.space.x, top: kbTop + KB_LAYOUT.height + 20, opacity: String(clamp01((keys.p - .75) * 2.6)) }}>
+        <Localized text={scene.extra?.tagAction ?? { pl: '', en: '' }} />
+      </span>
+      <span className="film-kb-note" style={{ opacity: String(clamp01(hint.p * 1.4)) }}>
+        <Localized text={scene.extra?.keyNote ?? { pl: '', en: '' }} />
+      </span>
+      <CopyBlock scene={scene} frame={frame} accent={ORANGE} />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* 6. Runda (wspólny ekran)                                            */
 /* ------------------------------------------------------------------ */
 
 const TV_MAIN = { x: 700, y: 470, width: 1160, height: 652 };
@@ -535,7 +644,7 @@ function PlayScene({ frame, scene, tier }: SceneProps) {
         ))}
       </div>
       <TvMock x={TV_MAIN.x} y={TV_MAIN.y} width={TV_MAIN.width} height={TV_MAIN.height} rot={-1} className={tv.on ? 'is-in' : ''}>
-        <VideoPane stem="tanks" sceneId={scene.id} poster={gameInfo('tanks').cover} live={tier !== 'static' && video.p > .1} startAt={2.4} className="is-full">
+        <VideoPane stem="tanks" sceneId={scene.id} poster={gameInfo('tanks').cover} play={tier !== 'static' && video.p > .1} preload={tier !== 'static'} startAt={2.4} className="is-full">
           <span className="film-play-arena-label"><Localized text={scene.extra?.arenaLabel ?? { pl: '', en: '' }} /></span>
           <span className="film-play-frame" aria-hidden="true" />
         </VideoPane>
@@ -557,7 +666,7 @@ function PlayScene({ frame, scene, tier }: SceneProps) {
 }
 
 /* ------------------------------------------------------------------ */
-/* 6. Podzielony ekran                                                 */
+/* 7. Podzielony ekran                                                 */
 /* ------------------------------------------------------------------ */
 
 const PANE = { width: 870, height: 450 };
@@ -578,6 +687,8 @@ function SplitScene({ frame, scene, tier }: SceneProps) {
   const last = stepCues[Math.max(0, fired - 1)];
   const ringFloat = fired === 0 ? 0 : fired - 1 + clamp01(last.p);
   const title = readCue(frame, 'title');
+  const label = readCue(frame, 'label');
+  const sub = readCue(frame, 'sub');
   const extra = scene.extra;
   const menuRows = [
     { label: extra?.row1, options: [extra?.optShared, extra?.optSplit], on: 1 },
@@ -610,7 +721,7 @@ function SplitScene({ frame, scene, tier }: SceneProps) {
                   stem={pane.stem}
                   sceneId={scene.id}
                   poster={gameInfo(pane.stem).cover}
-                  live={tier === 'high' && cue.p > .35}
+                  play={tier === 'high' && cue.p > .35} preload={tier === 'high'}
                   startAt={1.2 + index * .7}
                   className="is-full"
                 />
@@ -638,9 +749,11 @@ function SplitScene({ frame, scene, tier }: SceneProps) {
       </div>
       {seams.p > 0 && <span className="film-grid-seams" style={{ opacity: String(seams.p * .5) }} aria-hidden="true" />}
       <div className={`film-glass-card ${title.on ? 'is-in' : ''}`}>
-        {scene.label && <span className="film-label is-in"><Localized text={scene.label} /></span>}
+        {/* Etykieta i podpis mają własne cue (`label`/`sub`), więc idą za nimi —
+            wcześniej wpisywały się od razu na starcie sceny, przed kaflami, do których się odnoszą. */}
+        {scene.label && <span className={`film-label ${label.on ? 'is-in' : ''}`}><Localized text={scene.label} /></span>}
         {scene.title && <h2 className="film-title"><Words text={L(scene.title)} on={title.on} /></h2>}
-        {scene.sub && <p className="film-sub is-in"><Localized text={scene.sub} /></p>}
+        {scene.sub && <p className={`film-sub ${sub.on ? 'is-in' : ''}`}><Localized text={scene.sub} /></p>}
         <Chips items={scene.chips ?? []} on={readCue(frame, 'chips').on} accent={ORANGE} />
       </div>
     </div>
@@ -648,7 +761,7 @@ function SplitScene({ frame, scene, tier }: SceneProps) {
 }
 
 /* ------------------------------------------------------------------ */
-/* 7. Momenty                                                          */
+/* 8. Momenty                                                          */
 /* ------------------------------------------------------------------ */
 
 const FRAME_BOX = { x: 700, y: 372, width: 1180, height: 664 };
@@ -678,7 +791,7 @@ function MomentsScene({ frame, scene, tier }: SceneProps) {
         className={`film-frame ${frameCue.on ? 'is-in' : ''}`}
         style={{ left: FRAME_BOX.x - FRAME_BOX.width / 2, top: FRAME_BOX.y - FRAME_BOX.height / 2, width: FRAME_BOX.width, height: FRAME_BOX.height } as CSSProperties}
       >
-        <VideoPane stem="tanks" sceneId={scene.id} poster={gameInfo('tanks').cover} live={tier !== 'static' && frameCue.p > .2} startAt={5.4} rate={.25} className="is-full" />
+        <VideoPane stem="tanks" sceneId={scene.id} poster={gameInfo('tanks').cover} play={tier !== 'static' && frameCue.p > .2} preload={tier !== 'static'} startAt={5.4} rate={.25} className="is-full" />
         <span className="film-frame-freeze" style={{ opacity: String(freeze.p > 0 && freeze.p < 1 ? .85 : 0) }} />
         <span className={`film-slowmo ${slowmo.on ? 'is-in' : ''}`}>0.25×</span>
         <span className="film-frame-grain" aria-hidden="true" />
@@ -711,7 +824,7 @@ function MomentsScene({ frame, scene, tier }: SceneProps) {
 }
 
 /* ------------------------------------------------------------------ */
-/* 8. Zaproszenie                                                      */
+/* 9. Zaproszenie                                                      */
 /* ------------------------------------------------------------------ */
 
 function OutroScene({ frame, scene, tier, deviceScale }: SceneProps) {
@@ -779,6 +892,7 @@ function OutroScene({ frame, scene, tier, deviceScale }: SceneProps) {
 export const SCENE_VIEWS: Record<ViewId, (props: SceneProps) => ReactElement> = {
   coldOpen: ColdOpenScene,
   library: LibraryScene,
+  keyboard: KeyboardScene,
   pair: PairScene,
   handoff: HandoffScene,
   play: PlayScene,

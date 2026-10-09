@@ -50,7 +50,7 @@ export const EASE_NAMES = ['linear', 'inOut', 'outExpo', 'outQuint', 'outCubic',
 export type EaseName = typeof EASE_NAMES[number];
 
 /** Klocki, z których zbudowane są sceny — rejestr w `scenes.tsx`. */
-export type ViewId = 'coldOpen' | 'library' | 'pair' | 'handoff' | 'play' | 'split' | 'moments' | 'outro';
+export type ViewId = 'coldOpen' | 'library' | 'pair' | 'handoff' | 'keyboard' | 'play' | 'split' | 'moments' | 'outro';
 
 /** Dźwięki generowane proceduralnie (`score.ts`) — zero plików audio. */
 export type SoundKind = 'hum' | 'whoosh' | 'tick' | 'impact' | 'riser' | 'chime' | 'ui' | 'success' | 'sweep';
@@ -240,8 +240,20 @@ export const filmScript: FilmScript = {
       sub: t('Sześć światów na jednym ekranie — od czołgów po neonowe wyścigi.', 'Six worlds on one screen — from tanks to neon racing.'),
       chips: [t('6 ŚWIATÓW', '6 WORLDS'), t('BEZ INSTALACJI', 'NOTHING TO INSTALL'), t('2–4 GRACZY', '2–4 PLAYERS')],
       extra: {
-        focusTag: t('WYBÓR', 'SELECTED'),
         soonTag: t('ZAPOWIEDŹ', 'IN DEVELOPMENT'),
+        // Legenda sterowania (runda 19). Poradnik pokazywał gry i pada, ale nigdy nie
+        // mówił, jak w ogóle chodzi się po JoyPadzie — pierścień fokusa wędrował po
+        // kafelkach bez słowa o tym, co go prowadzi. Podpisy są zgodne z prawdziwymi
+        // przypisaniami z `uiControl.ts`: drążek i strzałki przewijają, A zatwierdza,
+        // B wraca, a X/Y robią to, co podpisane na dolnym pasku ekranu.
+        keyMove: t('DRĄŻEK', 'STICK'),
+        keyMoveNote: t('przewijaj', 'scroll'),
+        keySelect: t('A', 'A'),
+        keySelectNote: t('wybierz', 'open'),
+        keyBack: t('B', 'B'),
+        keyBackNote: t('wróć', 'back'),
+        keyShort: t('X / Y', 'X / Y'),
+        keyShortNote: t('skróty', 'shortcuts'),
       },
       cues: [
         { id: 'shelf', at: 0, dur: 1400, ease: 'outQuint' },
@@ -253,6 +265,9 @@ export const filmScript: FilmScript = {
         { id: 'focus', at: 2650, dur: 560, ease: 'outExpo' },
         { id: 'focus', at: 3750, dur: 560, ease: 'outExpo' },
         { id: 'plamek', at: 1500, dur: 1100, ease: 'outBack' },
+        // Legenda wchodzi, gdy pierścień już raz przeskoczył — najpierw ruch, potem
+        // wyjaśnienie, co go wywołuje.
+        { id: 'controls', at: 1900, dur: 700, ease: 'outCubic' },
       ],
       camera: [
         { at: 0, x: 90, y: 10, scale: 1.04, rot: -1.4 },
@@ -363,6 +378,54 @@ export const filmScript: FilmScript = {
       poster: .74,
       videos: [],
       note: 'Kontroler wpada dosłownie w ekran telefonu: tuman, pęknięcie światła, Plamek rozbryzguje się i wraca na przycisk A.',
+    },
+    {
+      id: 'keyboard',
+      view: 'keyboard',
+      chapter: t('Klawiatura', 'Keyboard'),
+      ms: 5000,
+      label: t('BEZ TELEFONU', 'NO PHONE?'),
+      title: t('Albo klawiatura.', 'Or a keyboard.'),
+      // Prawda z `PLAYER_DEFS`: WASD to pierwszy gracz, strzałki drugi, spacja i Enter to ogień.
+      // Ta scena istnieje po to, żeby ktoś bez telefonu pod ręką nie uznał, że nie ma czym zagrać.
+      sub: t('Nie masz telefonu pod ręką? Na komputerze zagrasz od razu: WASD to pierwszy gracz, strzałki — drugi.', 'No phone at hand? On a computer you just play: WASD is player one, the arrows are player two.'),
+      chips: [t('W A S D', 'W A S D'), t('STRZAŁKI', 'ARROWS'), t('SPACJA', 'SPACE')],
+      extra: {
+        tagMove: t('GRACZ 1', 'PLAYER 1'),
+        tagSecond: t('GRACZ 2', 'PLAYER 2'),
+        tagAction: t('OGIEŃ', 'FIRE'),
+        keyNote: t('Bez parowania — od razu do gry.', 'No pairing — straight into the game.'),
+      },
+      cues: [
+        { id: 'kb', at: 0, dur: 900, ease: 'outQuint' },
+        { id: 'keys', at: 500, dur: 2200, ease: 'linear' },
+        { id: 'label', at: 900, dur: 700, ease: 'outCubic' },
+        { id: 'title', at: 1050, dur: 900, ease: 'outQuint' },
+        { id: 'sub', at: 1450, dur: 900, ease: 'outCubic' },
+        { id: 'chips', at: 1900, dur: 800, ease: 'outCubic' },
+        { id: 'plamek', at: 2000, dur: 1100, ease: 'outBack' },
+        { id: 'press', at: 3600, dur: 900, ease: 'inOut' },
+        // Nota wchodzi PRZED klatką plakatu (`poster: .78` = 3900 ms), inaczej wersja
+        // statyczna nigdy by jej nie pokazała — a to jest właśnie ta linia, która mówi
+        // „bez parowania", czyli domyka ślepą uliczkę.
+        { id: 'hint', at: 2400, dur: 600, ease: 'outCubic' },
+      ],
+      camera: [
+        { at: 0, scale: 1.1, rot: .9, y: 26 },
+        { at: .45, scale: 1.01, rot: -.2, y: 0, ease: 'inOut' },
+        { at: 1, scale: 1.05, rot: -.7, y: -12, ease: 'inOut' },
+      ],
+      sound: [
+        { at: 0, kind: 'hum', gain: .25 },
+        { at: 500, kind: 'tick', gain: .35, note: 2 },
+        { at: 900, kind: 'tick', gain: .35, note: 4 },
+        { at: 1300, kind: 'tick', gain: .35, note: 6 },
+        { at: 2000, kind: 'chime', gain: .4 },
+        { at: 3600, kind: 'ui', gain: .45 },
+        { at: 3750, kind: 'success', gain: .5 },
+      ],
+      poster: .78,
+      note: 'Prawdziwy układ klawiszy; światła idą kolejnością nauki (WASD → strzałki → spacja), Plamek siedzi na ramce i przy błysku przeskakuje na spację.',
     },
     {
       id: 'play',

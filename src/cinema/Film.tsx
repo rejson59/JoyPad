@@ -15,7 +15,7 @@ import {
   storyboard, validateScript, type FilmFrame, type QualityTier,
 } from './timeline';
 import { useT } from '../platform/i18n';
-import { PANE_HOLD_MS, PANE_PREFETCH_AFTER_MS, PANE_READY_EVENT, sceneNeedsClips } from './ready';
+import { FILM_WARM_AFTER_MS, PANE_HOLD_MS, PANE_PREFETCH_AFTER_MS, PANE_READY_EVENT, sceneNeedsClips } from './ready';
 
 /**
  * Odtwarzacz filmu: jedno miejsce, w którym czas spotyka się z obrazem.
@@ -81,19 +81,41 @@ export function Film({ mode, onDone }: FilmProps) {
   // z klipami. Serwer podglądu (i GitHub Pages) trzyma `previews/` w pamięci podręcznej,
   // więc panel dostaje plik natychmiast i bramka gotowości prawie nigdy nie musi czekać.
   // Start dopiero po `PANE_PREFETCH_AFTER_MS`, żeby nie konkurować z tym, co widać teraz.
+  // Pobieranie nagrań: jedno miejsce, jedno konto pobranych klipów. Kolejno, nie
+  // równolegle — film ma się odtwarzać płynnie, a nie walczyć o pasmo z własną rozgrzewką.
+  const prefetched = useRef(new Set<string>());
+  const prefetch = useCallback(async (stems: readonly string[]) => {
+    for (const stem of stems) {
+      if (prefetched.current.has(stem)) continue;
+      prefetched.current.add(stem);
+      try {
+        await fetch(`${import.meta.env.BASE_URL}previews/${stem}.mp4`, { cache: 'force-cache' });
+      } catch { /* brak sieci to nie powód, żeby przerywać film — panele mają plakaty */ }
+    }
+  }, []);
+
+  // Klip sceny, która idzie następna: pobierany chwilę po wejściu w bieżącą scenę.
   useEffect(() => {
     if (activeTier === 'static') return;
     const index = timeline.scenes.findIndex(scene => scene.id === frame.scene.id);
     const next = timeline.scenes.slice(index + 1).find(scene => sceneNeedsClips(scene));
     if (!next?.videos?.length) return;
-    const timer = window.setTimeout(() => {
-      for (const stem of next.videos ?? []) {
-        void fetch(`${import.meta.env.BASE_URL}previews/${stem}.mp4`, { cache: 'force-cache' })
-          .catch(() => { /* brak sieci to nie powód, żeby przerywać film */ });
-      }
-    }, PANE_PREFETCH_AFTER_MS);
+    const timer = window.setTimeout(() => { void prefetch(next.videos ?? []); }, PANE_PREFETCH_AFTER_MS);
     return () => window.clearTimeout(timer);
-  }, [activeTier, frame.scene.id, timeline]);
+  }, [activeTier, frame.scene.id, prefetch, timeline]);
+
+  // Reszta nagrań filmu: w trybie pełnym startują jeszcze w pierwszych scenach (te są
+  // lekkie — iskra, okładki, kod QR), więc w chwili wejścia w scenę z rozgrywką klipy
+  // są już w pamięci podręcznej. Bez tego pobieranie zaczynało się dopiero wtedy, gdy
+  // widz patrzył na scenę potrzebującą nagrania — dokładnie to czuć było jako „za długo
+  // się wczytuje”. Tryby `lite`/`static` tego nie robią: tam nagrania są przez projekt lżejsze.
+  useEffect(() => {
+    if (activeTier !== 'high') return;
+    const all = [...new Set(timeline.scenes.flatMap(scene => scene.videos ?? []))];
+    if (!all.length) return;
+    const timer = window.setTimeout(() => { void prefetch(all); }, FILM_WARM_AFTER_MS);
+    return () => window.clearTimeout(timer);
+  }, [activeTier, prefetch, timeline]);
 
   useEffect(() => {
     const onReady = (event: Event) => {

@@ -14,6 +14,7 @@ import {
   resolveFrame, scoreEvents, storyboard, validateScript,
 } from '../src/cinema/timeline';
 import { sanitizeCinemaPrefs, shouldAskOnStart, defaultCinemaPrefs, setCinemaPrefs, getCinemaPrefs } from '../src/cinema/store';
+import { FILM_WARM_AFTER_MS, PANE_HOLD_MS } from '../src/cinema/ready';
 
 const timeline = buildTimeline(filmScript.scenes);
 
@@ -39,7 +40,7 @@ const sceneSource = readFileSync(new URL('../src/cinema/scenes.tsx', import.meta
 const registryAt = sceneSource.indexOf('SCENE_VIEWS:');
 assert.ok(registryAt > 0, 'brak rejestru SCENE_VIEWS w scenes.tsx');
 const registry = sceneSource.slice(registryAt, registryAt + 900);
-const views = ['coldOpen', 'library', 'pair', 'handoff', 'play', 'split', 'moments', 'outro'] as const;
+const views = ['coldOpen', 'library', 'pair', 'handoff', 'keyboard', 'play', 'split', 'moments', 'outro'] as const;
 for (const scene of filmScript.scenes) {
   assert.ok(views.includes(scene.view), `${scene.id}: nieznany view „${scene.view}"`);
   assert.ok(registry.includes(`${scene.view}:`), `${scene.id}: brak komponentu dla view „${scene.view}" w rejestrze`);
@@ -51,6 +52,156 @@ const declared = new Set(filmScript.scenes.flatMap(scene => scene.cues.map(cue =
 const missing = [...new Set(used)].filter(id => !declared.has(id));
 assert.deepEqual(missing, [], `sceny czytają cue, których nie ma w skrypcie: ${missing.join(', ')}`);
 console.log('FILM VIEWS SELFTEST: OK (rejestr scen i wszystkie odczytywane cue istnieją w skrypcie)');
+
+/* --- DANE: każde pole `extra` musi być gdzieś użyte --------------------- */
+/* Pole w skrypcie, którego żadna scena nie czyta, to cicha obietnica — dokładnie tak
+   leżakował `focusTag` („WYBÓR"), którego nikt nigdy nie pokazał. */
+{
+  const scriptSrc = readFileSync('src/cinema/script.ts', 'utf8');
+  const scenesSrc = readFileSync('src/cinema/scenes.tsx', 'utf8');
+  const extraBlocks = scriptSrc.split(/\n {6}extra: \{/).slice(1);
+  const orphans: string[] = [];
+  for (const block of extraBlocks) {
+    const body = block.slice(0, block.indexOf('\n      },'));
+    for (const [, key] of body.matchAll(/\n {8}(\w+):/g)) {
+      if (!scenesSrc.includes(`extra?.${key}`)) orphans.push(key);
+    }
+  }
+  assert.deepEqual(orphans, [], `pola \`extra\` bez użycia w scenach: ${orphans.join(', ')}`);
+}
+console.log('FILM DATA SELFTEST: OK (żadnego martwego pola w danych scen)');
+
+/* --- DOKUMENTACJA: tabela scen musi zgadzać się ze skryptem -------------- */
+/* Kolejność i numeracja w `docs/cinema.md` to mapa filmu dla człowieka. Gdy scena
+   dochodzi albo zmienia miejsce, tabela musi iść za nią — inaczej dokument kłamie. */
+{
+  const doc = readFileSync('docs/cinema.md', 'utf8');
+  const rows = [...doc.matchAll(/^\| (\d+) \| `([a-z]+)` \|/gm)].map(match => ({ number: Number(match[1]), id: match[2] }));
+  assert.ok(rows.length >= 6, 'tabela scen w docs/cinema.md zniknęła albo się rozjechała');
+  assert.deepEqual(rows.map(row => row.id), filmScript.scenes.map(scene => scene.id),
+    'kolejność scen w docs/cinema.md nie zgadza się ze skryptem');
+  assert.deepEqual(rows.map(row => row.number), filmScript.scenes.map((_, index) => index + 1),
+    'numeracja scen w docs/cinema.md nie zgadza się ze skryptem');
+}
+console.log('FILM DOCS SELFTEST: OK (tabela scen w dokumentacji zgadza się ze skryptem)');
+
+/* --- ŁADOWANIE: pobieranie musi zaczynać się PRZED odtwarzaniem --------- */
+/* Zgłoszenie z rundy 19: „coś się za długo wczytuje ten poradnik”. Przyczyny były
+   dwie i obie da się złapać statycznie: (1) bramka gotowości czekała na pierwszą
+   klatkę klipu, którego nikt jeszcze nie pobierał, bo `<video>` montowało się dopiero
+   po przekroczeniu progu cue; (2) cały dorobek filmu (fragment JS, kod QR, okładki)
+   zaczynał się pobierać w chwili kliknięcia. Te asercje pilnują obu. */
+{
+  const mocks = readFileSync('src/cinema/mocks.tsx', 'utf8');
+  const scenes = readFileSync('src/cinema/scenes.tsx', 'utf8');
+  const film = readFileSync('src/cinema/Film.tsx', 'utf8');
+
+  assert.ok(/preload\?\s*:/.test(mocks), 'VideoPane musi mieć prop `preload` (montowanie od wejścia w scenę)');
+  assert.ok(mocks.includes('onError={markFailed}'), 'zepsuty klip musi zwalniać bramkę gotowości (onError)');
+  assert.ok(/const markFailed\s*=/.test(mocks), 'brak zwolnienia bramki przy błędzie pobrania');
+
+  const videoPanes = (scenes.match(/<VideoPane/g) ?? []).length;
+  const withPreload = (scenes.match(/preload=/g) ?? []).length;
+  assert.ok(videoPanes >= 3, 'sceny zgubiły panele wideo');
+  assert.equal(withPreload, videoPanes, 'każdy VideoPane musi jawnie powiedzieć, czy montować klip od wejścia (`preload`)');
+
+  assert.ok(PANE_HOLD_MS <= 1000, `bramka trzyma zegar ${PANE_HOLD_MS} ms — przy pobieraniu od wejścia w scenę to zbędne opóźnienie`);
+  assert.ok(FILM_WARM_AFTER_MS > 0 && FILM_WARM_AFTER_MS < 5000, 'rozgrzewka nagrań musi startować w pierwszych scenach filmu, nie na końcu');
+  assert.ok(film.includes('FILM_WARM_AFTER_MS'), 'film nie rozgrzewa nagrań dalszych scen');
+  assert.ok(/GAMES\.flatMap|flatMap/.test(film), 'rozgrzewka musi wziąć klipy z osi czasu, a nie z ręcznej listy');
+
+  const warm = readFileSync('src/cinema/warm.ts', 'utf8');
+  assert.ok(warm.includes("import('./Film')"), 'rozgrzewka nie pobiera fragmentu filmu');
+  assert.ok(warm.includes("import('qrcode')"), 'rozgrzewka nie pobiera generatora QR');
+  for (const file of ['src/cinema/Welcome.tsx', 'src/console/ConsoleLibrary.tsx']) {
+    const source = readFileSync(file, 'utf8');
+    assert.ok(source.includes('warmCinema()'), `${file}: brak rozgrzewki poradnika przed kliknięciem`);
+  }
+}
+console.log('FILM LOADING SELFTEST: OK (klipy pobierają się od wejścia w scenę, poradnik grzeje się przed kliknięciem)');
+
+
+
+
+/* --- VISIBILITY: animacje wejścia muszą kończyć się w stanie WIDOCZNYM ----
+   Zgłoszenie użytkownika z rundy 19: „nie wszystko jest widoczne w poradniku,
+   np. kiedy patrzę na statyczny, to tylko wtedy widać, co jest na urządzeniach”.
+   Przyczyna: klatki kluczowe miały tylko `from { opacity: 0 }`, więc stanem
+   końcowym była wartość bazowa — a reguły bazowe też mają `opacity: 0`.
+   Elementy pokazywały się wyłącznie w trybie statycznym, bo tam dopisane jest
+   jawne `opacity: 1`. Te trzy asercje zamykają całą klasę tego błędu. */
+{
+  // Oba arkusze filmu: `film.css` (kadr) i `cinema.css` (arkusz pytania o poradnik).
+  const filmCss = ['src/cinema/film.css', 'src/console/cinema.css']
+    .map(file => readFileSync(file, 'utf8'))
+    .join('\n')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+
+  // Parsowanie klatek kluczowych z liczeniem nawiasów (formatowanie może się zmienić).
+  const keyframes = new Map<string, string>();
+  for (const match of filmCss.matchAll(/@keyframes\s+([\w-]+)\s*\{/g)) {
+    let depth = 1;
+    let index = match.index! + match[0].length;
+    while (index < filmCss.length && depth > 0) {
+      if (filmCss[index] === '{') depth++;
+      else if (filmCss[index] === '}') depth--;
+      index++;
+    }
+    keyframes.set(match[1], filmCss.slice(match.index! + match[0].length, index - 1));
+  }
+  assert.ok(keyframes.size >= 5, 'znalazłem klatki kluczowe filmu');
+
+  // 1. Gasi w `from`/`0%`, więc musi zapalić w `to`/`100%`.
+  for (const [name, body] of keyframes) {
+    const start = /(?:from|0%)\s*\{([^}]*)\}/.exec(body)?.[1] ?? '';
+    const end = /(?:to|100%)\s*\{([^}]*)\}/.exec(body)?.[1] ?? '';
+    if (!/opacity\s*:\s*0(?:\.\d+)?\s*;?\s*$|opacity\s*:\s*0\s*[;}]/.test(start.trim() + ';')) continue;
+    assert.ok(/opacity\s*:\s*1/.test(end),
+      `klatka \`${name}\` gasi opacity w \`from\`, więc musi mieć jawny \`to { opacity: 1 }\` — inaczej element zostaje niewidoczny (to był zgłoszony błąd)`);
+  }
+
+  // 2. Animacje wejścia nie mogą ruszać `transform`: telefon i telewizor pozycjonują się
+  //    inline'owym `transform: translate3d(...)`, a animacja `transform` by go zastąpiła
+  //    (mockup wjeżdżał z narożnika zamiast pojawiać się na miejscu).
+  for (const name of ['filmRise', 'filmSlideIn', 'filmPopIn', 'filmStamp']) {
+    assert.ok(!/transform\s*:/.test(keyframes.get(name) ?? ''), `klatka \`${name}\` używa \`translate\`/\`scale\`, nie \`transform\``);
+  }
+
+  // 3. Każda klasa filmu, która bazowo ma `opacity: 0`, musi mieć ścieżkę do widoczności:
+  //    animację kończącą się na `opacity: 1` albo jawną regułę z `opacity: 1`.
+  const baseHidden = new Set<string>();
+  for (const rule of filmCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const body = rule[2];
+    if (!/opacity\s*:\s*0\s*[;}]/.test(body + ';')) continue;
+    for (const cls of rule[1].matchAll(/\.([\w-]+)/g)) baseHidden.add(cls[1]);
+  }
+  const visibleSomewhere = new Set<string>();
+  for (const rule of filmCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const selector = rule[1];
+    const body = rule[2];
+    const animated = /animation\s*:/.test(body);
+    const explicit = /opacity\s*:\s*1/.test(body);
+    if (!animated && !explicit) continue;
+    // Animacja liczy się tylko wtedy, gdy jej klatka kończy się na opacity: 1.
+    const animatedVisible = animated
+      ? [...selector.matchAll(/([\w-]+)\s+[\d.]+m?s/g)].some(([, n]) => /opacity\s*:\s*1/.test(/(?:to|100%)\s*\{([^}]*)\}/.exec(keyframes.get(n) ?? '')?.[1] ?? ''))
+      : false;
+    if (explicit || animatedVisible) for (const cls of selector.matchAll(/\.([\w-]+)/g)) visibleSomewhere.add(cls[1]);
+  }
+  // 4. Wejście elementu musi zależeć od cue, nie od wpisanej na sztywno klasy:
+  //    `className="film-label is-in"` zapala treść na starcie sceny, ignorując własne cue.
+  const scenesSrc = readFileSync('src/cinema/scenes.tsx', 'utf8');
+  assert.ok(!/className="[^"]*is-in/.test(scenesSrc),
+    'scena wpisuje `is-in` na sztywno w `className` — wejście musi zależeć od cue');
+  assert.ok(!/className=\{`[^`$]*is-in/.test(scenesSrc),
+    'scena wpisuje `is-in` na sztywno w szablonie `className` — wejście musi zależeć od cue');
+
+  const orphans = [...baseHidden].filter(cls => !visibleSomewhere.has(cls));
+  assert.deepEqual(orphans, [],
+    `te klasy mają bazowe \`opacity: 0\` i żadnej ścieżki do widoczności: ${orphans.join(', ')}`);
+}
+console.log('FILM VISIBILITY SELFTEST: OK (stan końcowy animacji, pozycja mockupów, żadnej klasy uwięzionej w opacity 0)');
+
 
 /* --- TIMELINE: suma czasów i granice scen ------------------------------ */
 
@@ -133,6 +284,7 @@ console.log('FILM CAMERA SELFTEST: OK (klatki kluczowe, monotoniczne krzywe bez 
 
 assert.equal(qualityTier({ reduced: true, cores: 16, memory: 16 }), 'static', 'ograniczony ruch = wersja statyczna');
 assert.equal(qualityTier({ reduced: false, cores: 2 }), 'lite');
+assert.equal(qualityTier({ reduced: false, cores: 4, memory: 8 }), 'high', 'typowy czterordzeniowy laptop dostaje pełną wersję poradnika');
 assert.equal(qualityTier({ reduced: false, cores: 16, memory: 2 }), 'lite');
 assert.equal(qualityTier({ reduced: false, saveData: true, cores: 16, memory: 16 }), 'lite');
 assert.equal(qualityTier({ reduced: false, slowLink: true, cores: 16, memory: 16 }), 'lite');

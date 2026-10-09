@@ -281,7 +281,7 @@ ekranie startowym. Do klikania ręcznie:
 
 Bez przeglądarki w sandboxie (`ECONNRESET` przy pobieraniu Chromium) film nie był obejrzany.
 Maszyna sprawdziła za to `selftest:cinema` (kontrakt skryptu) i `selftest:cinema-render`
-(776 renderów w PL i EN: brak NaN w geometrii, obecność elementów charakterystycznych scen,
+(860 renderów w PL i EN: brak NaN w geometrii, obecność elementów charakterystycznych scen,
 język i tryby `lite`/`static`). Nagrania do ręcznego montażu robi
 `node scripts/cinema/render.mjs` (wymaga Chromium i ffmpeg).
 

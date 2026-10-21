@@ -12,7 +12,10 @@
  *
  * Warunki wstępne: build w `/home/user/joypad-preview` (skrypt sam kopiuje go do
  * `/home/user/boot-test`, gdzie dokłada `package.json` z `"type":"module"` — bez tego
- * Node odmówi importu plików `.js` jako ESM).
+ * Node odmówi importu plików `.js` jako ESM). Katalog można wskazać argumentem albo
+ * `JOYPAD_PREVIEW_DIR`, więc da się sprawdzić **dokładnie ten** build, który idzie na
+ * GitHub Pages (`JOYPAD_PREVIEW_DIR=dist`, zbudowany z `VITE_BASE=/JoyPad/`) — skrypt
+ * wycina prefiks base z adresu chunka wejściowego.
  *
  * Uwaga na jsdom: nie kopiujemy jego `performance` do globals (rekurencja `RangeError`);
  * `pretendToBeVisual:true` daje rAF; `dialog`/`ResizeObserver`/`IntersectionObserver`
@@ -22,8 +25,8 @@ import { cp, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const PREVIEW = '/home/user/joypad-preview';
-const SANDBOX = '/home/user/boot-test';
+const PREVIEW = process.env.JOYPAD_PREVIEW_DIR || process.argv[2] || '/home/user/joypad-preview';
+const SANDBOX = process.env.JOYPAD_BOOT_DIR || '/home/user/boot-test';
 const problems = [];
 const notes = [];
 
@@ -38,7 +41,9 @@ await cp(PREVIEW, SANDBOX, { recursive: true, force: true });
 await writeFile(path.join(SANDBOX, 'package.json'), '{"type":"module"}\n');
 
 const html = await readFile(path.join(SANDBOX, 'index.html'), 'utf8');
-const entry = /src="\.?\/?(assets\/index-[^"]+\.js)"/.exec(html)?.[1];
+// `src="./assets/…"` (base "/") albo `src="/JoyPad/assets/…"` (build dla Pages) —
+// w obu przypadkach interesuje nas sama ścieżka względem katalogu builda.
+const entry = /src="[^"]*?(assets\/index-[^"]+\.js)"/.exec(html)?.[1];
 if (!entry) { console.error('Nie znalazłem wejściowego chunka w index.html — najpierw zbuduj podgląd.'); process.exit(1) }
 
 // 2. jsdom + shimy przeglądarki.

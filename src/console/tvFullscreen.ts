@@ -20,7 +20,7 @@ export function nextFullscreenMode(mode: FullscreenMode, event: FullscreenEvent)
     case 'denied': return mode === 'pending' || mode === 'off' ? 'armed' : mode;
     case 'left': return 'off';
     case 'gesture': return mode === 'armed' ? 'pending' : mode;
-    case 'toggle': return mode === 'on' ? 'off' : mode === 'pending' ? 'pending' : 'pending';
+    case 'toggle': return mode === 'on' ? 'off' : 'pending';
   }
 }
 
@@ -55,14 +55,14 @@ export function toggleTvFullscreen() {
     return;
   }
   const fromPad = !(navigator as { userActivation?: { isActive?: boolean } }).userActivation?.isActive;
-  if (fromPad) {
-    // Odmowa z góry: uzbrajamy i mówimy, czego potrzebujemy.
-    setMode('armed');
-    notify(translate(loadLanguage(), 'fullscreen.armTitle'), translate(loadLanguage(), 'fullscreen.armDetail'), 'system');
-    return;
-  }
+  // Próbujemy zawsze: część przeglądarek (i telewizorów z wcześniejszym dotykiem na ekranie)
+  // wpuszcza do pełnego ekranu także po żądaniu z sieci. Dopiero faktyczna odmowa
+  // przeglądarki uzbraja ekran i mówi graczowi, czego brakuje.
   setMode(nextFullscreenMode(mode, 'toggle'));
-  void enter();
+  void enter().then(() => {
+    if (mode === 'on' || !fromPad) return;
+    notify(translate(loadLanguage(), 'fullscreen.armTitle'), translate(loadLanguage(), 'fullscreen.armDetail'), 'system');
+  });
 }
 
 /** Wołane z handlerów klawiatury/pada na telewizorze: domyka `armed`. */

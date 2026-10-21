@@ -295,6 +295,34 @@ assert.equal(race.highlights()[0].kind, 'lap');
 assert.ok(!race.highlights().some(m => m.kind === 'lead'), 'lap counts cannot invent race overtakes');
 console.log('MOMENTS SELFTEST: OK (real FX, streaks, lead changes, timing, bounds, lap semantics, reset)');
 
+/* Język interfejsu: kompletność słownika PL/EN, parametry i `<html lang>`. */
+const { MESSAGES, applyDocumentLanguage, documentLanguageTag, t: translateMessage } = await import('../src/platform/i18n');
+const { WHATS_NEW_VERSION } = await import('../src/platform/whatsNewState');
+const plKeys = Object.keys(MESSAGES.pl);
+assert.deepEqual(Object.keys(MESSAGES.en).filter(key => !(key in MESSAGES.pl)), [], 'klucz EN bez wersji PL');
+assert.deepEqual(plKeys.filter(key => !(key in MESSAGES.en)), [], 'klucz PL bez wersji EN — anglojęzyczny gracz zobaczyłby polski napis');
+const params = (text: string) => [...text.matchAll(/\{([a-zA-Z]+)\}/g)].map(match => match[1]).sort();
+for (const key of plKeys) {
+  assert.ok(MESSAGES.pl[key].trim().length > 0, `pusty napis pl:${key}`);
+  const en = MESSAGES.en[key];
+  if (en === undefined) continue;
+  assert.ok(en.trim().length > 0, `pusty napis en:${key}`);
+  assert.deepEqual(params(en), params(MESSAGES.pl[key]), `inne parametry w en:${key} — podstawienie zostawiłoby surowy znacznik`);
+}
+assert.equal(documentLanguageTag('pl'), 'pl');
+assert.equal(documentLanguageTag('en'), 'en');
+const attrs: Record<string, string> = {};
+const target = { setAttribute: (name: string, value: string) => { attrs[name] = value; } };
+applyDocumentLanguage('en', target);
+assert.equal(attrs.lang, 'en', 'dokument dostaje znacznik wybranego języka');
+applyDocumentLanguage('pl', target);
+assert.equal(attrs.lang, 'pl');
+applyDocumentLanguage('en'); // bez DOM-u: cicho, bez wyjątku
+assert.ok(translateMessage('en', 'library.version').includes(WHATS_NEW_VERSION), 'numer wersji w stopce bierze się z jednego źródła');
+assert.equal(translateMessage('pl', 'results.teamWins'), 'DRUŻYNA WYGRYWA');
+console.log(`LANGUAGE SELFTEST: OK (${plKeys.length} kluczy PL/EN, parametry, znacznik lang dokumentu, wersja z jednego źródła)`);
+
+
 // Ruch po ekranie wyników robi nawigacja przestrzenna (`focusSurface` + `useUiControls`),
 // więc płaska lista `navigateResults` została wycofana. Jej zamiennik testuje
 // `selftest:console` (sekcja UI CONTROL: powierzchnie menu gier, stepperzy i bramka

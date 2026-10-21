@@ -1,4 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
+// Numer wydania bierzemy ze źródła, a nie z literalu: przy każdym bumpie test
+// „co nowego?" musi nadal pomijać ogłoszenie startowe, a nie je otwierać.
+import { WHATS_NEW_VERSION } from '../src/platform/whatsNewState';
 
 async function harness(page: Page) {
   await page.route('**/__moments_test', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><html lang="pl"><body></body></html>' }));
@@ -11,7 +14,7 @@ async function harness(page: Page) {
 }
 
 async function skipStartupReleaseNotes(page: Page) {
-  await page.addInitScript(() => localStorage.setItem('joypad.whats-new-version', '1.7.0'));
+  await page.addInitScript(version => localStorage.setItem('joypad.whats-new-version', version), WHATS_NEW_VERSION);
 }
 
 test('localized release notes appear at startup once and can be dismissed', async ({ page }) => {
@@ -98,10 +101,10 @@ test('actual TV flow: captured pickup → results → video → rematch → new 
     expect(patched).not.toBe(code);
     await route.fulfill({ response, body: patched });
   });
-  await page.addInitScript(() => {
+  await page.addInitScript(version => {
     localStorage.setItem('joypad.evening.game', JSON.stringify('tanks'));
-    localStorage.setItem('joypad.whats-new-version', '1.7.0');
-  });
+    localStorage.setItem('joypad.whats-new-version', version);
+  }, WHATS_NEW_VERSION);
   await page.goto('/');
   await page.locator('[data-game-index="0"]').click();
   await page.getByRole('button', { name: 'Rozpocznij pojedynek', exact: false }).click();

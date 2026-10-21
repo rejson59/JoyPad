@@ -11,6 +11,11 @@
  * Uruchomienie:  node scripts/preview-server.mjs [port] [katalog]
  * Domyślnie:     port 5173, katalog ../joypad-preview
  *
+ * Zna prefiks `VITE_BASE` (np. `/JoyPad/`) z `index.html` i podaje zasoby zarówno
+ * pod `/assets/…`, jak i `/JoyPad/assets/…` — dzięki temu można tu otworzyć build
+ * przygotowany dla GitHub Pages i zobaczyć dokładnie te adresy, które wpisze
+ * przeglądarka w produkcji.
+ *
  * Przy starcie robi szybką samokontrolę: czy `index.html` i wszystkie odwołane
  * `/assets/*.js|css` naprawdę leżą na dysku. Brak pliku = build jest niekompletny
  * (np. przerwany) i lepiej wiedzieć o tym od razu, niż zgadywać, czemu ekran jest czarny.
@@ -53,6 +58,26 @@ const TYPES = {
 };
 
 const typeOf = (file) => TYPES[path.extname(file).toLowerCase()] ?? 'application/octet-stream';
+
+/**
+ * Prefiks base zbudowanej strony (`/JoyPad/` albo `''`). Czytamy go z `index.html`
+ * i pamiętamy razem z mtime pliku, bo build potrafi się zmienić bez restartu serwera.
+ */
+let baseCache = { mtimeMs: -1, prefix: '' };
+async function basePrefix() {
+  const indexPath = path.join(ROOT, 'index.html');
+  const info = await statOf(indexPath);
+  if (!info) return '';
+  if (baseCache.mtimeMs === info.mtimeMs) return baseCache.prefix;
+  let prefix = '';
+  try {
+    const html = await fs.readFile(indexPath, 'utf8');
+    const match = /(?:src|href)="(\/[^"]*?\/)assets\/index-/.exec(html);
+    if (match) prefix = match[1];
+  } catch { /* brak index.html — traktujemy jak base "/" */ }
+  baseCache = { mtimeMs: info.mtimeMs, prefix };
+  return prefix;
+}
 
 /**
  * Nagłówki pamięci podręcznej.
@@ -177,8 +202,13 @@ Promise.all(probes.map(p => fetch(p, { cache: 'no-store' })
 }
 
 async function serve(req, res, urlPath) {
-  if ((urlPath ?? '').split('?')[0] === '/podglad.html') return serveControlPage(res);
-  let file = resolveSafe(urlPath);
+  const clean = decodeURIComponent((urlPath ?? '/').split('?')[0].split('#')[0]);
+  if (clean === '/podglad.html') return serveControlPage(res);
+  // `/JoyPad/assets/x.js` → `assets/x.js`: serwer podglądu stoi w korzeniu builda,
+  // a GitHub Pages dokłada prefiks repozytorium. Obsługujemy oba zapisy.
+  const prefix = await basePrefix();
+  const local = prefix && clean.startsWith(prefix) ? '/' + clean.slice(prefix.length) : urlPath;
+  let file = resolveSafe(local);
   if (!file) { res.writeHead(400).end('Zła ścieżka'); return 400 }
 
   let info = await statOf(file);
@@ -215,7 +245,9 @@ async function audit() {
   const indexPath = path.join(ROOT, 'index.html');
   if (!existsSync(indexPath)) return { ok: false, missing: ['index.html'], total: 0 };
   const html = await fs.readFile(indexPath, 'utf8');
-  const refs = [...new Set([...html.matchAll(/(?:src|href)="\.?\/?([^":]+\.(?:js|css|webmanifest|png|svg|jpg))"/g)].map(m => m[1]))];
+  const prefix = await basePrefix();
+  const refs = [...new Set([...html.matchAll(/(?:src|href)="\.?\/?([^":]+\.(?:js|css|webmanifest|png|svg|jpg))"/g)]
+    .map(m => (prefix && m[1].startsWith(prefix) ? m[1].slice(prefix.length) : m[1])))];
   const missing = refs.filter(ref => !existsSync(path.join(ROOT, ref)));
   if (!missing.length) {
     // Chunki leniwe (film, pad, gry) nie są w `index.html` — sprawdzamy, czy w ogóle są.

@@ -11,6 +11,8 @@
 - **Dwa układy, nie rozciągnięta kolumna.** Pionowy admin ma pilot z OK i nawigacją — gałką obok krzyżaka oraz skrótami X/Y. Poziomy admin ma krzyżak po lewej (gałka w jego środku, X/Y w górnych narożnikach), centralny wyświetlacz i fizycznie stylizowane A/B po prawej. W menu oba wysyłają komendy menu, nigdy input jazdy/strzału. Start gry nadal przełącza na dedykowany kontroler silnika. Uczestnicy bez roli admina widzą poczekalnię, nie aktywne przyciski sterowania TV.
 - **Plamek (Splash) zamiast ramki fokusa.** To, gdzie jesteś, pokazuje pomarańczowa plama farby z buźką: otoczka ścieka w kulkę, kulka przelatuje ze smugą na następny element, uderza i wylewa nową otoczkę. Miny czytają stan (czeka, leci, uderzył, zasnął), a przy ograniczonym ruchu zostaje sam lepkie poślizg bez fajerwerków. Ten sam motyw jest wskaźnikiem czekania (QR, start gry, ekran rozruchu). Model: `src/console/plamek.ts`, opis: `docs/plamek.md`.
 - **Szklane powiadomienia.** Dołączenie/opuszczenie pokoju, gotowość, propozycje, nowy admin i zmiany zasad. Maksymalnie trzy pigułki, zamknięcie ręczne, automatyczne znikanie po 5 sekundach, `aria-live`, respektowanie ograniczonego ruchu. Pigułki nie przechwytują dotyku poza własnym obszarem. Dialog systemowy przeglądarki ma pierwszeństwo nad powiadomieniem.
+- **Sześć gier w bibliotece.** Od v1.8 grywalne są także **Turbo League** (piłka samochodowa 3D, silnik z `nitro-league.zip`) i **WEBZA — Nocna Dostawa** (dostawa pizzy 3D, silnik z paczki `multiplayer-superhero-pizza-delivery.zip`). BlockCraft pozostaje zapowiedzią (`wip: true`). Szczegóły integracji: [imported-games.md](imported-games.md).
+- **Język dokumentu idzie za wyborem gracza.** `index.html` jest po polsku (`lang="pl"`), a interfejs można przełączyć na angielski — od v1.8 `<html lang>` jest ustawiany z zapisanego wyboru (przy starcie i przy każdej zmianie), więc czytnik ekranu i automatyczne tłumaczenie przeglądarki nie czytają angielskiego tekstu polską wymową. Spójność słownika PL/EN (674 klucze, parametry `{name}`) pilnuje sekcja **LANGUAGE** w `npm run selftest:platform`.
 - **Moments Video.** Do trzech krótkich powtórek wideo po rundzie, czas akcji, gracz i odtwarzacz. Pauza, przewijanie, tempo 0,5× i pobranie samodzielnego pliku WebM/MP4. W wynikach strzałki pilota wybierają Moments i akcje, OK/A otwiera, Wstecz zamyka kartę. Osobny przycisk rewanżu na pionowym pilocie nadal wysyła jednoznaczne `restart`.
 
 ## Co dokładnie znaczy Moments w tej wersji
@@ -70,8 +72,19 @@ npm run selftest:replay
 npm run selftest:arcade
 npm run selftest:console
 npm run selftest:relay
+npm run selftest:cinema
+npm run selftest:cinema-render
+npm run selftest:league
+npm run selftest:pizza
+npm run selftest:ui
 VITE_BASE=/JoyPad/ npm run build
+JOYPAD_PREVIEW_DIR=dist JOYPAD_BOOT_DIR=.cache/boot-test npm run selftest:preview
 ```
+
+Całość bez przeglądarki jednym poleceniem: `npm run selftest:all`; z lintem, typami
+i buildem: `npm run verify`. `ci.yml` i `deploy.yml` uruchamiają ten sam zestaw, a po
+buildzie z `VITE_BASE` dodatkowo smoke **gotowego artefaktu Pages** (`selftest:preview`)
+i kontrolę dostarczania zasobów (`selftest:delivery`).
 
 Nowy selftest sprawdza brak uprawnień gościa, transfer, odebranie praw staremu adminowi, zamknięcie, reconnect, usunięcie ulgi po kick, odrzucenie WIP, cofnięcie głosu, walidację profilu, zapis bez localStorage, ograniczenia i reset Moments oraz niemutowalne snapshoty do powiadomień.
 

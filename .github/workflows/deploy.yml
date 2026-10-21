@@ -25,15 +25,12 @@ jobs:
           cache: npm
       - run: npm ci
       # Ten sam zestaw co w CI — bramka jakości przed publikacją na Pages.
-      - name: Selftesty przed deployem
+      - name: Lint i typecheck
         run: |
           npm run lint
-          npm run selftest:arcade
-          npm run selftest:console
-          npm run selftest:relay
-          npm run selftest:platform
-          npm run selftest:replay
-          npm run selftest:v16
+          npm run typecheck
+      - name: Selftesty przed deployem
+        run: npm run selftest:all
       # Strona projektu leży pod https://<user>.github.io/<repo>/ → base = /<repo>/
       # (dla repo <user>.github.io ustaw VITE_BASE=/)
       - name: Build
@@ -45,6 +42,21 @@ jobs:
           VITE_TURN_URLS: ${{ secrets.VITE_TURN_URLS }}
           VITE_TURN_USERNAME: ${{ secrets.VITE_TURN_USERNAME }}
           VITE_TURN_CREDENTIAL: ${{ secrets.VITE_TURN_CREDENTIAL }}
+      # Publikujemy tylko artefakt, który sam się uruchamia i podaje wszystkie zasoby.
+      - name: Smoke produkcyjnego bundla (Pages)
+        run: JOYPAD_PREVIEW_DIR=dist JOYPAD_BOOT_DIR=.cache/boot-test npm run selftest:preview
+      - name: Delivery — serwer podaje artefakt Pages
+        run: |
+          PREVIEW_DIR=dist node scripts/preview-server.mjs 5176 &
+          SERVER_PID=$!
+          for _ in $(seq 1 30); do
+            curl -sf "http://localhost:5176/" > /dev/null && break
+            sleep 1
+          done
+          node scripts/preview-check.mjs 5176
+          STATUS=$?
+          kill "$SERVER_PID" 2>/dev/null || true
+          exit $STATUS
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

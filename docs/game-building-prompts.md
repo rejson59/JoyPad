@@ -6,7 +6,7 @@
 
 1. Skopiuj **cały blok** wybranej gry do osobnej sesji Arena.ai. Każdy jest samowystarczalny: zawiera wymagania gry, kontrakt hosta, testy i pakowanie.
 2. Najlepiej dołącz `src/arcade/runtime.ts`, `src/net/protocol.ts`, `src/platform/momentRecorder.ts` i tę dokumentację, nawet jeśli nie udostępniasz całego repo.
-3. Pobierz ZIP ze źródłami. Skopiuj go do repo JoyPad (ZIP-y są ignorowane przez Git) lub załącz w nowej sesji.
+3. Pobierz ZIP ze źródłami i załącz w sesji albo rozpakuj do `.cache/game-import/` (ten katalog i `*.zip` są w `.gitignore`). Uwaga: `nitro-league.zip` i `orbitalna-fala.zip` leżą w korzeniu repo i **są śledzone przez Gita** — zostały dodane zanim powstał ten zapis, a ich silniki żyją już w `src/arcade/league-next/` i `src/arcade/starclash/`. Nowych paczek nie commituj.
 4. Użyj promptu integracyjnego na końcu pliku. Integracja to przegląd i zmiana kodu, **nie instalacja paczki przez stronę**. Agent ma zweryfikować API na aktualnej gałęzi; kontrakt może się zmienić w kolejnych aktualizacjach.
 5. Nie nadpisuj całego repo wyeksportowaną aplikacją demo. Importuj moduł, assety i adapter.
 

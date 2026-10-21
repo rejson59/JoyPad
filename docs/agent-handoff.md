@@ -607,13 +607,13 @@ i trzynastu nowych/zmienionych modułów. Bez commita i pusha.
 1. `git status` + `git diff` — sprawdź, na czym stanąłeś;
 2. `npm ci` (sandbox startuje bez `node_modules`) i `npm run dev -- --host 0.0.0.0 --port 5173`
    — preview użytkownika działa tylko pod 5173;
-3. **bramka przed odpowiedzią:** `npm run lint && npm run typecheck && for t in cinema cinema-render
-   console platform arcade replay v16 relay; do npm run --silent selftest:$t; done && npm run build`;
+3. **bramka przed odpowiedzią:** `npm run verify` (lint + typecheck + `selftest:all` + build),
+   a po buildzie z `VITE_BASE` jeszcze `JOYPAD_PREVIEW_DIR=dist npm run selftest:preview`;
 4. nie commituj i nie pushuj, jeśli użytkownik o to nie poprosił; ZIP-y i staging nie lądują
    w commitach; pracujesz wyłącznie na `arena/01a0f36b-joypad`.
 5. `docs/console-testing.md` — testy konsolowe i lista review-checków do samodzielnego klikania;
-   `docs/agent-brief.md` — skrócona instrukcja forku gry (jeśli wracasz do `nitro-league.zip`,
-   zajrzy najpierw do §4 i §5 tego dokumentu).
+   `docs/game-building-prompts.md` §2 i `docs/imported-games.md` — procedura wciągania paczki ZIP
+   (na jej podstawie zintegrowano `nitro-league.zip`, patrz §4 i §5 tego dokumentu).
 
 Nie jest to dokument, który trzeba czytać w całości: §4 i §5 wystarczą, żeby wiedzieć, co
 już zostało rozstrzygnięte, i nie podejmować tych decyzji raz jeszcze.
@@ -626,3 +626,24 @@ już zostało rozstrzygnięte, i nie podejmować tych decyzji raz jeszcze.
       z fokusem na ikonie pomocy, przejdź listę gier strzałkami; na telefonie dołącz pada
       i sprawdź pozycje `0/0` przy odświeżaniu kodu;
 - [ ] nic nie jest commitowane/pushnięte bez pytania (patrz reguły w `docs/game-building-prompts.md`).
+
+## Stan po wydaniu v1.8 (2026-10-21, gałąź `arena/fbae352d-joypad`)
+
+Ta gałąź = pełna zawartość `arena/01a0f36b-joypad` (rundy 15–19, WEBZA, Turbo League) plus porządki:
+
+| Co | Gdzie | Dlaczego |
+|---|---|---|
+| Wersja **1.8.0** w jednym miejscu | `src/platform/whatsNewState.ts` (`WHATS_NEW_VERSION`, `APP_VERSION_SHORT`) | numer był wpisany ręcznie w stopce biblioteki, w „Co nowego?", w napisie końcowym filmu i w `package.json` — rozjeżdżał się przy każdym wydaniu |
+| „Co nowego?" opisuje v1.8 | `src/platform/WhatsNew.tsx` | lista wymieniała tylko zakres v1.7, choć w bibliotece są już Turbo League i WEBZA |
+| `<html lang>` idzie za językiem gracza | `applyDocumentLanguage` w `src/platform/i18n.ts`, wołane z `main.tsx`, `setLanguage` i `useLanguage` | `index.html` jest zawsze `lang="pl"`; przy EN czytnik ekranu i tłumaczenie przeglądarki czytały angielski tekst polską wymową |
+| Bramka spójności PL/EN | sekcja **LANGUAGE** w `scripts/platform-selftest.ts` (+ `MESSAGES` z `i18n.ts`) | brakujący klucz w EN odpada po cichu na polski napis (`messages[lang][key] ?? messages.pl[key]`) — 674 kluczy, parametry `{name}`, puste wartości |
+| Pełny ekran TV próbuje także z pada | `toggleTvFullscreen` w `src/console/tvFullscreen.ts` | kod od razu uzbrajał ekran, choć komentarz obiecywał próbę; część przeglądarek wpuszcza bez gestu, a odmowa i tak kończy się `armed` + powiadomieniem |
+| Podgląd/CI znają `VITE_BASE` | `scripts/preview-server.mjs`, `preview-smoke.mjs` (`JOYPAD_PREVIEW_DIR`, `JOYPAD_BOOT_DIR`), `preview-check.mjs` | smoke produkcyjnego bundla nie dał się uruchomić na buildzie z Pages (`/JoyPad/assets/…`), a serwer podglądu meldował „BRAKI" dla poprawnego artefaktu |
+| Bramki w CI i deployu | `.github/workflows/ci.yml`, `deploy.yml` | `cinema`, `cinema-render`, `league`, `pizza`, `ui` nie były wołane nigdzie; deploy nie robił typechecku i publikował bez sprawdzenia artefaktu |
+| `npm run selftest:all` / `npm run verify` | `package.json` | jeden polecenie zamiast jedenastu; `verify` = dokładnie to, co woła CI |
+| Test Playwright bierze numer wersji ze źródła | `tests/moments.spec.ts` | literal `'1.7.0'` sprawiłby, że po bumpie ogłoszenie startowe otwiera się w środku scenariusza Moments |
+| README i dokumenty zgodne z katalogiem | `README.md`, `docs/platform-update.md`, `docs/console-testing.md`, `docs/game-building-prompts.md` | README nadal twierdził, że dostępne są **cztery** gry i że Turbo League to zapowiedź; zdanie „ZIP-y są ignorowane przez Git" było nieprawdziwe (dwa ZIP-y są śledzone) |
+
+ZIP-y w korzeniu (`nitro-league.zip`, `orbitalna-fala.zip`) zostają śledzone jako materiał
+źródłowy zintegrowanych silników; nowo otrzymanych paczek nie commitujemy (`.gitignore` ma `*.zip`).
+Testy wideo Playwright nadal działają tylko w CI — sandbox agenta nie pobiera Chromium.

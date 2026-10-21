@@ -13,6 +13,11 @@ npm run selftest:ui      # test dymny interfejsu (jsdom + prawdziwy render klien
 npm run build
 ```
 
+Wszystkie automaty bez przeglądarki jednym poleceniem: `npm run selftest:all`
+(arcade, console, relay, platform, replay, v16, cinema, cinema-render, league, pizza, ui).
+`npm run verify` dokłada do tego lint, typecheck i build — to dokładnie ten zestaw,
+który uruchamia `ci.yml` i `deploy.yml`.
+
 `selftest:console` sprawdza walidację preferencji, zakresy rozmiaru/wysokości, omijanie niedostępnych gier, zawijanie biblioteki, wspólną paletę oraz priorytety i fallback haptyki. Sekcja **LIQUID GLASS** liczy selektory powierzchni (165) i pilnuje tokenów, braku `background-color: #hex8`, `backdrop-filter: blur(` w ciele reguły, nieskończonych animacji i `transform: none !important` na klasach Plamka z transformem JS. Sekcja **UI CONTROL** dokłada liczby sterowania (martwa strefa analoga, próg pierwszego powtórzenia, rytm przyspieszenia, wybór celu w rzędzie i w siatce), stos skrótów X/Y (kto jest na wierzchu, podmiana w miejscu, brak akcji po zamknięciu), maszynę stanów pełnego ekranu, nowe komendy w protokole (`x`/`y`/`fullscreen` przy `PROTOCOL_VERSION 1`) oraz kontrakt źródłowy: jedna nawigacja w projekcie, maskotka animowana transformem i znosząca się przy ograniczonym ruchu (bez `Math.random` w klatce), pilot telefoniczny z gałką i skrótami. Sekcja dokłada też **model ruchu Plamka** (kolejność faz, przekierowanie w locie, próg poślizgu, grubienie farby przy skracaniu obwodu, długość lotu od dystansu z górnym limitem) i to, że ruch jest **pościgiem ze stałą czasową, nie sprężyną**: 63% dystansu na `tau`, brak przekroczenia celu, promień zaokrąglający się z napięcia, ostry tył kulki w locie, prymat ruchu nad skłonem w eyeline'ach. Runda 3 doka kontrakty rytmu zdarzeń i fizyki cieczy: `focusout` nie może gasić maskotki (test sprawdza brak nasłuchu i istnienie `scheduleHide` z `PLAMEK.hideDelayMs`), rytuał startuje z gałęzi `lean` (`takeOff`), most `strandFor` nie istnieje bez ruchu, cienieje monotonicznie i pęka przed lądowaniem (z kurczącą się kroplą źródłową), `flightCurve` jest monotoniczna i zerwanie jest szybsze niż hamowanie, `gripOffset` ściąga się do zera, `squashFrom` zachowuje pole, a `wobbleValue` zmienia znak po pół okresie i gaśnie do zera (więc pętla może zasnąć); w widoku drganie nie może trafiać w oś pozycji. Runda 4 dokłada kontrakt położenia głowy: `perchFor` siada nad elementem niezależnie od kierunku
 komendy (tylko gdy brakuje 2× promień + zapas — pod), `perchSide` jest funkcją kierunku,
 `gazeBiasFor` każe oczom patrzeć na etykietę, a `landFor` oddaje dokładnie ten sam punkt, w którym
@@ -307,6 +312,11 @@ Podgląd, który ogląda użytkownik, to **gotowy build** podawany przez
 Serwer czyta pliki przy każdym żądaniu, więc po `npx vite build --outDir ../joypad-preview
 --emptyOutDir` nic nie trzeba restartować. `npm run dev` zostaje do pracy w edytorze.
 
+Serwer zna też prefiks `VITE_BASE`: przy buildzie dla GitHub Pages
+(`VITE_BASE=/JoyPad/ npm run build`, katalog `dist`) podaje zasoby zarówno pod
+`/assets/…`, jak i `/JoyPad/assets/…`, więc `PREVIEW_DIR=dist node scripts/preview-server.mjs 5176`
+otwiera dokładnie ten artefakt, który trafia na Pages — z tymi samymi adresami co w produkcji.
+
 Dwie rzeczy w tym serwerze są celowe:
 
 - **`/podglad.html` jest generowana w locie**, nie z pliku na dysku — `--emptyOutDir`
@@ -321,8 +331,8 @@ Dwa automaty pilnują tej warstwy (wymagają gotowego builda i — dla drugiego 
 
 | Skrypt | Co sprawdza |
 | --- | --- |
-| `npm run selftest:preview` | kopiuje build do `/home/user/boot-test`, importuje **prawdziwy** chunk wejściowy w jsdom i przechodzi pierwsze uruchomienie: drzewo interfejsu wstaje, pojawia się pytanie o poradnik, „Tak” startuje film, Esc wraca do biblioteki |
-| `npm run selftest:delivery` | pobiera przez HTTP każdy zasób, którego potrzebuje ekran TV i pad: chunki (także leniwe), czcionki z CSS, okładki, nagrania MP4/WebM, manifest |
+| `npm run selftest:preview` | kopiuje build do katalogu roboczego, importuje **prawdziwy** chunk wejściowy w jsdom i przechodzi pierwsze uruchomienie: drzewo interfejsu wstaje, pojawia się pytanie o poradnik, „Tak” startuje film, Esc wraca do biblioteki. Katalog wskazuje `JOYPAD_PREVIEW_DIR` (domyślnie `/home/user/joypad-preview`), a roboczy — `JOYPAD_BOOT_DIR`; prefiks base jest wycinany z adresu chunka, więc `JOYPAD_PREVIEW_DIR=dist` sprawdza build z Pages |
+| `npm run selftest:delivery` | pobiera przez HTTP każdy zasób, którego potrzebuje ekran TV i pad: chunki (także leniwe), czcionki z CSS, okładki, nagrania MP4/WebM, manifest. Adresy bierze wprost z `index.html`, więc przy `VITE_BASE=/JoyPad/` sprawdza dokładnie te URL-e, które wpisze przeglądarka na GitHub Pages |
 
 `selftest:preview` to jedyny automat widzący błędy **builda** (zły podział chunków,
 `import.meta`, CSS), bo `selftest:ui` idzie przez świeże moduły źródłowe Vite. Uwaga przy

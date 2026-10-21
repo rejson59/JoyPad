@@ -17,7 +17,7 @@ import "./fonts";
 import JoypadApp from "./arcade/JoypadApp";
 import { AppErrorBoundary, installStartupGuard } from "./components/AppErrorBoundary";
 import { isPadRoute } from "./net/protocol";
-import { loadLanguage } from "./platform/i18n";
+import { applyDocumentLanguage, loadLanguage } from "./platform/i18n";
 import { installWindowOriginTracker } from "./console/windowOrigin";
 import { installViewportProfile } from "./console/viewport";
 
@@ -27,6 +27,10 @@ installWindowOriginTracker();
 // Awaria pojedynczego modułu albo efektu nie może kończyć się pustym, czarnym ekranem —
 // strażnik startu i granica błędów zawsze zostawiają czytelny komunikat (patrz AppErrorBoundary).
 installStartupGuard();
+
+// Język dokumentu (`<html lang>`) z zapisanego wyboru gracza — przed pierwszym renderem,
+// żeby czytelnik ekranu nie czytał angielskiego interfejsu polską wymową.
+applyDocumentLanguage(loadLanguage());
 
 // Jaki to ekran (TV / komputer / tablet / telefon) — zapisane na `<html data-profile>`.
 // Musi być PRZED pierwszym renderem, inaczej TV mrugnie układem desktopowym.

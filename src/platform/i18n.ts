@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { WHATS_NEW_VERSION } from './whatsNewState';
 
 export type Language = 'pl' | 'en';
 const KEY = 'joypad.language';
@@ -10,7 +11,29 @@ export function loadLanguage(): Language {
 
 export function setLanguage(language: Language) {
   try { localStorage.setItem(KEY, language); } catch { /* optional */ }
+  applyDocumentLanguage(language);
   window.dispatchEvent(new CustomEvent('joypad-language', { detail: language }));
+}
+
+/** Znacznik BCP-47 dla `<html lang>`. */
+export function documentLanguageTag(language: Language): string {
+  return language === 'en' ? 'en' : 'pl';
+}
+
+/**
+ * Ustawia `lang` na dokumencie.
+ *
+ * `index.html` jest zawsze po polsku (`lang="pl"`), a język interfejsu wybiera
+ * gracz i zapisuje się on lokalnie — bez tej linijki czytelnik ekranu i automatyczne
+ * tłumaczenie przeglądarki czytałyby angielski tekst polską wymową (i odwrotnie).
+ * `root` jest parametrem, żeby dało się to sprawdzić w node bez DOM-u.
+ */
+//** Minimalny kształt celu: `document.documentElement` w przeglądarce, atrapa w teście. */
+export interface LanguageTarget { setAttribute(name: string, value: string): void }
+
+export function applyDocumentLanguage(language: Language, root?: LanguageTarget | null): void {
+  const target = root ?? (typeof document === 'undefined' ? null : document.documentElement);
+  try { target?.setAttribute('lang', documentLanguageTag(language)); } catch { /* dokument może być niedostępny */ }
 }
 
 export function useLanguage() {
@@ -20,6 +43,9 @@ export function useLanguage() {
     window.addEventListener('joypad-language', update);
     return () => window.removeEventListener('joypad-language', update);
   }, []);
+  // Dokument dostaje znacznik języka także przy pierwszym montażu — wybór gracza
+  // bywa wcześniejszy niż ta strona (zapisany w localStorage na telewizorze).
+  useEffect(() => { applyDocumentLanguage(language); }, [language]);
   return language;
 }
 
@@ -38,7 +64,7 @@ const messages: Record<Language, Record<string, string>> = {
     'library.admin': 'Administrator', 'library.connected': 'Połączono', 'library.waitingPlayer': 'Czeka na gracza', 'library.crewVotes': 'EKIPA PROPONUJE', 'library.connectionIssue': 'Problem z połączeniem · szczegóły',
     'library.invite': 'W co dziś gramy?', 'library.availableGames': 'Dostępne gry', 'library.upcoming': 'Zapowiedzi', 'library.remoteHint': 'Pilot · klawiatura · gamepad',
     'library.rotateTablet': 'Obróć tablet poziomo — będziesz grać jak na dużym ekranie.', 'library.phoneHint': 'Otwórz kontroler na telefonie',
-    'library.whatsNew': 'Co nowego?', 'library.tutorial': 'Poradnik', 'library.tutorialWatch': 'Obejrzyj poradnik', 'library.howToStart': 'Jak zacząć?', 'library.version': 'JOYPAD OS · 1.7.0', 'library.musicDisable': 'Wyłącz', 'library.musicEnable': 'Włącz', 'library.libraryMusic': 'muzykę w bibliotece',
+    'library.whatsNew': 'Co nowego?', 'library.tutorial': 'Poradnik', 'library.tutorialWatch': 'Obejrzyj poradnik', 'library.howToStart': 'Jak zacząć?', 'library.version': `JOYPAD OS · ${WHATS_NEW_VERSION}`, 'library.musicDisable': 'Wyłącz', 'library.musicEnable': 'Włącz', 'library.libraryMusic': 'muzykę w bibliotece',
     'library.soonTitle': 'Wkrótce w bibliotece', 'library.soonNote': 'Nowe światy pojawią się, gdy będą gotowe — bez odliczania i obietnic dat.', 'library.inDevelopment': 'Zapowiedź',
     'library.helpTitle': 'Usiądź. Połącz. Graj.', 'library.helpScreenTitle': 'Duży ekran', 'library.helpScreen': 'Otwórz JoyPad na komputerze lub telewizorze. Możesz grać na klawiaturze.',
     'library.helpPhoneTitle': 'Twój telefon, Twój kontroler', 'library.helpPhone': 'Zeskanuj kod QR. Pierwszy połączony telefon steruje menu, kolejni gracze dołączają bez konta.',
@@ -134,7 +160,7 @@ const messages: Record<Language, Record<string, string>> = {
     'library.admin': 'Admin', 'library.connected': 'Connected', 'library.waitingPlayer': 'Waiting for player', 'library.crewVotes': 'CREW PICKS', 'library.connectionIssue': 'Connection issue · details',
     'library.invite': "What are we playing?", 'library.availableGames': 'Available games', 'library.upcoming': 'Coming soon', 'library.remoteHint': 'Remote · keyboard · gamepad',
     'library.rotateTablet': 'Turn the tablet sideways to play like on a big screen.', 'library.phoneHint': 'Open the phone controller',
-    'library.whatsNew': "What's new?", 'library.tutorial': 'Tutorial', 'library.tutorialWatch': 'Watch the tutorial', 'library.howToStart': 'How to start', 'library.version': 'JOYPAD OS · 1.7.0', 'library.musicDisable': 'Turn off', 'library.musicEnable': 'Turn on', 'library.libraryMusic': 'library music',
+    'library.whatsNew': "What's new?", 'library.tutorial': 'Tutorial', 'library.tutorialWatch': 'Watch the tutorial', 'library.howToStart': 'How to start', 'library.version': `JOYPAD OS · ${WHATS_NEW_VERSION}`, 'library.musicDisable': 'Turn off', 'library.musicEnable': 'Turn on', 'library.libraryMusic': 'library music',
     'library.soonTitle': 'Coming to the library', 'library.soonNote': 'New worlds will arrive when they are ready — no countdowns or promised dates.', 'library.inDevelopment': 'Coming soon',
     'library.helpTitle': 'Sit down. Connect. Play.', 'library.helpScreenTitle': 'Big screen', 'library.helpScreen': 'Open JoyPad on a computer or TV. You can play with a keyboard.',
     'library.helpPhoneTitle': 'Your phone, your controller', 'library.helpPhone': 'Scan the QR code. The first connected phone controls the menu; other players join without an account.',
@@ -217,6 +243,15 @@ const messages: Record<Language, Record<string, string>> = {
     'diagnostics.relay': 'Fallback relay (Wi‑Fi ↔ LTE)', 'diagnostics.relay.running': 'testing public message relays…', 'diagnostics.relay.ready': 'Relay ready in {time} ({host}) — devices on DIFFERENT networks can connect even when WebRTC/TURN fails.', 'diagnostics.relay.readyHint': 'This is a fallback path: the game uses it only when a direct connection fails. It is usually a few dozen milliseconds slower than WebRTC.', 'diagnostics.relay.fail': 'None of the public relays responded (or the network blocks them).', 'diagnostics.relay.failHint': 'Without a relay or TURN, connections across different networks may fail. Add a custom TURN server with ?turn=turn:host:3478 and optional ?turnUser= and ?turnPass= parameters, or configure VITE_TURN_* at deployment.'
   },
 };
+
+/**
+ * Pełny słownik — wystawiony dla testu spójności (`selftest:platform`).
+ *
+ * Aplikacja dwujęzyczna ma jedną cichą awarię: brakujący klucz w EN odpada na
+ * polski tekst (`messages[language][key] ?? messages.pl[key]`), więc gracz widzi
+ * mieszankę języków i nikt nie zgłasza błędu. Test porównuje zbiory kluczy.
+ */
+export const MESSAGES: Readonly<Record<Language, Readonly<Record<string, string>>>> = messages;
 
 export function t(language: Language, key: string, values: Record<string, string | number> = {}): string {
   let value = messages[language][key] ?? messages.pl[key] ?? key;

@@ -7,7 +7,9 @@
  * żądanie HTTP; brakujący plik albo zły MIME kończy się błędem, a nie cichym
  * „czarnym ekranem” u użytkownika.
  *
- * Wymaga działającego serwera: `node scripts/preview-server.mjs 5173`.
+ * Wymaga działającego serwera: `node scripts/preview-server.mjs 5173` (albo
+ * `PREVIEW_DIR=dist node scripts/preview-server.mjs 5176`, żeby sprawdzić build
+ * z `VITE_BASE` — ten sam, który publikuje GitHub Pages).
  * Uruchomienie bez argumentu sprawdza port 5173.
  */
 const PORT = Number(process.argv[2] ?? 5173);
@@ -46,6 +48,10 @@ if (!index) {
   console.error('Uruchom go wcześniej:  node scripts/preview-server.mjs ' + PORT);
   process.exit(1);
 }
+
+// Adresy bierzemy Z `index.html` bez poprawek: gdy build ma `VITE_BASE=/JoyPad/`,
+// sprawdzamy dokładnie te URL-e, które wpisze przeglądarka na GitHub Pages.
+// Serwer podglądu zna prefiks base i podaje oba warianty ścieżki.
 
 // 1. Wszystko, co `index.html` odwołuje bezpośrednio (chunki, CSS, ikony, manifest).
 for (const match of index.body.matchAll(/(?:src|href)="([^"]+)"/g)) {

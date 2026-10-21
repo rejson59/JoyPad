@@ -191,6 +191,35 @@ await run('start: splash i biblioteka', async () => {
   else if (!frame.querySelector('.fit-scale .os-library')) fail('treść biblioteki nie siedzi w skalowanym obszarze');
 });
 
+/* Język dokumentu i numer wersji. `index.html` jest zawsze `lang="pl"`, a język
+   wybiera gracz — bez synchronizacji czytnik ekranu czyta angielski interfejs polską
+   wymową. Numer wersji ma jedno źródło (`whatsNewState`), więc stopka nie może zostać
+   w poprzednim wydaniu.
+
+   Zmianę języka wysyłamy zdarzeniem jsdom, nie `setLanguage()`: w tym harnessie
+   globalny `CustomEvent` pochodzi z Node, a `window` z jsdom, więc `dispatchEvent`
+   odrzuciłby obiekt z drugiego świata (w przeglądarce to ta sama klasa). Ścieżka,
+   którą sprawdzamy, jest ta sama co w aplikacji: zapis w `localStorage` + zdarzenie
+   `joypad-language`, na które nasłuchuje `useLanguage`. */
+const { WHATS_NEW_VERSION } = await server.ssrLoadModule('/src/platform/whatsNewState.ts');
+const chooseLanguage = async language => {
+  await React.act(async () => {
+    win.localStorage.setItem('joypad.language', language);
+    win.dispatchEvent(new win.CustomEvent('joypad-language', { detail: language }));
+  });
+  await settle(500);
+};
+
+await run('język dokumentu i numer wersji', async () => {
+  const html = win.document.documentElement;
+  if (html.getAttribute('lang') !== 'pl') fail(`start bez znacznika języka: <html lang="${html.getAttribute('lang')}">`);
+  await chooseLanguage('en');
+  if (html.getAttribute('lang') !== 'en') fail('przełączenie na English nie ustawia <html lang="en">');
+  if (!bodyText().includes(`JOYPAD OS · ${WHATS_NEW_VERSION}`)) fail(`stopka nie pokazuje aktualnej wersji ${WHATS_NEW_VERSION}`);
+  await chooseLanguage('pl');
+  if (html.getAttribute('lang') !== 'pl') fail('powrót do polskiego nie przywraca <html lang="pl">');
+});
+
 await run('pierwsze uruchomienie: pytanie o poradnik', async () => {
   const asked = await waitFor(() => /Chcesz zobaczyć krótki poradnik/.test(bodyText()), {
     timeout: 10000, label: 'ekran powitalny (leniwy chunk)',

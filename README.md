@@ -2,19 +2,23 @@
 
 ## JoyPad OS 02 — duża aktualizacja platformy
 
-JoyPad v1.7 rozwija wspólną konsolę: rozbudowana **Moments Gallery**, pełne interfejsy **PL/EN**, pewniejsze prowadzenie w **Neonowym Pędzie**, nowa stalowa arena 2D **Wężowego Wiru**, płynniejsze przejścia oraz lżejsze sterowanie na telefonach. W bibliotece pojawia się też wyłącznie zapowiedź **BlockCraft** — bez grywalnego silnika.
+JoyPad v1.8 dokłada dwie grywalne gry (**Turbo League** i **WEBZA — Nocna Dostawa**), sterowanie **całym** interfejsem z pada, klawiatury i pilota z telefonu, profile ekranu **TV / komputer / tablet / telefon**, maskotkę fokusa **Plamek**, pływające okienka „liquid glass" i filmowy poradnik „Poznaj JoyPad". Z v1.7 zostają **Moments Gallery**, pełne interfejsy **PL/EN** i lżejsze sterowanie na telefonach; **BlockCraft** nadal jest wyłącznie zapowiedzią.
 
 - [Opis funkcji, ograniczenia i testy platformy](docs/platform-update.md)
+- [Sterowanie interfejsem z pada, klawiatury i pilota](docs/ui-control.md)
+- [Plamek — maskotka fokusa: model ruchu i choreografia farby](docs/plamek.md)
 - [Liquid glass — język powierzchni systemu (pigułki, karty, pływające okienka)](docs/liquid-glass.md)
 - [Profile ekranu — TV, komputer, tablet i telefon bez przewijania](docs/viewports.md)
-- [Prompt dla Turbo League i bezpieczna integracja ZIP](docs/game-building-prompts.md)
+- [Film „Poznaj JoyPad" — sceny, jakość i fallbacki](docs/cinema.md)
+- [Gry wciągnięte z paczek ZIP (Turbo League, WEBZA)](docs/imported-games.md)
+- [Prompt dla następnej gry i bezpieczna integracja ZIP](docs/game-building-prompts.md)
 - [Moments Video — architektura, ograniczenia i testy nagrywania](docs/moments-video.md)
 - [JoyPad v1.6 — archiwalny zakres i ograniczenia beta](docs/v1.6.md)
-- Testy platformy: `npm run selftest:platform`, `npm run selftest:replay` oraz `npm run selftest:v16`.
-- Test dymny interfejsu: `npm run selftest:ui` (prawdziwy render kliencki w jsdom — przechodzi splash, film i wszystkie okna, wymagając zera błędów).
+- [Notatka agenta — mapa projektu dla następnej sesji](docs/agent-handoff.md)
+- Testy: `npm run selftest:all` (model, silniki, konsola, film, nowe gry, dym interfejsu) albo `npm run verify` (lint + typecheck + selftesty + build).
 
 
-**JoyPad OS** — matowa konsola do wspólnej gry na jednym ekranie. Telefon jest bezprzewodowym kontrolerem, komputer lub TV wyświetla grę. **Cztery gry są dostępne: Stalowy Front, Neonowy Pęd, Orbitalna Fala i Wężowy Wir (beta).** Turbo League i BlockCraft pozostają zapowiedziami; BlockCraft to teaser, niegrywalna gra.
+**JoyPad OS** — matowa konsola do wspólnej gry na jednym ekranie. Telefon jest bezprzewodowym kontrolerem, komputer lub TV wyświetla grę. **Sześć gier jest dostępnych: Stalowy Front, Neonowy Pęd, Orbitalna Fala, Wężowy Wir (beta), Turbo League i WEBZA — Nocna Dostawa.** BlockCraft pozostaje zapowiedzią — to teaser, niegrywalna gra.
 
 ## System konsoli
 
@@ -118,14 +122,19 @@ npm run selftest:arcade     # role admina, protokół, aktywne silniki + macierz
 npm run selftest:console    # preferencje, dostępna biblioteka, kolory, priorytety haptyki
 npm run selftest:relay      # warstwa MQTT / awaryjnego przekaźnika
 npm run selftest:v16        # turniej/2v2, galeria i kontrakt profilu v1.6
+npm run selftest:cinema     # film „Poznaj JoyPad": sceny, czasy, kamera, jakość, napisy
+npm run selftest:league     # Turbo League: mostek pada, sterowanie, napisy, pełny mecz
+npm run selftest:pizza      # WEBZA: mostek pada, napisy, zmiana, dostawy, Moments
 npm run selftest:ui         # test dymny interfejsu: splash, pytanie o poradnik, film, wszystkie okna
-npm run selftest:preview    # smoke PRAWDZIWEGO bundla z podglądu (jsdom, wymaga builda)
+npm run selftest:all        # wszystko powyżej jednym poleceniem
+npm run verify              # lint + typecheck + selftest:all + build
+npm run selftest:preview    # smoke PRAWDZIWEGO bundla (jsdom; JOYPAD_PREVIEW_DIR=dist sprawdzi build z Pages)
 npm run selftest:delivery   # czy serwer podglądu podaje każdy zasób (wymaga działającego serwera)
 ```
 
-Każdy push/PR przechodzi workflow `ci.yml` (lint, typecheck, selftesty, build), a `deploy.yml` powtarza selftesty (także `selftest:console`) przed publikacją na GitHub Pages. Fonty (Black Ops One, Chakra Petch, JetBrains Mono) są self-hostowane przez Fontsource — bez żądań do Google Fonts. Okładki gier to WebP, a `public/manifest.webmanifest` z ikonami pozwala „dodać JoyPad do ekranu głównego" na telefonie.
+Każdy push/PR przechodzi workflow `ci.yml` (lint, typecheck, wszystkie selftesty, testy wideo Playwright, build z `VITE_BASE` oraz smoke i kontrola dostarczania **gotowego artefaktu Pages**), a `deploy.yml` powtarza ten sam zestaw przed publikacją na GitHub Pages — na stronę trafia tylko build, który sam się uruchamia i podaje wszystkie zasoby. Fonty (Black Ops One, Chakra Petch, JetBrains Mono) są self-hostowane przez Fontsource — bez żądań do Google Fonts. Okładki gier to WebP, a `public/manifest.webmanifest` z ikonami pozwala „dodać JoyPad do ekranu głównego" na telefonie.
 
-Stack: Vite, React, TypeScript, Canvas 2D, Three.js, raw WebGL2, PeerJS, QRCode. `src/arcade/catalog.ts` to biblioteka; `src/arcade/neon/` zawiera silnik Neonowy Pęd i adapter JoyPad, a `src/arcade/games/` cztery aktywne silniki z jedną warstwą obsługi klawiatury/pada (`src/arcade/runtime.ts`). `src/arcade/webgl/runtime3d.ts` dostarcza mały renderer WebGL2, macierze kamery, low-poly geometrię i profile DPR, a `League3D.ts` jest używany przed fallbackiem Canvas2D. Wersja Canvas (`League.ts`) pozostaje bezpiecznym fallbackiem. `src/App.tsx` i `src/game/` zawierają Stalowy Front. `src/net/` zachowuje istniejący transport, poszerzony o stan sesji i komendy admina. Używany jest hash `#pad`, więc GitHub Pages nie potrzebuje routingu serwerowego.
+Stack: Vite, React, TypeScript, Canvas 2D, Three.js, raw WebGL2, PeerJS, QRCode. `src/arcade/catalog.ts` to biblioteka; `src/arcade/neon/` zawiera silnik Neonowy Pęd i adapter JoyPad, a `src/arcade/games/` lekkie silniki Canvas z jedną warstwą obsługi klawiatury/pada (`src/arcade/runtime.ts`), `src/arcade/league-next/` i `src/arcade/pizza/` to silniki Three.js wciągnięte z paczek ZIP, a `src/arcade/starclash/` — silnik Orbitalnej Fali. `src/arcade/webgl/runtime3d.ts` dostarcza mały renderer WebGL2, macierze kamery, low-poly geometrię i profile DPR, a `League3D.ts` jest używany przed fallbackiem Canvas2D. Wersja Canvas (`League.ts`) pozostaje bezpiecznym fallbackiem. `src/App.tsx` i `src/game/` zawierają Stalowy Front. `src/net/` zachowuje istniejący transport, poszerzony o stan sesji i komendy admina. Używany jest hash `#pad`, więc GitHub Pages nie potrzebuje routingu serwerowego.
 
 ### Warstwa JoyPad OS
 

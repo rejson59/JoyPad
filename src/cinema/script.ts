@@ -39,6 +39,7 @@
  */
 
 import { GAMES } from '../arcade/catalog';
+import { APP_VERSION_SHORT } from '../platform/whatsNewState';
 
 export type Lang = 'pl' | 'en';
 
@@ -609,7 +610,7 @@ export const filmScript: FilmScript = {
       extra: {
         mark: t('JoyPad', 'JoyPad'),
         tagline: t('Twój wieczór. Twoja gra.', 'Your evening. Your game.'),
-        version: t('JOYPAD OS · 1.7', 'JOYPAD OS · 1.7'),
+        version: t(`JOYPAD OS · ${APP_VERSION_SHORT}`, `JOYPAD OS · ${APP_VERSION_SHORT}`),
       },
       cues: [
         { id: 'settle', at: 0, dur: 1200, ease: 'outQuint' },

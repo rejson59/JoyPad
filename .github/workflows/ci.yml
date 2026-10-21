@@ -19,22 +19,32 @@ jobs:
         run: npm run lint
       - name: Typecheck
         run: npm run typecheck
-      - name: Selftest — protokół i silniki arcade
-        run: npm run selftest:arcade
-      - name: Selftest — system konsoli i haptyka
-        run: npm run selftest:console
-      - name: Selftest — awaryjny przekaźnik MQTT
-        run: npm run selftest:relay
-      - name: Selftest — platforma i cykl życia powtórek
-        run: |
-          npm run selftest:platform
-          npm run selftest:replay
-          npm run selftest:v16
+      # Wszystkie selftesty bez przeglądarki: protokół, silniki arcade, konsola,
+      # haptyka, relay MQTT, platforma, powtórki, film, nowe gry i dym interfejsu.
+      - name: Selftesty (model, silniki, konsola, film, UI)
+        run: npm run selftest:all
       - name: Chromium for video replay tests
         run: npx playwright install --with-deps chromium
       - name: Real video capture and playback (2D, WebGL, split-screen)
         run: npm run test:replay
-      - name: Build
+      - name: Build (base GitHub Pages)
         run: npm run build
         env:
           VITE_BASE: /${{ github.event.repository.name }}/
+      # Bramki na PRAWDZIWYM artefakcie: import zminifikowanego bundla w jsdom
+      # (czarny ekran po złym podziale chunków wychodzi tu, nie u gracza) oraz
+      # sprawdzenie, że serwer podaje każdy zasób, którego żąda index.html.
+      - name: Smoke produkcyjnego bundla (Pages)
+        run: JOYPAD_PREVIEW_DIR=dist JOYPAD_BOOT_DIR=.cache/boot-test npm run selftest:preview
+      - name: Delivery — serwer podaje build z Pages
+        run: |
+          PREVIEW_DIR=dist node scripts/preview-server.mjs 5176 &
+          SERVER_PID=$!
+          for _ in $(seq 1 30); do
+            curl -sf "http://localhost:5176/" > /dev/null && break
+            sleep 1
+          done
+          node scripts/preview-check.mjs 5176
+          STATUS=$?
+          kill "$SERVER_PID" 2>/dev/null || true
+          exit $STATUS

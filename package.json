@@ -1,7 +1,7 @@
 {
   "name": "joypad",
   "private": true,
-  "version": "1.7.0",
+  "version": "1.8.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -21,6 +21,8 @@
     "selftest:replay": "esbuild scripts/replay-selftest.ts --bundle --format=esm --platform=node --define:import.meta.env={} --outfile=.cache/replay-selftest.mjs --log-level=warning && node .cache/replay-selftest.mjs",
     "test:replay": "playwright test",
     "selftest:v16": "esbuild scripts/v16-selftest.ts --bundle --format=esm --platform=node --define:import.meta.env={} --outfile=.cache/v16-selftest.mjs --log-level=warning && node .cache/v16-selftest.mjs",
+    "selftest:all": "npm run selftest:arcade && npm run selftest:console && npm run selftest:relay && npm run selftest:platform && npm run selftest:replay && npm run selftest:v16 && npm run selftest:cinema && npm run selftest:cinema-render && npm run selftest:league && npm run selftest:pizza && npm run selftest:ui",
+    "verify": "npm run lint && npm run typecheck && npm run selftest:all && npm run build",
     "selftest:pizza": "esbuild scripts/pizza-selftest.ts --bundle --format=esm --platform=node --define:import.meta.env={} --outfile=.cache/pizza-selftest.mjs --log-level=warning && node .cache/pizza-selftest.mjs",
     "selftest:league": "esbuild scripts/league-selftest.ts --bundle --format=esm --platform=node --define:import.meta.env={} --outfile=.cache/league-selftest.mjs --log-level=warning && node .cache/league-selftest.mjs"
   },

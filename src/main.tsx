@@ -48,7 +48,7 @@ function Root() {
   }, []);
   if (pad) {
     return (
-      <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-[#0a0a0b] text-zinc-400">{loadLanguage() === 'en' ? 'Loading controller…' : 'Ładowanie pada…'}</div>}>
+      <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-[var(--os-bg)] text-zinc-400">{loadLanguage() === 'en' ? 'Loading controller…' : 'Ładowanie pada…'}</div>}>
         <PadApp />
       </Suspense>
     );

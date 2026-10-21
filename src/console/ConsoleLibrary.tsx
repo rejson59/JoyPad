@@ -30,6 +30,7 @@ import { openCinema } from '../cinema/store';
 import { useMenuMusic } from '../lib/useMenuMusic';
 import { sessionSummary } from './sessionSummary';
 import { playableIndices } from './navigation';
+import { maxRailColumns, railColumns, railRows } from './libraryRail';
 import { FitScreen } from './FitScreen';
 import { useT } from '../platform/i18n';
 
@@ -49,6 +50,11 @@ export function ConsoleLibrary({ focus, onFocus, onOpen, onConnections, onLab, o
   const [qrNonce, setQrNonce] = useState(0);
   const [previewControls, setPreviewControls] = useState<HTMLSpanElement | null>(null);
   const prefs = useConsolePreferences();
+  // Półka z grami: liczba kolumn zależy od tego, ile gier jest dostępnych i jak
+  // szerokie jest okno. Stałe cztery kolumny w CSS zostawiały sieroty (6 gier =
+  // rząd 4 + rząd 2) i pchały bibliotekę poza jeden ekran.
+  const tileCount = playableIndices.length;
+  const tileColumns = railColumns(tileCount, maxRailColumns(viewport.width));
   // Skróty X/Y należą do powierzchni, na której właśnie jesteśmy — ten sam mechanizm
   // napędza pasek podpowiedzi na dole, więc opis i działanie nigdy się nie rozjadą.
   useEffect(() => {
@@ -174,7 +180,7 @@ export function ConsoleLibrary({ focus, onFocus, onOpen, onConnections, onLab, o
     <p className="os-hint-rotate"><TabletSmartphone size={18} /> {t('library.rotateTablet')}</p>
     <section className="os-collection" aria-label={t('library.availableGames')}>
       <div className="os-collection-heading"><h2>{t('library.chooseWorld')}</h2><button onClick={() => setPanel('soon')}>{t('library.upcoming')} <span>{GAMES.filter(g => g.wip).length}</span><ArrowRight size={14} /></button></div>
-      <div className="os-game-rail">{playableIndices.map(i => {
+      <div className="os-game-rail" data-rows={railRows(tileCount, tileColumns)} style={{ '--tile-columns': tileColumns } as CSSProperties}>{playableIndices.map(i => {
         const g = localizeGame(GAMES[i], language);
         return <button key={g.id} data-game-index={i} className={`os-game-tile ${i === focus ? 'is-selected' : ''}`} aria-pressed={i === focus} onFocus={() => onFocus(i)} onClick={() => { if (i === focus) onOpen(g.id); else onFocus(i); }}>
           <img src={`${import.meta.env.BASE_URL}${g.cover}`} alt="" width="640" height="360" loading="lazy" decoding="async" />

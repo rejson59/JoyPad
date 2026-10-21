@@ -3,10 +3,31 @@
   <head>
     <link rel="icon" type="image/svg+xml" href="%BASE_URL%brand/joypad-mark.svg" />
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- `viewport-fit=cover` jest warunkiem działania `env(safe-area-inset-*)`:
+         bez niego iOS zwraca zera i cały pad ignoruje wycięcie oraz pasek home. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>JoyPad — Wasza ekipa. Wasza konsola.</title>
     <meta name="description" content="JoyPad zamienia duży ekran i telefony w domową konsolę. Wspólna biblioteka, osobiste pady, głos ekipy i Moments z Waszych rozgrywek." />
     <meta name="theme-color" content="#09090b" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="JoyPad" />
+    <style>
+      /* Pierwsze malowanie: arkusz stylów jest render-blocking, ale ten blok jest
+         wczytywany razem z HTML-em, więc pasek adresu, formularze i suwaki dostają
+         ciemny schemat od razu — bez jasnego błysku na telewizorze i na telefonie. */
+      html { color-scheme: dark; background: #09090b; }
+      body { margin: 0; background: #09090b; }
+      /* Znak startowy: `position: fixed`, więc nie dotyka układu `#root`, a znika
+         razem z całą zawartością kontenera w chwili montażu Reacta. */
+      .boot-mark {
+        position: fixed; inset: 0; display: grid; place-items: center;
+        font: 600 clamp(16px, 2.2vw, 26px)/1 system-ui, sans-serif;
+        letter-spacing: .42em; text-indent: .42em; text-transform: uppercase;
+        color: #f6ad55;
+      }
+    </style>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./images/joypad-touch-180.png" />
     <meta property="og:type" content="website" />
@@ -19,7 +40,11 @@
     <meta name="twitter:image" content="./images/og-cover.jpg" />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Pobranie i uruchomienie JS-a na telewizorze trwa chwilę. Zamiast pustej
+           czerni wisi tu znak systemu; React czyści kontener przy montażu. -->
+      <div class="boot-mark" aria-hidden="true">JoyPad</div>
+    </div>
     <script type="module" src="./src/main.tsx"></script>
   </body>
 </html>

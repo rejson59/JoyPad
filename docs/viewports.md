@@ -58,8 +58,31 @@ najpierw zmniejszają typografię, a dopiero potem wchodzi skalowanie.
 Wszystkie rozmiary wewnątrz liczą się z `dvh` (`clamp(104px, 15dvh, 208px)` na kafelek,
 `clamp(34px, min(5.4vw, 7.2dvh), 92px)` na tytuł). Drugim źródłem przewijania była
 **siatka kafelków**: cztery dostępne gry stały w trzech kolumnach, więc czwarta łamała się
-do drugiego rzędu. Teraz rząd jest czterokolumnowy (tablet: 3 w poziomie, 2 w pionie,
-telefon: przewijany poziomo, jak dotąd).
+do drugiego rzędu.
+
+### Półka z grami: kolumny bez rzędów-sierot (runda 20)
+
+Stała liczba kolumn w CSS jest poprawna tylko dla jednej liczby gier. Gdy biblioteka
+urośnie, rząd się urywa (sześć gier przy czterech kolumnach = 4 + 2), a wolne miejsce
+i tak wypycha bibliotekę poza jeden ekran. Dlatego liczbę kolumn liczy **czysta funkcja**
+`src/console/libraryRail.ts`, a CSS bierze ją ze zmiennej:
+
+| Funkcja | Co robi |
+| --- | --- |
+| `maxRailColumns(width)` | sufit dla szerokości okna: 6 (≥1700 px), 4 (≥1100 px), 3 (≥760 px), 2 (telefon) |
+| `railColumns(count, max)` | wszystko w jednym rzędzie, jeśli się mieści; inaczej największy podział bez reszty; a gdy takiego nie ma — najkrótszy układ z najpełniejszym ostatnim rzędem |
+| `railRows(count, columns)` | liczba rzędów, zapisana na półce jako `data-rows` |
+
+Biblioteka wpisuje wynik w `style={{ '--tile-columns': … }}` i `data-rows`, a reguła
+siatki to `repeat(var(--tile-columns, 4), minmax(0, 1fr))`. Półka w **jednym rzędzie**
+(telewizor, szeroki monitor) dostaje wyższą okładkę — `clamp(132px, 20dvh, 268px)` — bo
+skoro nie ma drugiego rzędu, jest na to miejsce; dalej mieści się w jednym ekranie, a jeśli
+nie, skaluje ją `FitScreen`. Tablety zostają przy swoich 3 kolumnach (2 w pionie), a telefon
+przy przewijaniu poziomym — te reguły profilowe mają wyższą specyficzność.
+
+Tabelę przypadków (2–24 gry × cztery sufity) przegląda sekcja `RAIL SELFTEST`
+w `selftest:console`: sprawdza, że podział bez reszty zawsze wygrywa, że rzędów jest
+minimum, a ostatni rząd nie jest jedynym kafelkiem, gdy da się go wypełnić.
 
 ### Co wolno, a czego nie wolno wkładać do skalowanej treści
 
@@ -77,7 +100,7 @@ z nieco wyższą dolną granicą skali (`.78`), bo tam jest drobny tekst i przyc
 | | Telewizor | Komputer | Tablet |
 | --- | --- | --- | --- |
 | Typografia | większe minimum (nagłówek, stopka, kbd, eyebrow) | jak dotąd | między TV a telefonem |
-| Kafelki | wyższe, grubszy pierścień fokusa | elastyczne | 3 kolumny (2 w pionie) |
+| Kafelki | jeden rząd i wyższe okładki (`data-rows="1"`), grubszy pierścień fokusa | kolumny liczone z liczby gier (`libraryRail.ts`) | 3 kolumny (2 w pionie) |
 | Przyciski | ikony 54 px, „Dodaj gracza” 15 px | standard | minimum 46–56 px pod palec |
 | Układ | pełna szerokość, stopka z większymi klawiszami | pełna szerokość okna (szerokość ogranicza tylko padding, proporcjonalny do okna) | jedna kolumna w pionie |
 | Dodatki | pasek przewijania ukryty | — | podpowiedź „Obróć tablet poziomo” |
@@ -102,6 +125,7 @@ na telewizorze.
 ## Czego ten automat nie sprawdzi
 
 `selftest:console` pilnuje **reguł rozpoznania i kontraktu arkusza** (wysokość `100dvh`,
-cztery kolumny, obecność bloków profili, brak `!important`, podpowiedzi w markupie).
+kolumny półki ze zmiennej `--tile-columns`, obecność bloków profili, brak `!important`,
+podpowiedzi w markupie).
 Nie sprawdzi, jak to wygląda na prawdziwym telewizorze — żaden harness w tym repozytorium
 nie rysuje pikseli. Wygląd na sprzęcie pozostaje do oceny wzrokiem.

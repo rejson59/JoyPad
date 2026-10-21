@@ -364,7 +364,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
   if (screen === 'setup') {
     return (
       <>
-      <div data-ui-scope="tank-setup" data-ui-focus="[data-ui-entry]" ref={setupRoot} className="cine-tank-setup relative min-h-screen bg-[#0a0a0b] text-white">
+      <div data-ui-scope="tank-setup" data-ui-focus="[data-ui-entry]" ref={setupRoot} className="cine-tank-setup relative min-h-screen bg-[var(--os-bg)] text-white">
         <div className="hazard-stripes h-2 w-full opacity-80" />
         <div className="mx-auto w-full max-w-6xl px-4 py-6">
           <div className="flex items-center justify-between">

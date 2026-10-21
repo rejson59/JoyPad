@@ -36,8 +36,12 @@
 .os-library { min-height:100dvh; display:grid; grid-template-rows:auto minmax(0,1fr) auto auto; overflow:hidden; }
 .os-stage { min-height:0; padding:clamp(14px,2.6dvh,44px) 0 clamp(10px,1.8dvh,30px); }
 .os-collection { min-height:0; padding-top:clamp(8px,1.4dvh,18px); }
-.os-game-rail { grid-template-columns:repeat(4,minmax(0,1fr)); gap:clamp(12px,1.1vw,24px); }
+.os-game-rail { grid-template-columns:repeat(var(--tile-columns,4),minmax(0,1fr)); gap:clamp(12px,1.1vw,24px); }
 .os-game-tile { height:clamp(104px,15dvh,208px); }
+/* Jeden rząd (telewizor, szeroki monitor) ma miejsce na wyższą okładkę: półka
+   wygląda jak regał z grami, a nie jak pasek miniaturek, i dalej jest jednym
+   ekranem — kolumny liczy `libraryRail.ts`, więc nigdy nie ma rzędu-sieroty. */
+.os-game-rail[data-rows="1"] .os-game-tile { height:clamp(132px,20dvh,268px); }
 .os-footer { padding:clamp(12px,1.8dvh,24px) 0 clamp(14px,2dvh,28px); margin-top:clamp(10px,1.6dvh,22px); }
 .os-feature h1 { font-size:clamp(34px,min(5.4vw,7.2dvh),92px); }
 .os-feature p { font-size:clamp(13px,min(1.05vw,1.9dvh),16px); margin-bottom:clamp(14px,2.4dvh,28px); }
@@ -84,6 +88,7 @@ html[data-profile="tablet"] .os-lab-link { min-height:46px; }
 html[data-profile="tablet"] .os-game-rail { grid-template-columns:repeat(3,minmax(0,1fr)); }
 /* Przy 7+ światach trzy kolumny dają trzy rzędy — niższe kafle trzymają wysokość biblioteki blisko dawnych dwóch rzędów. */
 html[data-profile="tablet"] .os-game-tile { height:clamp(92px,12.5dvh,176px); }
+html[data-profile="tablet"] .os-game-rail[data-rows="1"] .os-game-tile { height:clamp(112px,16dvh,220px); }
 html[data-profile="tablet"] .os-stage { grid-template-columns:minmax(0,1fr) minmax(250px,32%); gap:clamp(20px,3vw,40px); }
 @media (orientation:portrait) {
   html[data-profile="tablet"] .os-game-rail { grid-template-columns:repeat(2,minmax(0,1fr)); }
@@ -104,7 +109,7 @@ html[data-profile="handheld"] .os-hint-phone { display:flex; }
 }
 .os-hint-rotate { grid-column:1 / -1; }
 .os-hint-phone, .os-hint-phone a { color:var(--os-accent-bright); font-weight:600; text-decoration:none; }
-.os-hint-phone { position:fixed; left:50%; bottom:clamp(14px,3dvh,30px); transform:translateX(-50%); z-index:70; box-shadow:var(--lg-shadow); }
+.os-hint-phone { position:fixed; left:50%; bottom:max(clamp(14px,3dvh,30px),env(safe-area-inset-bottom)); transform:translateX(-50%); z-index:70; box-shadow:var(--lg-shadow); }
 /* Pływające elementy (podpowiedź telefonu) stoją poza skalowaną treścią, więc
    `position: fixed` naprawdę przykleja je do okna, a nie do pomniejszonego bloku. */
 

@@ -13,7 +13,7 @@ body { background:var(--os-bg); }
 .os-topbar nav { display:flex; align-items:center; gap:12px; }
 .os-network { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--os-secondary); margin-right:18px; }
 .os-network i,.os-footer-brand i { display:inline-block; width:5px; height:5px; background:var(--os-accent); border-radius:50%; }
-.os-network i.is-ready { background:#b2c397; }
+.os-network i.is-ready { background:var(--os-success); }
 .os-icon { width:44px; height:44px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; background:#ffffff07; border:1px solid #ffffff12; color:var(--os-text); }
 .os-icon:hover,.os-add:hover { background:#ffffff12; border-color:#ffffff40; }
 .os-add { display:flex; align-items:center; gap:9px; border:1px solid #ffffff25; background:#11111470; padding:12px 18px; border-radius:30px; font-size:13px; }
@@ -174,7 +174,6 @@ html[data-motion="reduced"] .plamek-orbit-ball { scale: 1; }
 .os-error { color:#e5be92!important; }
 @keyframes os-copy { from { opacity:.3; transform:translateY(7px); } to { opacity:1; transform:translateY(0); } }
 @keyframes os-sheet-in { from { opacity:0; transform:translateX(24px); } to { opacity:1; transform:translateX(0); } }
-@media(min-width:1700px) { .os-game-tile{height:clamp(150px,17dvh,240px);} }
 @media(max-width:1000px) { .os-stage{gap:30px;grid-template-columns:1fr 280px;}.os-feature h1{font-size:54px;}.os-wordmark small,.os-network{display:none;}.os-feature-tags{gap:10px;font-size:10px;}.os-feature-tags span+span::before{margin-right:10px;} }
 @media(max-width:720px) { .os-topbar{height:86px;gap:12px;}.os-add{padding:11px;}.os-add span{display:none;}.os-stage{grid-template-columns:1fr;padding-top:34px;gap:28px;}.os-feature h1{font-size:54px;}.os-feature p{font-size:14px;}.os-session{padding:20px;}.os-pairing{gap:11px;padding:11px;}.os-session h2{margin-top:10px;}.os-game-rail{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;padding:8px 6px 16px;}.os-game-tile{min-width:260px;scroll-snap-align:center;height:170px;}.os-collection{margin-top:22px;}.os-footer-brand,.os-footer .os-muted{display:none;}.os-footer>div{gap:13px;}.os-footer{gap:12px;}.os-wallpaper{height:700px;}.os-genre{font-size:12px;} }
 /* Shared system surfaces — games retain their identity, controls don't. */

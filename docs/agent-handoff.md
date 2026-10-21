@@ -621,7 +621,7 @@ już zostało rozstrzygnięte, i nie podejmować tych decyzji raz jeszcze.
 ## Ostatnia bramka przed wysłaniem zmiany do użytkownika
 
 - [ ] `npm run lint && npm run typecheck && npm run build` na zero;
-- [ ] `npm run --silent selftest:console` (oraz pozostałe siedem skryptów) — 37 pakietów na OK (w tym ANTY-SPAM z tury 12, raster maski z tury 13 i film z tury 14);
+- [ ] `npm run --silent selftest:all` — jedenaście skryptów, 53 sekcje na OK (w tym ANTY-SPAM z tury 12, raster maski z tury 13, film z tury 14 i `RAIL SELFTEST` z rundy 20);
 - [ ] patrz sekcja „Samodzielny przegląd" w `docs/console-testing.md` — kliknij okienka i `Esc`
       z fokusem na ikonie pomocy, przejdź listę gier strzałkami; na telefonie dołącz pada
       i sprawdź pozycje `0/0` przy odświeżaniu kodu;
@@ -647,3 +647,23 @@ Ta gałąź = pełna zawartość `arena/01a0f36b-joypad` (rundy 15–19, WEBZA, 
 ZIP-y w korzeniu (`nitro-league.zip`, `orbitalna-fala.zip`) zostają śledzone jako materiał
 źródłowy zintegrowanych silników; nowo otrzymanych paczek nie commitujemy (`.gitignore` ma `*.zip`).
 Testy wideo Playwright nadal działają tylko w CI — sandbox agenta nie pobiera Chromium.
+
+## Stan po przeglądzie błędów i wyglądu (2026-10-21, runda 20, gałąź `arena/95e6edaf-joypad`)
+
+Prośba brzmiała: *„spójrz na projekt, napraw błędy i ulepsz wygląd”*. Zmiany są celowo
+małe, mieszczą się w istniejącym języku projektu (Obsidian/Ember, warstwa szkła, Plamek)
+i każda ma swoją bramkę — bez nowej grafiki, tylko usunięte rozjazdy między warstwami.
+
+| Co | Gdzie | Dlaczego |
+|---|---|---|
+| Półka z grami bez rzędów-sierot | `src/console/libraryRail.ts`, `ConsoleLibrary.tsx`, `viewport.css` (`--tile-columns`, `data-rows`) | CSS miał stałe cztery kolumny, a grywalnych światów jest sześć: drugi rząd dostawał dwa kafelki i wyglądał na urwany, a biblioteka przestawała być jednym ekranem |
+| Jeden rząd = wyższe okładki | `viewport.css` (`.os-game-rail[data-rows="1"] .os-game-tile`) | na telewizorze i szerokim monitorze półka zajmowała pół ekranu, a pod nią zostawała pustka |
+| Bezpieczne marginesy iOS przestały być atrapą | `index.html` (`viewport-fit=cover` + metadane PWA), `pad/Joystick.tsx`, `pad/JoypadController.tsx`, `pad/PadApp.tsx`, `viewport.css` (`.os-hint-phone`) | bez `viewport-fit=cover` każde `env(safe-area-inset-*)` wynosi zero, więc kilkanaście użyć marginesów nic nie robiło; w poziomie wycięcie jest **z boku**, a pady odsuwały się tylko od góry i dołu |
+| Znak startowy, zanim React przejmie `#root` | `index.html` (`.boot-mark` + inline `color-scheme`), `scripts/preview-smoke.mjs` | pobranie i uruchomienie JS-a na telewizorze to kilka sekund pustej czerni; harness podglądu czeka teraz na drzewo Reacta, a nie na placeholder (inaczej pierwszy krok testu przechodził zawsze) |
+| Jedno tło systemu | `src/index.css`, `src/main.tsx`, `src/App.tsx` | `#0a0a0b` obok paletowego `--os-bg: #09090b` dawało widoczny szew między warstwami |
+| Suwaki z palety, także w Firefoksie | `src/index.css` (`scrollbar-width` / `scrollbar-color`) | Firefox nie zna `::-webkit-scrollbar`, więc listy dostawały suwak systemowy |
+| Kolor poza paletą i martwa reguła | `src/console/console.css` | `#b2c397` na diodzie połączeń (nadpisany i tak przez blok Obsidian/Ember) oraz `@media(min-width:1700px)` dla wysokości kafelka, która nigdy nie działała — `viewport.css` jest ładowany później i ma ostatnie słowo |
+| Bramki: `RAIL SELFTEST` i kontrakt HTML-a | `scripts/console-selftest.ts` | tabela 2–24 gier × cztery sufity kolumn (podział bez reszty wygrywa, rzędów jest minimum, ostatni rząd nie zostaje sam) + sprawdzenie, że `index.html` i pad trzymają bezpieczne marginesy |
+
+Numer wydania zostaje **1.8.0**: to poprawki w obrębie wydania, a panel „Co nowego?”
+opisuje zakres v1.8 (bump bez nowej listy pokazałby tę samą treść z innym numerem).

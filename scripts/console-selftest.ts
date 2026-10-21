@@ -580,6 +580,24 @@ for (const [name, src] of [['Plamek', plamekSource], ['uiControl', engineSource]
 assert.ok(appSource.includes(".boot-splash'") && appSource.includes('joypad-dialog-command'), 'ekran startowy nadal pomija się pilotem z telefonu');
 assert.ok(padSource.includes('NavStick') && padSource.includes("command=\"x\""), 'telefon ma gałkę nawigacji i skróty X/Y');
 assert.ok(padSource.includes("send('fullscreen')"), 'admin rozkłada pełny ekran telewizora z telefonu');
+// iPhone w poziomie ma wycięcie z boku: bez marginesów skrajne przyciski są pod nim.
+const indexHtml = readFileSync('index.html', 'utf8');
+assert.ok(indexHtml.includes('viewport-fit=cover'),
+  'iOS oddaje `env(safe-area-inset-*)` tylko z `viewport-fit=cover` — bez tego każdy margines wynosi zero');
+assert.ok(/safe-area-inset-left/.test(padSource) && /safe-area-inset-right/.test(padSource),
+  'poziomy pad odsuwa pasek i kolumnę przycisków od wycięcia z obu stron');
+// Znak startowy w HTML-u: widać system zanim React przejmie `#root`, ale nie wolno mu
+// dotykać układu kontenera (biblioteka jest na całą wysokość) ani czytnika ekranu.
+assert.ok(indexHtml.includes('class="boot-mark"') && /boot-mark[^>]*aria-hidden="true"/.test(indexHtml),
+  'zastępczy znak startowy jest w HTML-u i ukryty przed czytnikiem ekranu');
+assert.ok(/\.boot-mark\s*\{[^}]*position:\s*fixed/.test(indexHtml),
+  'znak startowy jest `position: fixed` — `display: grid` na `#root` złamałby układ biblioteki');
+const smokeSource = readFileSync('scripts/preview-smoke.mjs', 'utf8');
+assert.ok(/!window\.document\.querySelector\('\.boot-mark'\)/.test(smokeSource),
+  'harness preview czeka na drzewo Reacta, a nie na zastępczy znak startowy');
+const stickSource = readFileSync('src/pad/Joystick.tsx', 'utf8');
+assert.ok(/safe-area-inset-\$\{side\}/.test(stickSource) && /calc\(\$\{zoneWidthPct\}% - env/.test(stickSource),
+  'strefa gałki zaczyna się za wycięciem i jest o nie węższa — gałka liczy pozycję z pomiaru strefy');
 for (const selector of ['.plamek', '.plamek-liquid', '.plamek-glow', '.plamek-collar', '.plamek-src', '.plamek-blob', '.plamek-sheen', '.plamek-echo', '.plamek-face', '.plamek-mini', '.ui-hints', '.ui-hint kbd']) {
   assert.ok(liquidCss.includes(selector) && markup.includes(selector.slice(1).split(' ')[0]), `${selector} istnieje w warstwie szkła i w markupie`);
 }
@@ -1025,8 +1043,14 @@ console.log('UI CONTROL SELFTEST: OK (martwa strefa, rytm powtórzeń, wybór ce
     assert.ok(/<FitScreen/.test(source) && /minScale=\{\.\d+\}/.test(source),
       `${screen} korzysta z dopasowania do okna (menu gry i wyniki miały ten sam problem)`);
   }
-  assert.ok(/\.os-game-rail\s*\{[^}]*grid-template-columns:\s*repeat\(4/.test(viewportCss),
-    'cztery dostępne gry stoją w jednym rzędzie — siatka 3-kolumnowa łamała je na dwa i to pchało stronę w dół');
+  // Stała siatka czterech kolumn była poprawna przy czterech grach; gdy doszły dwie,
+  // drugi rząd miał sieroty (4 + 2) i biblioteka przestała być jednym ekranem.
+  assert.ok(/\.os-game-rail\s*\{[^}]*grid-template-columns:\s*repeat\(var\(--tile-columns/.test(viewportCss),
+    'półka bierze liczbę kolumn ze zmiennej — stała siatka zostawia rząd-sierotę, gdy dochodzi gra');
+  assert.ok(/\.os-game-rail\[data-rows="1"\] \.os-game-tile/.test(viewportCss),
+    'pojedynczy rząd dostaje wyższą okładkę, inaczej telewizor ma pustą półkę pod spodem');
+  assert.ok(/--tile-columns/.test(librarySource) && /data-rows=\{/.test(librarySource) && /railColumns\(/.test(librarySource),
+    'biblioteka liczy kolumny z liczby gier i szerokości okna (`libraryRail.ts`)');
   for (const profile of ['tv', 'desktop', 'tablet']) {
     assert.ok(viewportCss.includes(`html[data-profile="${profile}"]`), `arkusz ma reguły dla profilu ${profile}`);
   }
@@ -1039,3 +1063,55 @@ console.log('UI CONTROL SELFTEST: OK (martwa strefa, rytm powtórzeń, wybór ce
 }
 console.log('VIEWPORT SELFTEST: OK (profile TV/komputer/tablet/telefon, układ jednego ekranu i podpowiedzi urządzeń)');
 
+
+/* --- PÓŁKA Z GRAMI (runda 20): kolumny bez rzędów-sierot ---------------------
+   Biblioteka ma sześć grywalnych pozycji, a siatka CSS miała cztery kolumny — drugi
+   rząd wyglądał jak urwany. Liczenie kolumn musi być czystą funkcją, żeby dało się
+   przejrzeć całą tabelę przypadków (od 2 do 24 gier, na czterech szerokościach). */
+{
+  const { RAIL_BREAKPOINTS, RAIL_MAX_COLUMNS, maxRailColumns, railColumns, railRows } = await import('../src/console/libraryRail');
+  assert.equal(railColumns(6, 6), 6, 'telewizor: sześć gier stoi w jednym rzędzie');
+  assert.equal(railColumns(6, 4), 3, 'komputer: sześć gier to dwa równe rzędy po 3, nie 4 + 2');
+  assert.equal(railColumns(4, 4), 4, 'cztery gry mieszczą się w jednym rzędzie');
+  assert.equal(railColumns(8, 4), 4, 'osiem gier dzieli się bez reszty');
+  assert.equal(railColumns(5, 4), 3, 'pięć gier: 3 + 2 zamiast 4 + 1');
+  assert.equal(railColumns(7, 6), 4, 'siedem gier: 4 + 3 — najmniej rzędów i najpełniejszy ostatni');
+  assert.equal(railColumns(1, 6), 1, 'jedna gra to jeden kafelek');
+  assert.equal(railColumns(0, 6), 1, 'pusta półka nie dzieli przez zero');
+  assert.equal(railRows(6, 3), 2, 'liczba rzędów idzie z liczby kolumn (CSS czyta ją z `data-rows`)');
+  assert.equal(railRows(6, 0), 0, 'zero kolumn nie wywraca rzędów');
+  for (let count = 2; count <= 24; count++) {
+    for (const max of [2, 3, 4, RAIL_MAX_COLUMNS]) {
+      const columns = railColumns(count, max);
+      assert.ok(Number.isInteger(columns) && columns >= 1 && columns <= Math.min(max, RAIL_MAX_COLUMNS),
+        `${count} gier przy ${max} kolumnach: liczba kolumn w zakresie`);
+      if (count <= max) {
+        assert.equal(columns, count, `${count} gier mieści się w jednym rzędzie`);
+        continue;
+      }
+      const rows = railRows(count, columns);
+      const options: Array<{ columns: number; rows: number; fill: number }> = [];
+      for (let c = max; c >= 2; c--) options.push({ columns: c, rows: Math.ceil(count / c), fill: (count % c || c) / c });
+      const exact = options.find(option => count % option.columns === 0);
+      if (exact) {
+        assert.equal(columns, exact.columns, `${count} gier przy ${max} kolumnach dzieli się bez reszty na ${exact.columns}`);
+        continue;
+      }
+      const minRows = Math.min(...options.map(option => option.rows));
+      assert.equal(rows, minRows, `${count} gier przy ${max} kolumnach: najmniej rzędów`);
+      const bestFill = Math.max(...options.filter(option => option.rows === minRows).map(option => option.fill));
+      assert.ok(Math.abs(((count % columns) || columns) / columns - bestFill) < 1e-9,
+        `${count} gier przy ${max} kolumnach: najpełniejszy ostatni rząd`);
+    }
+  }
+  assert.equal(maxRailColumns(1920), 6, 'telewizor ma najszerszą półkę');
+  assert.equal(maxRailColumns(2560), 6, 'duży monitor nie dostaje więcej niż sufit kolumn');
+  assert.equal(maxRailColumns(1440), 4, 'komputer: cztery kolumny');
+  assert.equal(maxRailColumns(1024), 3, 'tablet: trzy kolumny');
+  assert.equal(maxRailColumns(390), 2, 'telefon: dwie kolumny (w pionie i tak rządzi przewijacz)');
+  assert.equal(maxRailColumns(Number.NaN), RAIL_BREAKPOINTS[RAIL_BREAKPOINTS.length - 1].maxColumns,
+    'brak pomiaru okna nie wywraca półki');
+  assert.ok(RAIL_BREAKPOINTS.every((step, i) => i === 0 || step.minWidth < RAIL_BREAKPOINTS[i - 1].minWidth),
+    'progi są malejące — pierwszy pasujący wygrywa');
+}
+console.log('RAIL SELFTEST: OK (kolumny półki bez rzędów-sierot: 2–24 gry na czterech szerokościach ekranu)');

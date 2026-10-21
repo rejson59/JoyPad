@@ -2,16 +2,16 @@ import { useEffect, useId, useRef } from 'react';
 import { NAVIGABLE_SELECTOR } from './focusSurface';
 import { motionReduced } from './preferences';
 import {
-  PLAMEK, PLAMEK_INFLATE, PLAMEK_SMOOTH, PLAMEK_TRAIL, PLAMEK_WET, WOBBLE, alphaMatrix,
+  PLAMEK, PLAMEK_IDLE, PLAMEK_INFLATE, PLAMEK_SMOOTH, PLAMEK_TRAIL, PLAMEK_WET, WOBBLE, alphaMatrix,
   contactShadowFor, crownFor, edgeAaFor, lobeAtFor, maskMatrix, paintWeightFor, rimSwellFor,
   sheenBlurFor, wetBlur,
   advancePhase, arcControl, ballShapeFor, ballSizeFor, boxToEdges, burstCount,
   chooseChoreography, clamp01, dirBetween, dominantGaze, easeInOutSine, edgeTau, edgesToBox,
   bandEdges, blobPath, dripTail, flightCurve, gatherCurve, gooStrength, gooTension, gripOffset,
-  haloAppearance, haloRadiusFor, inflateEdges, neckPath, pourEdges, ribbonPath, teardropPath,
-  gazeBiasFor, isAsleep, isTimed, landFor, leanFor, lerp, moodFor, perchFor, phaseDuration,
-  pointDistance, pourCurve, quadPoint, shouldBlink, smoothTo, splatsFor, strandFor, squashFrom,
-  wobbleKick, wobbleValue, wrapFor,
+  haloAppearance, haloRadiusFor, idleDrip, idlePool, inflateEdges, neckPath, pourEdges,
+  ribbonPath, rimPoint, teardropPath, gazeBiasFor, isAsleep, isTimed, landFor, leanFor, lerp,
+  moodFor, perchFor, phaseDuration, pointDistance, pourCurve, quadPoint, shouldBlink, smoothTo,
+  splatsFor, strandFor, squashFrom, wobbleKick, wobbleValue, wrapFor,
   type Box, type Edges, type PerchSide, type PlamekPhase, type Point, type Wobble,
 } from './plamek';
 import type { NavDirection } from './spatialNav';
@@ -67,6 +67,7 @@ export function Plamek({ scope = null }: { scope?: HTMLElement | null }) {
     const blobEl = root.querySelector<SVGPathElement>('.plamek-blob');
     const strand = root.querySelector<SVGPathElement>('.plamek-strand');
     const sheen = root.querySelector<SVGEllipseElement>('.plamek-sheen');
+    const gleam = root.querySelector<SVGEllipseElement>('.plamek-gleam');
     const glow = root.querySelector<HTMLElement>('.plamek-glow');
     const trails = Array.from(root.querySelectorAll<SVGCircleElement>('.plamek-echo'));
     const splats = Array.from(root.querySelectorAll<SVGCircleElement>('.plamek-splat'));
@@ -75,7 +76,7 @@ export function Plamek({ scope = null }: { scope?: HTMLElement | null }) {
       // powtarzanie identycznego `d` w klatce bezczynności to darmowa praca na TV.
       if (el && el.getAttribute(name) !== value) el.setAttribute(name, value);
     };
-    if (!collar || !src || !blobEl || !strand || !sheen || !glow || !goo || !region || !blur) return;
+    if (!collar || !src || !blobEl || !strand || !sheen || !gleam || !glow || !goo || !region || !blur) return;
 
     let phase: PlamekPhase = 'hidden';
     let phaseStart = 0;
@@ -85,6 +86,7 @@ export function Plamek({ scope = null }: { scope?: HTMLElement | null }) {
     let follow = 0;
     let raf = 0;
     let lastFrame = 0;
+    let lastBreath = 0;
     let asleep = false;
     let lastBlinkAt = performance.now();
     let napTimer = 0;
@@ -442,8 +444,17 @@ export function Plamek({ scope = null }: { scope?: HTMLElement | null }) {
         if (pointDistance(echo, head) > .8) busy = true;
       });
 
+      // Farba oddycha, więc pętla w bezruchu zwalnia zamiast gasnąć: ~12 klatek na
+      // sekundę (~5, gdy kulka śpi) wystarczy na ruch kątem oka, a telewizor nie płaci
+      // za pełne 60 fps. RAF i tak staje w ukrytej karcie, więc tło jest darmowe.
+      const breathing = !reduced && phase === 'hug';
+      if (breathing && !busy && now - lastBreath < (asleep ? PLAMEK_IDLE.napFrameMs : PLAMEK_IDLE.frameMs)) {
+        raf = requestAnimationFrame(frame);
+        return;
+      }
+      lastBreath = now;
       draw(now, speed, reduced, flight);
-      if (busy || tension > .01 || Math.abs(head.sharp - 50) > .3) raf = requestAnimationFrame(frame);
+      if (busy || tension > .01 || Math.abs(head.sharp - 50) > .3 || breathing) raf = requestAnimationFrame(frame);
     };
 
     // Góra .5 (nie .35): przy mniejszym przycisku górna krawędź taśmy miała
@@ -472,7 +483,18 @@ export function Plamek({ scope = null }: { scope?: HTMLElement | null }) {
       // Grubość farby idzie za rozmiarem elementu: na chipie taśma jest cienka, na
       // kaflu gruba — inaczje na małych przyciskach kleks zjada treść (zarzut z przeglądu).
       const weight = paintWeightFor(host);
-      const spread = lerp(blobR * .62, weight, settle);
+      // Oddech farby (patrz `PLAMEK_IDLE` w modelu): w spoczynku taśma grubieje, kałuża
+      // pod przyciskiem wolno nabiera materiału i go oddaje, a kropla zwisa i się wydłuża.
+      // Ruchem, nie rozmyciem — mokrość w spoczynku (.3) jest przypięta bramką, bo przy
+      // większym rozmyciu próg alfa zjadał cienką górną krawędź taśmy na małych przyciskach.
+      const breathing = !reduced && phase === 'hug';
+      const pool = breathing ? idlePool(now, asleep) : 0;
+      const drip = breathing ? idleDrip(now, asleep) : 0;
+      const poolBottom = ANISO.bottom * (1 + PLAMEK_IDLE.poolAmp * pool);
+      // Pęcznienie wchodzi w `spread`, więc dotyczy całej geometrii farby: taśmy, kropli,
+      // odblasku i zapasu regionu maski. Klamer pilnuje bramka: spuchnięta taśma wciąż
+      // mieści się w ~1/6 krótszego boku, czyli napis zostaje wolny.
+      const spread = lerp(blobR * .62, weight, settle) * (1 + PLAMEK_IDLE.poolSwell * pool);
       const lobeRaw = phase === 'pour' ? clamp01((progress - .55) / .45)
         : phase === 'impact' ? .18 : onTarget ? 1 : 0;
       // Garb ma sens tylko tam, gdzie rant jest płaski: na ikonce-kole dokładał materiał
@@ -485,7 +507,7 @@ export function Plamek({ scope = null }: { scope?: HTMLElement | null }) {
       let d = '';
       if (onTarget) {
         const band = bandEdges(host, {
-          inset: -2, spread, aniso: ANISO, wrap, lobe, dent: 0,
+          inset: -2, spread, aniso: pool > 0 ? { ...ANISO, bottom: poolBottom } : ANISO, wrap, lobe, dent: 0,
           lobeWidth: head.size * .8, lobeSize: head.size * .62,
           wob: shake, spin, lobeAt,
         });
@@ -493,7 +515,7 @@ export function Plamek({ scope = null }: { scope?: HTMLElement | null }) {
         // Kropla: podścieżka TEJ SAMEJ ścieżki, więc maska robi z niej łzę trzymającą
         // się taśmy szyjką. Rozmiar liczymy z grubości farby, nie z główki. Gdy główka
         // przysiadła POD przyciskiem, łza jest niepotrzebna — tam już leży cała farba.
-        const tail = reduced || lobeAt > 0 ? null : dripTail(host, wrap, spread * ANISO.bottom, shake);
+        const tail = reduced || lobeAt > 0 ? null : dripTail(host, wrap, spread * poolBottom, shake, drip);
         if (tail) d += teardropPath(tail.x, tail.y, tail.width, tail.height, tail.swell);
       }
       setAttr(collar, 'd', d);
@@ -564,11 +586,32 @@ export function Plamek({ scope = null }: { scope?: HTMLElement | null }) {
       // Połysk mokrej farby siada na bulwie (albo na jej wybrzuszeniu, gdy kulka odpoczęła).
       // Połysk czytamy jak odbicie światła z góry-lewej (ta sama strona, co szkło w UI):
       // mniejszy i ciemniejszy niż wcześniej, bo 42% bieli na małej bulwie myło kolor farby.
-      setAttr(sheen, 'cx', (head.x - blobR * .16).toFixed(2));
-      setAttr(sheen, 'cy', (head.y - blobR * .34).toFixed(2));
-      setAttr(sheen, 'rx', (blobR * .44).toFixed(2));
-      setAttr(sheen, 'ry', (blobR * .28).toFixed(2));
+      // Połysk oddycha razem z farbą: w spoczynku przesuwa się o ~1.5 px i zmienia
+      // rozmiar o kilka procent, więc światło „pływa” po mokrej powierzchni zamiast
+      // zastygnąć w jednym miejscu (zastygły połysk czyta się jak naklejka).
+      const sheenBreath = pool * (reduced ? 0 : 1);
+      setAttr(sheen, 'cx', (head.x - blobR * .16 + sheenBreath * 1.5).toFixed(2));
+      setAttr(sheen, 'cy', (head.y - blobR * .34 + sheenBreath * .8).toFixed(2));
+      setAttr(sheen, 'rx', (blobR * (.44 + .05 * sheenBreath)).toFixed(2));
+      setAttr(sheen, 'ry', (blobR * (.28 + .04 * sheenBreath)).toFixed(2));
       sheen.style.filter = `blur(${sheenBlurFor(blobR).toFixed(2)}px)`;
+      // Odblask na RANCIE: mokra jest krawędź farby, nie środek przycisku. Jedzie po
+      // obwodzie (`rimPoint`, u = 0 to środek górnej krawędzi, dalej zgodnie z ruchem
+      // wskazówek) i przesuwa się o kilka procent z oddechem, więc połysk żyje, ale
+      // nie jeździ po ekranie. Poza maską goo — próg alfa zjadłby go tak jak cień.
+      {
+        const lit = breathing || phase === 'pour';
+        const u = .885 + .035 * pool;                       // górny lewy rąbek kałuży
+        const at = rimPoint(host, u);
+        const thick = spread * (at.ny > .4 ? poolBottom : at.ny < -.4 ? ANISO.top : ANISO.side);
+        setAttr(gleam, 'cx', (at.x + at.nx * thick * .42).toFixed(2));
+        setAttr(gleam, 'cy', (at.y + at.ny * thick * .42).toFixed(2));
+        setAttr(gleam, 'rx', (lit ? Math.max(8, host.width * .055 + thick * 1.55) : 0).toFixed(2));
+        setAttr(gleam, 'ry', (lit ? Math.max(1.9, thick * .42) : 0).toFixed(2));
+        // Styczna do obwodu: `at.nx/ny` to normalna, więc obrót elipsy to jej prostopadła.
+        gleam.style.transform = lit ? `rotate(${(Math.atan2(at.nx, -at.ny) * 180 / Math.PI).toFixed(2)}deg)` : 'none';
+        gleam.style.opacity = lit ? (.17 + .2 * pool).toFixed(3) : '0';
+      }
 
       // ---- maska goo: rozmycie + próg alfa na grupie farby -------------------
       // Region `filter` liczy się od podanego prostokąta (userSpaceOnUse), NIE od ekranu:
@@ -761,6 +804,9 @@ export function Plamek({ scope = null }: { scope?: HTMLElement | null }) {
           <circle className="plamek-splat" r="0" />
         </g>
         <ellipse className="plamek-sheen" rx="0" ry="0" />
+        {/* Odblask na rancie kałuży — druga, cichsza plama światła; pozycję liczy
+            `rimPoint`, więc siedzi NA farbie, a nie w środku przycisku. */}
+        <ellipse className="plamek-gleam" rx="0" ry="0" />
       </svg>
       {/* Twarz NAD mokrą farbą, w tym samym boxie co bulwa (`--ball-*` na korzeniu):
           oko pod maską goo zamieniłoby się w plamę, a buźka ma być ostra zawsze. */}

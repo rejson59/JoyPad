@@ -555,6 +555,11 @@ dialog.cine-sheet { width: min(680px, calc(100vw - var(--lg-gap) * 2)); height: 
    podwajałoby liczenie regionu. */
 .plamek-sheen { fill: #fff6ea; opacity: .3; filter: blur(1.6px); transform-box: fill-box; transform-origin: center; }
 .plamek.is-settle .plamek-sheen { animation: plamek-sheen 520ms var(--liquid-glide); }
+/* Odblask na RANCIE kałuży: mokra jest krawędź farby, nie środek przycisku. Ta sama
+   biel co połysk bulwy, tylko cichsza i rozciągnięta wzdłuż obwodu — pozycję, rozmiar
+   i obrót liczy co klatkę `draw()` z `rimPoint`, więc plama jedzie z oddechem farby.
+   Siedzi poza maską goo (jak połysk): próg alfa zjadłby tak delikatne krycie. */
+.plamek-gleam { fill: #fff6ea; opacity: 0; filter: blur(1.2px); transform-box: fill-box; transform-origin: center; }
 @keyframes plamek-sheen {
   0% { opacity: .5; transform: translate(-9px, 4px) scale(.8); }
   100% { opacity: .22; transform: none; }

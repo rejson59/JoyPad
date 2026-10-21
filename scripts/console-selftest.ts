@@ -411,7 +411,15 @@ assert.ok(sheetSource.includes('data-ui-scope') && sheetSource.includes('<UiHint
 assert.ok(!/<select|HTMLSelectElement.*selectedIndex/.test(sheetSource), 'Sheet nie cyklinuje już opcji — zrobiłby to dwa razy');
 assert.ok(/setAttr\(collar, 'd'/.test(plamekSource) && /setAttr\(blobEl, 'd'/.test(plamekSource)
   && plamekSource.includes('cancelAnimationFrame') && plamekSource.includes('if (el && el.getAttribute(name) !== value)'),
-  'Plamek animuje ŚCIEŻKĘ (`d` pisany tylko gdy się zmieniła) i zasypia, gdy nic się nie dzieje');
+  'Plamek animuje ŚCIEŻKĘ (`d` pisany tylko gdy się zmieniła) i nie pisze atrybutów bez zmiany');
+// Runda 22: „zwykła otoczka z buźką” brała się z ZASTYGANIA — w bezruchu pętla gasła,
+// kropla znikała (`wrap === 1` → `null`) i zostawał równy, nieruchomy pierścień. Teraz
+// farba oddycha, ale tanio: kadencja ~12 fps (~5 fps po zaśnięciu), a nie pełna pętla.
+assert.ok(plamekSource.includes('PLAMEK_IDLE.frameMs') && plamekSource.includes('PLAMEK_IDLE.napFrameMs'),
+  'oddech farby ma własną kadencję (i wolniejszą po zaśnięciu) — liczby z modelu, nie z kopii w widoku');
+assert.ok(/const breathing = !reduced && phase === 'hug'/.test(plamekSource)
+  && /\|\| breathing\) raf = requestAnimationFrame\(frame\)/.test(plamekSource),
+  'farba oddycha tylko w spoczynku i tylko przy pełnym ruchu, ale pętla wtedy nie gaśnie');
 assert.ok(!/className="plamek-(halo|shell|body|front|neck|drip|anchor)"/.test(plamekSource),
   'farba nie wraca do zestawu `<div>`-ów: dopóki główka jest osobnym elementem, będzie STAĆ na pierścieniu, a nie wnikać w niego');
 assert.ok(!/mask-image: conic-gradient/.test(liquidCss),
@@ -627,7 +635,7 @@ assert.ok(/!window\.document\.querySelector\('\.boot-mark'\)/.test(smokeSource),
 const stickSource = readFileSync('src/pad/Joystick.tsx', 'utf8');
 assert.ok(/safe-area-inset-\$\{side\}/.test(stickSource) && /calc\(\$\{zoneWidthPct\}% - env/.test(stickSource),
   'strefa gałki zaczyna się za wycięciem i jest o nie węższa — gałka liczy pozycję z pomiaru strefy');
-for (const selector of ['.plamek', '.plamek-liquid', '.plamek-glow', '.plamek-collar', '.plamek-src', '.plamek-blob', '.plamek-sheen', '.plamek-echo', '.plamek-face', '.plamek-mini', '.ui-hints', '.ui-hint kbd']) {
+for (const selector of ['.plamek', '.plamek-liquid', '.plamek-glow', '.plamek-collar', '.plamek-src', '.plamek-blob', '.plamek-sheen', '.plamek-gleam', '.plamek-echo', '.plamek-face', '.plamek-mini', '.ui-hints', '.ui-hint kbd']) {
   assert.ok(liquidCss.includes(selector) && markup.includes(selector.slice(1).split(' ')[0]), `${selector} istnieje w warstwie szkła i w markupie`);
 }
 for (const list of liquidCss.matchAll(/@media\(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n\}/g)) {
@@ -679,10 +687,10 @@ assert.ok(PLAMEK_TRAIL.every((echo, index) => echo.tau > 0
 assert.ok(ORBIT_ECHOS.every((lag, index) => index === 0 || lag > ORBIT_ECHOS[index - 1]), 'ogon ładowarki cofa się w czasie coraz bardziej');
 
 // Runda 3–7: fizyka cieczy w modelu (bez DOM-u — te same liczki widzi przeglądarka).
-const { bandEdges, blobPath, crownFor, dripTail, flightCurve, gazeBiasFor, gooStrength, lobeAtFor, paintWeightFor,
-  gripOffset, landFor, neckPath, perchFor, PERCH_SINK, pourEdges, ribbonPath, rimPerimeter,
-  rimPoint, smoothLoop, strandFor, teardropPath, wobbleKick, wobbleValue, wrapCurve, wrapFor,
-  burstCount: burst, splatsFor } = plamekModel;
+const { bandEdges, blobPath, crownFor, dripTail, flightCurve, gazeBiasFor, gooStrength, idleDrip, idlePool,
+  idleWave, lobeAtFor, paintWeightFor, gripOffset, landFor, neckPath, perchFor, PERCH_SINK, PLAMEK_IDLE,
+  pourEdges, ribbonPath, rimPerimeter, rimPoint, smoothLoop, strandFor, teardropPath, wobbleKick,
+  wobbleValue, wrapCurve, wrapFor, burstCount: burst, splatsFor } = plamekModel;
 // Główka ZAWSZE nad przyciskiem (awaryjnie pod, gdy nie ma światła) i sklejona z obwódką.
 {
   const wide = { left: 200, top: 300, width: 180, height: 44, radius: 16 };
@@ -783,6 +791,59 @@ const { bandEdges, blobPath, crownFor, dripTail, flightCurve, gazeBiasFor, gooSt
   assert.ok(gooStrength(1, 'pour') > .9 && gooStrength(.4, 'fly') > .9, 'w rytuale ciecz jest pełna niezależnie od napięcia');
   assert.ok(gooStrength(1, 'pour', false, 1) < .35 && gooStrength(1, 'pour', false, 1) >= .3, 'na końcu rozlewu zostaje tylko miękkość, nie rozmycie: farba stygnie w kształt przycisku');
   assert.ok(PLAMEK.gooPad >= 24, 'region maski ma zapas na rozmycie, bryzgi i smugę');
+}
+
+// Runda 22: farba nie wysycha w spoczynku. Mokrości podnieść nie wolno (goo .3 i próg
+// alfa 18/-6 są przypięte powyżej — przy większym rozmyciu znikała cienka górna krawędź
+// taśmy), więc ciecz wraca ruchem: oddech kałuży, wisząca kropla i odblask na rancie.
+{
+  // Fala jest ciągła i domknięta: skok na końcu okresu czytałby się jak tik, nie oddech.
+  assert.ok(Math.abs(idleWave(0, 1000)) < 1e-9, 'oddech zaczyna się od zera');
+  assert.equal(idleWave(500, 1000), 1, 'w połowie okresu jest szczyt');
+  assert.ok(Math.abs(idleWave(1000, 1000) - idleWave(0, 1000)) < 1e-9, 'koniec okresu wraca do początku');
+  assert.ok(Math.abs(idleWave(999, 1000) - idleWave(1001, 1000)) < .02, 'i nie ma w tym miejscu skoku');
+  for (const now of [0, 321, 4200, 9000, 12_345, 60_000]) {
+    const pool = idlePool(now), drip = idleDrip(now);
+    assert.ok(pool >= 0 && pool <= 1, `kałuża w zakresie 0..1 (${now})`);
+    assert.ok(drip >= PLAMEK_IDLE.dripFloor - 1e-9 && drip <= 1, `kropla nigdy nie znika do zera (${now})`);
+    assert.equal(pool, idlePool(now), 'oddech jest deterministyczny: ta sama chwila, ta sama fala');
+    assert.equal(drip, idleDrip(now), 'kropla też — w widoku obowiązuje zakaz `Math.random`');
+  }
+  // Sen: kulka śpi, farba ledwo drży — płycej i wolniej, ale nie zastyga.
+  assert.ok(idlePool(PLAMEK_IDLE.poolMs / 2, true) <= PLAMEK_IDLE.napFactor + 1e-9,
+    'we śnie oddech kałuży jest płytszy');
+  assert.ok(idleDrip(1234, true) < PLAMEK_IDLE.dripFloor, 'we śnie kropla jest wciągnięta');
+  assert.ok(PLAMEK_IDLE.napFrameMs > PLAMEK_IDLE.frameMs, 'śpiąca maskotka rysuje rzadziej');
+  assert.ok(PLAMEK_IDLE.frameMs >= 50 && PLAMEK_IDLE.frameMs <= 140,
+    'kadencja oddechu to ~7-20 fps: poniżej widać klatkowanie, powyżej to znowu pełna pętla');
+  // Pęcznienie taśmy musi zostawać w klamrze „napis wolny”: oddech pogrubia farbę, ale
+  // nie ma prawa wejść w treść przycisku — zwłaszcza na chipie, gdzie taśma jest najcieńsza.
+  for (const box of [{ left: 0, top: 0, width: 96, height: 26, radius: 13 },
+    { left: 0, top: 0, width: 300, height: 54, radius: 14 },
+    { left: 0, top: 0, width: 320, height: 168, radius: 24 }]) {
+    const swelled = paintWeightFor(box) * (1 + PLAMEK_IDLE.poolSwell) * (1 + PLAMEK_IDLE.poolAmp);
+    assert.ok(swelled < box.height * .18,
+      `spuchnięta farba wciąż mieści się w ~1/6 krótszego boku (${swelled.toFixed(2)} < ${(box.height * .18).toFixed(2)})`);
+  }
+  assert.ok(/spread = lerp\(blobR \* \.62, weight, settle\) \* \(1 \+ PLAMEK_IDLE\.poolSwell \* pool\)/.test(plamekSource),
+    'pęcznienie wchodzi w `spread` z liczbami z modelu — widok nie ma własnych kopii');
+  // Kropla w spoczynku: jest, ale krótsza i węższa od tej z rozlewu — wyrasta z kałuży,
+  // nie konkuruje z nią.
+  const wet = { left: 100, top: 200, width: 220, height: 64, radius: 18 };
+  const pour = dripTail(wet, .72, 9)!;
+  const rest = dripTail(wet, 1, 9, 0, 1)!;
+  assert.ok(pour && rest, 'kropla istnieje i w rozlewie, i w spoczynku');
+  assert.ok(rest.height < pour.height, `spoczynkowa kropla jest krótsza (${rest.height.toFixed(1)} < ${pour.height.toFixed(1)})`);
+  assert.ok(rest.width <= pour.width, 'i nie szersza — inaczej to kałuża, nie kropla');
+  assert.ok(rest.height <= wet.height * .34 + 1e-9, 'nie wisi niżej niż trzecia część przycisku');
+  assert.ok(rest.alpha < pour.alpha && rest.alpha > .3, 'jest delikatniejsza, ale widoczna');
+  assert.equal(dripTail(wet, 1, 9), null, 'bez oddechu (`rest` = 0) spoczynek zostaje suchy — stara ścieżka bez zmian');
+  // Odblask jedzie po rancie farby, nie po środku przycisku.
+  assert.ok(/rimPoint\(host, u\)/.test(plamekSource) && plamekSource.includes('className="plamek-gleam"')
+    && liquidCss.includes('.plamek-gleam'), 'odblask na rancie jest w modelu, w znacznikach i w CSS');
+  assert.ok(/u = \.885 \+ \.035 \* pool/.test(plamekSource), 'odblask siedzi na górnym lewym rąbku i przesuwa się z oddechem');
+  assert.ok(!/\.plamek-gleam[^{}]*\{[^}]*animation:/.test(liquidCss),
+    'odblask nie ma własnej animacji w CSS — żyje z klatki farby, więc nie rozjeżdża się z oddechem');
 }
 // Grubość farby idzie za rozmiarem elementu. Stała była jednocześnie za gruba na chipie
 // (zamieniała się w ramkę) i za cienka na kaflu (znikała z kanapy) — dwa zarzuty, jedna przyczyna.

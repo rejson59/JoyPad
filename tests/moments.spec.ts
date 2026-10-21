@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 // Numery bierzemy ze źródła, a nie z literałów: przy każdym bumpie testy muszą nadal
 // pomijać okna startowe, a nie czekać, aż któreś z nich przechwyci kliknięcie.
 import { WHATS_NEW_VERSION } from '../src/platform/whatsNewState';
+import { UPDATES } from '../src/platform/whatsNewNotes';
 import { FILM_VERSION } from '../src/cinema/script';
 
 async function harness(page: Page) {
@@ -41,7 +42,10 @@ test('localized release notes appear at startup once and can be dismissed', asyn
   await page.goto('/');
   const whatsNew = page.getByRole('dialog', { name: 'Co nowego?' });
   await expect(whatsNew).toBeVisible({ timeout: 15_000 });
-  await expect(whatsNew).toContainText('Moments Gallery');
+  // Treść z komponentu, nie z literału: lista notatek zmienia się co rundę, a ten test
+  // sprawdza, że okno jest PO POLSKU, pokazuje bieżącą wersję i zamyka się raz na zawsze.
+  await expect(whatsNew).toContainText(WHATS_NEW_VERSION);
+  await expect(whatsNew).toContainText(UPDATES[0].title.pl);
   await whatsNew.getByRole('button', { name: 'Do biblioteki' }).click();
   await expect(whatsNew).toHaveCount(0);
   await page.reload();

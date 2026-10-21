@@ -92,7 +92,17 @@ jobs:
       - name: Chromium for capture
         run: npx playwright install --with-deps chromium
       - name: FFmpeg (libx264 + libvpx-vp9)
-        run: ffmpeg -hide_banner -encoders | grep -E 'libx264|libvpx'
+        run: |
+          # Obraz biegacza nie gwarantuje już ffmpeg (ubuntu-latest się przesuwa), a bez
+          # libx264 i libvpx nie ma czym zakodować pary MP4+WebM — dlatego najpierw
+          # sprawdzamy, a dopiero potem instalujemy. ffprobe (krok „Clip shape”) jedzie w pakiecie.
+          if ! command -v ffmpeg > /dev/null 2>&1 \
+            || ! ffmpeg -hide_banner -encoders 2> /dev/null | grep -qE 'libx264|libvpx'; then
+            echo '::notice::ffmpeg brak lub bez libx264/libvpx — instaluję z apt'
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends ffmpeg
+          fi
+          ffmpeg -hide_banner -encoders | grep -E 'libx264|libvpx'
       - name: Vite dev server (capture imports engine sources)
         run: |
           npm run dev -- --host 127.0.0.1 --port 5173 --strictPort > .cache-vite.log 2>&1 &

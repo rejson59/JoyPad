@@ -629,6 +629,19 @@ assert.ok(indexHtml.includes('class="boot-mark"') && /boot-mark[^>]*aria-hidden=
   'zastępczy znak startowy jest w HTML-u i ukryty przed czytnikiem ekranu');
 assert.ok(/\.boot-mark\s*\{[^}]*position:\s*fixed/.test(indexHtml),
   'znak startowy jest `position: fixed` — `display: grid` na `#root` złamałby układ biblioteki');
+// Notatki wersji: test przeglądarkowy czyta treść z `WhatsNew.tsx`, więc kolejny bump
+// listy nie wywraca CI (literal 'Moments Gallery' przeżył dwie wersje i padł na 1.9.0).
+const momentsSpec = readFileSync('tests/moments.spec.ts', 'utf8');
+assert.ok(momentsSpec.includes("import { UPDATES } from '../src/platform/whatsNewNotes'")
+  && momentsSpec.includes('UPDATES[0].title.pl') && !momentsSpec.includes("toContainText('Moments Gallery')"),
+  'test notatek bierze treść z komponentu — nie przypina zdania z jednej wersji');
+const whatsNewSource = readFileSync('src/platform/WhatsNew.tsx', 'utf8');
+const whatsNewNotes = readFileSync('src/platform/whatsNewNotes.ts', 'utf8');
+assert.ok(whatsNewNotes.includes('export const UPDATES = [') && whatsNewSource.includes("from './whatsNewNotes'")
+  && !whatsNewSource.includes('export const UPDATES'),
+  'treść notatek żyje w module danych, a widok ją importuje — jedno źródło prawdy dla testu i UI');
+assert.ok(!/from '(\.\.\/)?console\/Sheet'|from 'react'/.test(whatsNewNotes),
+  'moduł notatek nie ciągnie Reacta ani `Sheet` — test importuje go w Node bez drzewa komponentów');
 const smokeSource = readFileSync('scripts/preview-smoke.mjs', 'utf8');
 assert.ok(/!window\.document\.querySelector\('\.boot-mark'\)/.test(smokeSource),
   'harness preview czeka na drzewo Reacta, a nie na zastępczy znak startowy');

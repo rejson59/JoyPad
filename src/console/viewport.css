@@ -1,0 +1,151 @@
+/* ==========================================================================
+   PROFILE EKRANU (runda 16) — „wszystko ma się mieścić bez scrolla”
+   ==========================================================================
+   `src/console/viewport.ts` rozpoznaje urządzenie i zapisuje wynik na
+   `<html data-profile="tv|desktop|tablet|handheld">`. Poniżej każdy profil dostaje
+   własny rozmiar typografii, kafelków i oddechów, a wspólna część (pierwszy blok)
+   pilnuje, żeby biblioteka była **jednym ekranem**:
+
+   - wysokość liczona z `dvh` (nie ze stałych pikseli), więc krótsze okno samo
+     zmniejsza kafelki i nagłówek, zamiast wypychać stopkę poza ekran;
+   - cztery gry stoją w JEDNYM rzędzie (siatka 3-kolumnowa łamała je na dwa rzędy
+     i to głównie pchało stronę w dół);
+   - treść ma **naturalną wysokość** (żadnego `height: 100dvh` + elastycznego wiersza —
+     to właśnie ten duet ściskał wiersz poniżej jego treści i powodował nachodzenie
+     elementów na siebie w rundzie 16);
+   - gdy treść jest wyższa od okna, `FitScreen` pomniejsza całość transformacją
+     (`data-fit="scaled"`), a przy naprawdę małym oknie wraca przewijanie
+     (`data-fit="scroll"`) — nigdy nakładanie.
+
+   Reguły profilowe mają wyższą specyficzność (`html[data-profile=…]`), więc wygrywają
+   z resztą arkuszy bez `!important` i bez przestawiania kolejności plików.
+   -------------------------------------------------------------------------- */
+
+/* --- Wspólne: biblioteka jako jeden ekran --------------------------------- */
+/* Ramka: dokładnie okno, przycina to, co poza (skalowana treść nigdy nie wychodzi).
+   `data-fit="scroll"` to bezpiecznik dla ekranów, na których pomniejszanie nie ma sensu. */
+.fit-frame { position:relative; height:100dvh; overflow:hidden; background:var(--os-bg); }
+.fit-frame[data-fit="scroll"] { overflow-y:auto; overflow-x:hidden; scrollbar-width:thin; }
+.fit-frame[data-fit="scroll"]::-webkit-scrollbar { width:8px; }
+.fit-frame[data-fit="scroll"]::-webkit-scrollbar-thumb { background:#ffffff1f; border-radius:8px; }
+/* Skalowana treść: naturalna wysokość mierzona w JS. Lewy górny róg jest początkiem
+   skali, bo przy pomniejszaniu układ dostaje płótno szersze od okna (`okno / skala`) —
+   wtedy po przeskalowaniu treść zajmuje dokładnie całą szerokość, bez pasów po bokach. */
+.fit-scale { transform-origin:top left; }
+.os-library-root { position:relative; min-height:100dvh; background:var(--os-bg); color:var(--os-text); font-family:var(--font-joy); }
+.os-library { min-height:100dvh; display:grid; grid-template-rows:auto minmax(0,1fr) auto auto; overflow:hidden; }
+.os-stage { min-height:0; padding:clamp(14px,2.6dvh,44px) 0 clamp(10px,1.8dvh,30px); }
+.os-collection { min-height:0; padding-top:clamp(8px,1.4dvh,18px); }
+.os-game-rail { grid-template-columns:repeat(4,minmax(0,1fr)); gap:clamp(12px,1.1vw,24px); }
+.os-game-tile { height:clamp(104px,15dvh,208px); }
+.os-footer { padding:clamp(12px,1.8dvh,24px) 0 clamp(14px,2dvh,28px); margin-top:clamp(10px,1.6dvh,22px); }
+.os-feature h1 { font-size:clamp(34px,min(5.4vw,7.2dvh),92px); }
+.os-feature p { font-size:clamp(13px,min(1.05vw,1.9dvh),16px); margin-bottom:clamp(14px,2.4dvh,28px); }
+.os-genre { margin-top:clamp(12px,2dvh,30px); }
+.os-play { padding:clamp(13px,1.9dvh,18px) clamp(18px,1.6vw,24px); }
+
+/* --- Telewizor: czytelność z 10 stóp, pilot zamiast myszy ------------------ */
+html[data-profile="tv"] .os-topbar { height:clamp(88px,10.5dvh,132px); }
+html[data-profile="tv"] .os-wordmark { font-size:clamp(30px,2.5vw,40px); }
+html[data-profile="tv"] .os-wordmark small { font-size:11px; letter-spacing:3.4px; }
+html[data-profile="tv"] .os-network { font-size:14px; }
+html[data-profile="tv"] .os-icon { width:54px; height:54px; }
+html[data-profile="tv"] .os-add { padding:15px 22px; font-size:15px; border-radius:34px; }
+html[data-profile="tv"] .os-room-button { font-size:15px; padding:15px 20px; }
+html[data-profile="tv"] .os-eyebrow { font-size:12px; letter-spacing:3px; }
+html[data-profile="tv"] .os-genre { font-size:15px; }
+html[data-profile="tv"] .os-feature-tags { font-size:12px; }
+html[data-profile="tv"] .os-play { font-size:17px; border-radius:16px; }
+html[data-profile="tv"] .os-session { padding:clamp(20px,2.4dvh,30px); }
+html[data-profile="tv"] .os-game-tile h3 { font-size:clamp(20px,1.5vw,30px); }
+html[data-profile="tv"] .os-game-tile>div>span { font-size:12px; }
+html[data-profile="tv"] .os-game-tile.is-selected { outline-width:3px; }
+html[data-profile="tv"] .os-footer { font-size:12px; gap:30px; }
+html[data-profile="tv"] .os-footer kbd { min-width:26px; font-size:12px; padding:4px 8px; }
+html[data-profile="tv"] .os-collection-heading h2 { font-size:clamp(18px,1.35vw,26px); }
+/* Na TV treść jest pomniejszana, więc pasek pojawia się tylko awaryjnie (data-fit="scroll"). */
+
+/* --- Komputer: pełna szerokość okna -----------------------------------------
+   Wcześniej kontenery miały `max-width:1720px` i wyśrodkowanie. Na szerokim
+   monitorze zostawiało to CZARNE PASY po bokach (zgłoszenie użytkownika: „nie jest
+   na swojej pełnej możliwej szerokości”). Teraz szerokość ogranicza wyłącznie
+   padding, który rośnie z oknem — treść zajmuje cały ekran, a marginesy po bokach
+   są zamierzone i proporcjonalne, nie „puste pole”. */
+html[data-profile="desktop"] .os-library { padding:0 clamp(28px,4.6vw,120px); }
+html[data-profile="desktop"] .os-footer { margin-top:clamp(10px,1.6dvh,22px); }
+
+/* --- Tablet: gra jak na dużym ekranie, ale wszystko pod palec -------------- */
+html[data-profile="tablet"] .os-icon { width:52px; height:52px; }
+html[data-profile="tablet"] .os-add { padding:14px 20px; min-height:52px; }
+html[data-profile="tablet"] .os-play { min-height:56px; font-size:16px; }
+html[data-profile="tablet"] .os-footer button,
+html[data-profile="tablet"] .os-session-invite,
+html[data-profile="tablet"] .os-lab-link { min-height:46px; }
+html[data-profile="tablet"] .os-game-rail { grid-template-columns:repeat(3,minmax(0,1fr)); }
+/* Przy 7+ światach trzy kolumny dają trzy rzędy — niższe kafle trzymają wysokość biblioteki blisko dawnych dwóch rzędów. */
+html[data-profile="tablet"] .os-game-tile { height:clamp(92px,12.5dvh,176px); }
+html[data-profile="tablet"] .os-stage { grid-template-columns:minmax(0,1fr) minmax(250px,32%); gap:clamp(20px,3vw,40px); }
+@media (orientation:portrait) {
+  html[data-profile="tablet"] .os-game-rail { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  html[data-profile="tablet"] .os-stage { grid-template-columns:minmax(0,1fr); gap:clamp(18px,3dvh,28px); }
+  html[data-profile="tablet"] .os-hint-rotate { display:flex; }
+}
+html[data-profile="handheld"] .os-hint-phone { display:flex; }
+
+/* --- Podpowiedzi zależne od urządzenia ------------------------------------
+   Obrót tabletu w pionie i wejście na kontroler z telefonu. Oba elementy są
+   w markupie zawsze, a widoczność rozstrzyga profil (i orientacja) — dzięki temu
+   nie trzeba zgadywać urządzenia w JavaScripcie ani montować różnych drzew. */
+.os-hint-rotate, .os-hint-phone {
+  display:none; align-items:center; gap:12px; margin:0 auto;
+  padding:12px 18px; border-radius:999px; border:1px solid var(--lg-edge);
+  background:var(--lg-fill); backdrop-filter:var(--lg-glass-soft);
+  color:var(--os-text); font-size:13px; text-decoration:none; width:max-content; max-width:92vw;
+}
+.os-hint-rotate { grid-column:1 / -1; }
+.os-hint-phone, .os-hint-phone a { color:var(--os-accent-bright); font-weight:600; text-decoration:none; }
+.os-hint-phone { position:fixed; left:50%; bottom:clamp(14px,3dvh,30px); transform:translateX(-50%); z-index:70; box-shadow:var(--lg-shadow); }
+/* Pływające elementy (podpowiedź telefonu) stoją poza skalowaną treścią, więc
+   `position: fixed` naprawdę przykleja je do okna, a nie do pomniejszonego bloku. */
+
+/* --- Menu gry i wyniki: ta sama zasada „jednego ekranu” -------------------- */
+.cine-game, .cine-results { min-height:100dvh; }
+.cine-game-main { display:flex; flex-direction:column; min-height:0; }
+.cine-game-topbar { min-height:clamp(62px,9dvh,96px); }
+.cine-game-intro { padding:clamp(18px,4.4dvh,54px) 0 clamp(16px,4dvh,48px); }
+.cine-game-intro h1 { font-size:clamp(32px,min(6.4vw,7.6dvh),96px); margin:clamp(12px,2.6dvh,30px) 0 clamp(10px,2.2dvh,20px); }
+.cine-game-intro>p { font-size:clamp(12px,min(1vw,1.85dvh),15px); line-height:1.7; }
+.cine-game-features { margin-top:clamp(12px,2.2dvh,25px); }
+.cine-deck-heading { padding:clamp(14px,2.2dvh,25px) clamp(18px,2.4vw,30px); }
+.cine-configuration { padding:clamp(14px,2.2dvh,25px) clamp(18px,2.4vw,30px); gap:clamp(10px,1.8dvh,20px) clamp(16px,2vw,28px); }
+.cine-launch-side { padding:clamp(14px,2.2dvh,26px) clamp(16px,2.2vw,26px); }
+.cine-crew { margin:clamp(12px,2dvh,24px) 0 clamp(10px,1.8dvh,18px); gap:clamp(10px,1.6dvh,20px) 12px; }
+.cine-start { margin-top:clamp(14px,2.4dvh,27px); padding:clamp(12px,1.9dvh,17px) 20px; }
+.cine-rules summary { padding:clamp(12px,1.8dvh,17px) clamp(18px,2.4vw,30px); }
+.cine-game-footer { padding-top:clamp(10px,2dvh,26px); }
+.cine-results-main { min-height:0; padding:clamp(20px,5dvh,65px) clamp(24px,6vw,100px); gap:clamp(22px,5dvh,80px); }
+.cine-result-emblem { width:clamp(124px,17dvh,210px); height:clamp(124px,17dvh,210px); }
+.cine-ranking li { min-height:clamp(62px,8.4dvh,87px); padding:clamp(10px,1.6dvh,15px) 18px; }
+.cine-result-footer { padding:clamp(14px,2.4dvh,25px) 0; }
+
+/* --- Telewizor: menu gry czytane z kanapy ---------------------------------- */
+html[data-profile="tv"] .cine-game-topbar { min-height:clamp(84px,10dvh,120px); }
+html[data-profile="tv"] .cine-deck-heading h2 { font:500 clamp(20px,1.5vw,30px) var(--font-joy-heading); }
+html[data-profile="tv"] .cine-configuration .flip-in { font-size:clamp(18px,1.25vw,26px); }
+html[data-profile="tv"] .cine-configuration .joy-arrow { height:48px; width:48px; }
+html[data-profile="tv"] .cine-configuration [role="tab"] { min-height:46px; font-size:11px; }
+html[data-profile="tv"] .cine-game-intro>p { font-size:clamp(14px,1.05vw,18px); }
+html[data-profile="tv"] .cine-start>span:first-child { font-size:clamp(16px,1.1vw,22px); }
+html[data-profile="tv"] .cine-start small { font-size:10px; }
+html[data-profile="tv"] .cine-game-footer { font-size:11px; }
+html[data-profile="tv"] .cine-crew-member b { font-size:12px; }
+html[data-profile="tv"] .cine-crew-member small { font-size:9px; }
+html[data-profile="tv"] .cine-result-moment>p { font-size:15px; }
+
+/* --- Tablet: duże menu, ale wszystko pod palec ----------------------------- */
+html[data-profile="tablet"] .cine-configuration .joy-arrow { height:46px; width:46px; }
+html[data-profile="tablet"] .cine-configuration [role="tab"] { min-height:46px; }
+html[data-profile="tablet"] .cine-start { min-height:60px; }
+html[data-profile="tablet"] .cine-back,
+html[data-profile="tablet"] .cine-rules summary,
+html[data-profile="tablet"] .cine-result-secondary { min-height:48px; }

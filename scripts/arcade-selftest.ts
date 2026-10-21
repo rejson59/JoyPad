@@ -246,7 +246,10 @@ safety.onMessage(safetyGuest, { t: 'suggest', game: 'snake' });
 safety.onMessage(safetyGuest, { t: 'suggest', game: 'race' });
 assert.equal(safetyHost.session().roster[1].suggestedGame, 'snake');
 safety.onMessage(safetyGuest, { t: 'suggest', game: 'tanks' });
-assert.equal(safetyHost.session().roster[1].suggestedGame, 'tanks');
+// Przestawianie ekranu co kliknięcie to już nie głosowanie, tylko hałas — telewizor
+// trzyma pierwszy przyjęty głos, a resztę odbija na cooldownie (`net/antiSpam`).
+assert.equal(safetyHost.session().roster[1].suggestedGame, 'snake', 'antyspam nie pozwala przestawiać ekranu co kliknięcie');
+// Wycofać się można zawsze: kłódka dotyczy nowych propozycji, nie odwrotu.
 safety.onMessage(safetyGuest, { t: 'suggest', game: null });
 assert.equal(safetyHost.session().roster[1].suggestedGame, undefined);
 safetyHost.setScreen('game');
@@ -265,7 +268,7 @@ safety.dropConn(returned.id);
 pairSafety('new-zero', 'new-zero'); pairSafety('new-one', 'new-one');
 pairSafety('return-occupied', 'safety-guest');
 assert.equal(safetyHost.snapshot().pads.find(p => p.connId === 'return-occupied')?.slot, 2, 'returning phone never displaces a new player');
-console.log('PAD SAFETY SELFTEST: OK (stale input, recovery slot, occupied slot, reminders, proposal validation)');
+console.log('PAD SAFETY SELFTEST: OK (stale input, recovery slot, occupied slot, reminders, proposal validation, anti-spam cooldown)');
 
 // Tire wisps can be translucent without changing sparks/explosions globally.
 const { Particles } = await import('../src/arcade/neon/particles');
@@ -282,3 +285,32 @@ particleTest.points.geometry.dispose();
 const particleMaterial = particleTest.points.material;
 if (!Array.isArray(particleMaterial)) particleMaterial.dispose();
 console.log('NEON PARTICLES SELFTEST: OK (per-emitter opacity, unchanged defaults, fade-out)');
+
+// --- Klawiatura pod modalem: silnik nie może walczyć z interfejsem ---
+{
+  const fs = await import('node:fs');
+  const owner = fs.readFileSync('src/lib/inputOwnership.ts', 'utf8');
+  assert.ok(/document\.querySelector\('dialog\[open\]'\)/.test(owner)
+    && /isContentEditable/.test(owner),
+    'własność klawiatury rozpoznaje modal i pole wpisowe — dwa stany, w których silnik nie ma nic do gadania');
+  const engines: Array<[string, string]> = [
+    ['arcade/runtime.ts', 'src/arcade/runtime.ts'],
+    ['arcade/webgl/runtime3d.ts', 'src/arcade/webgl/runtime3d.ts'],
+    ['starclash/StarClashRound.ts', 'src/arcade/starclash/StarClashRound.ts'],
+    ['neon/NeonRushScene.ts', 'src/arcade/neon/NeonRushScene.ts'],
+    ['game/engine.ts', 'src/game/engine.ts'],
+  ];
+  for (const [name, path] of engines) {
+    const source = fs.readFileSync(path, 'utf8');
+    const guard = source.indexOf('uiOwnsKeyboard(');
+    assert.ok(guard > 0, `${name}: brak rezygnacji z klawisza, gdy interfejs ma fokus`);
+    assert.ok(/import \{ uiOwnsKeyboard \} from '[^']*lib\/inputOwnership'/.test(source),
+      `${name}: własność klawiatury liczymy w jednym liściu, nie kopią warunków po silnikach`);
+    const keyDown = source.slice(guard, guard + 700);
+    const prevent = keyDown.indexOf('preventDefault()');
+    assert.ok(prevent === -1 || prevent > source.slice(guard, guard + 700).indexOf('uiOwnsKeyboard('),
+      `${name}: guard musi stać PRZED preventDefault — inaczej strzałki są ukradzione okienku jeszcze przed decyzją`);
+  }
+  console.log('KEYBOARD OWNERSHIP SELFTEST: OK (pięć silników rezygnuje z klawisza pod modalem i przy wpisaniu)');
+}
+

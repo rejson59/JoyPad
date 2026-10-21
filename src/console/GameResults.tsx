@@ -5,10 +5,13 @@ import { GAMES, localizeGame } from '../arcade/catalog';
 import { padHost } from '../net/padHost';
 import type { CSSProperties } from 'react';
 import { ArrowRight, ArrowUpRight, Crown, Home, RotateCcw, Settings2, Trophy } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { focusUiScope } from './focusSurface';
 import type { GameInfo } from '../arcade/catalog';
 import { usePadHost } from '../pad/PadHostPanel';
 import { CountUp } from '../components/motion';
 import { useT } from '../platform/i18n';
+import { FitScreen } from './FitScreen';
 
 export interface ResultPlayer { slot: number; name: string; color: string; score: number; detail: string; isBot?: boolean }
 export function GameResults({ replayNotice = '', moments = [], info, title, subtitle, players, winnerSlot, allWon = false, record, scoreLabel, onRestart, onSettings, onExit, onMenu }: {
@@ -22,7 +25,17 @@ export function GameResults({ replayNotice = '', moments = [], info, title, subt
   const rematch = host.pads.filter(p => p.rematch);
   const winner = players.find(player => player.slot === winnerSlot);
   const label = scoreLabel || (en ? 'SCORE' : 'WYNIK');
-  return <div className="cine-results" style={{ '--result-color': winner?.color || 'var(--os-accent)' } as CSSProperties}>
+  // Ekran wyników jest powierzchnią interfejsu tak jak menu: pad chodzi po nim
+  // nawigacją przestrzenną (siatka momentów, propozycje ekipy, akcje), a Plamek
+  // siada od razu na REWANSZU — to zwykle tego szuka gracz.
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && (active.closest('dialog') || root.current?.contains(active))) return;
+    focusUiScope(root.current);
+  }, []);
+  // Wyniki: naturalna wysokość i pomniejszanie zamiast przycinania treści.
+  return <FitScreen minScale={.78} label={t('results.title')}><div ref={root} data-ui-scope="game-results" data-ui-focus={'.cine-result-actions .cine-start'} className="cine-results" style={{ '--result-color': winner?.color || 'var(--os-accent)' } as CSSProperties}>
     <div className="cine-results-art" aria-hidden="true"><img src={`${import.meta.env.BASE_URL}${info.cover}`} alt="" /></div>
     <header className="cine-result-header"><span className="os-wordmark"><JoyPadLogo size={38} />JoyPad<span>.</span></span><span>{info.title} <i /> {t('results.roundEnd')}</span><button className="cine-back" onClick={onExit}><Home size={16} /> {t('results.library')}</button></header>
     <main className="cine-results-main"><section className="cine-result-moment">
@@ -42,5 +55,5 @@ export function GameResults({ replayNotice = '', moments = [], info, title, subt
       {host.pads.some(p => p.suggestedGame) && <section className="cine-proposals" aria-label={en ? 'Player suggestions' : 'Propozycje graczy'}><h3>{t('results.proposals')}</h3>{GAMES.filter(g => !g.wip && g.id !== info.id).map(g => { const votes = host.pads.filter(p => p.suggestedGame === g.id); const localized = localizeGame(g, language); return votes.length > 0 && <button key={g.id} onClick={() => padHost.onGameChoice?.(GAMES.indexOf(g))}><span>{t('results.choose', { title: localized.title })}<small>{votes.map(p => p.nick).join(', ')}</small></span><ArrowRight size={18} /></button>; })}<p>{t('results.approval')}</p></section>}
       <div className="cine-result-actions">{host.pads.length > 0 && <p className="cine-rematch-status" role="status">{t('results.wantsRematch', { ready: rematch.length, total: host.pads.length })}{rematch.length > 0 ? ` · ${rematch.map(p => p.nick).join(', ')}` : ` · ${t('results.rematchPrompt')}`}</p>}<button className="cine-start" onClick={onRestart}><span>{t('results.rematch')}<small>{t('results.sameSettings')}</small></span><RotateCcw size={22} /></button><button className="cine-change-game" onClick={onExit}><span>{t('results.changeGame')}<small>{t('results.backLibrary')}</small></span><ArrowRight size={22} /></button><button className="cine-result-secondary" onClick={onSettings}><Settings2 size={17} /><span>{t('results.changeSettings')}</span><ArrowUpRight size={17} /></button>{onMenu && <button className="cine-result-secondary" onClick={onMenu}><Home size={17} /><span>{t('results.battleMenu')}</span><ArrowRight size={17} /></button>}</div>
     </section></main><footer className="cine-result-footer"><span>{en ? 'ONE SCREEN. ONE CREW. SHARED MEMORIES.' : 'WSPÓLNY EKRAN. WSPÓLNE WSPOMNIENIA.'}</span><button onClick={onExit}>{t('results.nextWorld')} <ArrowRight size={15} /></button></footer>
-  </div>;
+</div></FitScreen>;
 }

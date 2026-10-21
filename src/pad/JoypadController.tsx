@@ -7,13 +7,14 @@ import { loadProfile, THEMES } from '../platform/profile';
 import { readinessText } from '../console/sessionSummary';
 import { playableIndices } from '../console/navigation';
 import { Sheet } from '../console/Sheet';
-import { useCallback, useEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Crown, Home, LogOut, Maximize2, Menu, Pause, Play, RotateCcw, Settings, Trophy } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent } from 'react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Crown, Home, LogOut, Maximize2, Menu, MonitorPlay, Pause, Play, RotateCcw, Settings, Trophy } from 'lucide-react';
 import { GAMES, gameInfo, localizeGame } from '../arcade/catalog';
 import { useT } from '../platform/i18n';
 import { padClient, type PadClientState } from '../net/padClient';
 import { type RemoteCommand } from '../net/protocol';
 import { Joystick } from './Joystick';
+import { shouldStep, stickDirection, type NavDirection } from '../console/spatialNav';
 import { getHapticStatus, haptic, unlockHaptics } from './haptics';
 import { useConsolePreferences } from '../console/preferences';
 import { useViewport } from '../console/useViewport';
@@ -39,12 +40,14 @@ function RemoteButton({
   children,
   admin,
   primary = false,
+  className = '',
 }: {
   command: RemoteCommand;
   label: string;
   children: React.ReactNode;
   admin: boolean;
   primary?: boolean;
+  className?: string;
 }) {
   return (
     <button
@@ -52,10 +55,96 @@ function RemoteButton({
       disabled={!admin}
       onClick={() => send(command)}
       aria-label={label}
-      className={`pad-remote-button ${primary ? 'pad-remote-primary' : ''}`}
+      className={`pad-remote-button ${primary ? 'pad-remote-primary' : ''} ${className}`}
     >
       {children}
     </button>
+  );
+}
+
+/**
+ * Gałka nawigacji pilota: telefon liczy martwą strefę i powtórzenia, a na telewizor
+ * lecą dyskretne komendy (up/down/left/right). Dzięki temu TV jest bezstanowy,
+ * opóźnienie sieci nie psuje rytmu, a sterowanie gry nigdy nie jest „kradzione".
+ */
+function NavStick({ admin, size = 104, hub = false, label }: { admin: boolean; size?: number; hub?: boolean; label: string }) {
+  const knob = useRef<HTMLSpanElement>(null);
+  const base = useRef<HTMLDivElement>(null);
+  const state = useRef({ x: 0, y: 0, held: null as NavDirection | null, heldSince: 0, lastStep: 0, raf: 0, dragging: false });
+
+  const paint = () => {
+    const el = knob.current;
+    const radius = size / 2;
+    if (el) el.style.transform = `translate3d(${(state.current.x * radius * .34).toFixed(1)}px, ${(state.current.y * radius * .34).toFixed(1)}px, 0)`;
+  };
+
+  const stop = () => {
+    const s = state.current;
+    s.dragging = false; s.held = null; s.x = 0; s.y = 0;
+    if (s.raf) cancelAnimationFrame(s.raf);
+    s.raf = 0;
+    paint();
+    base.current?.classList.remove('is-active');
+  };
+
+  const tick = (now: number) => {
+    const s = state.current;
+    if (!s.held) { s.raf = 0; return; }
+    s.raf = requestAnimationFrame(tick);
+    // Znacznik klatki potrafi być wcześniejszy niż performance.now() z pointerdown —
+    // bez tego guardingu pierwsze pociągnięcie dałoby dwa kroki w jednej klatce.
+    const heldFor = now - s.heldSince, sinceLast = now - s.lastStep;
+    if (heldFor <= 0 || sinceLast <= 0) return;
+    // Powtórzenia bez haptyki — wibracja przy każdym kroku zmęczyłaby kciuk.
+    if (shouldStep(heldFor, sinceLast)) { s.lastStep = now; padClient.sendCommand(s.held); }
+  };
+
+  const move = (dx: number, dy: number) => {
+    const s = state.current;
+    const radius = size / 2;
+    const len = Math.hypot(dx, dy) || 1;
+    const clamp = len > radius ? radius / len : 1;
+    s.x = (dx * clamp) / radius; s.y = (dy * clamp) / radius;
+    paint();
+    const direction = stickDirection(s.x, s.y);
+    if (direction === s.held) return;
+    s.held = direction;
+    if (direction) {
+      const now = performance.now();
+      s.heldSince = now; s.lastStep = now;
+      send(direction);
+      if (!s.raf) s.raf = requestAnimationFrame(tick);
+    }
+  };
+
+  const onDown = (event: RPointerEvent<HTMLDivElement>) => {
+    if (!admin) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    state.current.dragging = true;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.currentTarget.classList.add('is-active');
+    move(event.clientX - (rect.left + rect.width / 2), event.clientY - (rect.top + rect.height / 2));
+  };
+  const onMove = (event: RPointerEvent<HTMLDivElement>) => {
+    if (!state.current.dragging || !admin) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    move(event.clientX - (rect.left + rect.width / 2), event.clientY - (rect.top + rect.height / 2));
+  };
+
+  return (
+    <div
+      ref={base}
+      className={`pad-nav-stick ${hub ? 'pad-nav-stick--hub' : ''}`}
+      // Wariant „hub" rozciąga sama siatka krzyżaka — inaczej miksałby rozmiary komórek.
+      style={hub ? undefined : ({ width: size, height: size } as CSSProperties)}
+      onPointerDown={onDown} onPointerMove={onMove} onPointerUp={stop} onPointerCancel={stop}
+      // Gałka to powielenie krzyżaka — dla czytników ekranu zostaje dekoracją,
+      // a prawdziwe semantyczne przyciski to osobne strzałki obok niej.
+      aria-hidden="true" title={label}
+    >
+      {!hub && <><i className="pad-nav-stick-arrow is-up" /><i className="pad-nav-stick-arrow is-right" /><i className="pad-nav-stick-arrow is-down" /><i className="pad-nav-stick-arrow is-left" /></>}
+      <span ref={knob} className="pad-nav-stick-knob" />
+    </div>
   );
 }
 
@@ -64,30 +153,37 @@ function RemoteNavigation({ admin, accent }: { admin: boolean; accent: string })
   return (
     <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
       <div className="mb-3 text-center text-[10px] font-black tracking-[.2em] text-slate-500">{t('remote.adminNav')}</div>
-      <div className="mx-auto grid w-[210px] grid-cols-3 gap-2">
-        <span />
-        <RemoteButton command="up" label={t('remote.up')} admin={admin}><ArrowUp size={22} /></RemoteButton>
-        <span />
-        <RemoteButton command="left" label={t('remote.left')} admin={admin}><ArrowLeft size={22} /></RemoteButton>
-        <RemoteButton command="select" label={t('remote.select')} admin={admin} primary>
-          <span className="text-[10px] font-black tracking-wider">OK</span>
-        </RemoteButton>
-        <RemoteButton command="right" label={t('remote.right')} admin={admin}><ArrowRight size={22} /></RemoteButton>
-        <span />
-        <RemoteButton command="down" label={t('remote.down')} admin={admin}><ArrowDown size={22} /></RemoteButton>
-        <span />
+      <div className="pad-nav-top">
+        <NavStick admin={admin} label={t('remote.navStick')} />
+        <div className="pad-nav-side">
+          <RemoteButton command="select" label={t('remote.select')} admin={admin} primary><span className="text-[10px] font-black tracking-wider">OK</span></RemoteButton>
+          <div className="pad-nav-xy">
+            <RemoteButton command="x" label={t('remote.shortcutX')} admin={admin}><span className="text-[11px] font-black">X</span></RemoteButton>
+            <RemoteButton command="y" label={t('remote.shortcutY')} admin={admin}><span className="text-[11px] font-black">Y</span></RemoteButton>
+          </div>
+        </div>
       </div>
-      <div className="mt-3 flex justify-center gap-2">
-        <button type="button" onClick={() => send('back')} disabled={!admin} className="pad-secondary min-w-[112px] disabled:cursor-not-allowed disabled:opacity-40">
+      {/* Krzyżak obok gałki — dokładnie równolegle: kto woli celować kciukiem, ten klika. */}
+      <div className="pad-nav-dpad">
+        <RemoteButton command="left" label={t('remote.left')} admin={admin}><ArrowLeft size={20} /></RemoteButton>
+        <RemoteButton command="up" label={t('remote.up')} admin={admin}><ArrowUp size={20} /></RemoteButton>
+        <RemoteButton command="down" label={t('remote.down')} admin={admin}><ArrowDown size={20} /></RemoteButton>
+        <RemoteButton command="right" label={t('remote.right')} admin={admin}><ArrowRight size={20} /></RemoteButton>
+      </div>
+      <div className="mt-3 flex flex-wrap justify-center gap-2">
+        <button type="button" onClick={() => send('back')} disabled={!admin} className="pad-secondary min-w-[104px] disabled:cursor-not-allowed disabled:opacity-40">
           <ArrowLeft size={14} /> {t('remote.back')}
         </button>
-        <button type="button" onClick={() => send('home')} disabled={!admin} className="pad-secondary min-w-[112px] disabled:cursor-not-allowed disabled:opacity-40">
+        <button type="button" onClick={() => send('home')} disabled={!admin} className="pad-secondary min-w-[104px] disabled:cursor-not-allowed disabled:opacity-40">
           <Home size={14} /> {t('remote.games')}
+        </button>
+        <button type="button" onClick={() => send('fullscreen')} disabled={!admin} className="pad-secondary min-w-[104px] disabled:cursor-not-allowed disabled:opacity-40" title={t('remote.xHelp')}>
+          <Maximize2 size={14} /> {t('remote.tvFullscreen')}
         </button>
       </div>
       {!admin && <p className="mt-3 text-center text-[10px] text-slate-500">{t('remote.onlyAdmin')}</p>}
-      <div className="mt-3 text-center text-[10px] text-slate-500" style={{ color: admin ? `${accent}cc` : undefined }}>
-        {t('remote.arrowsHelp')}
+      <div className="mt-3 text-center text-[10px] leading-relaxed text-slate-500" style={{ color: admin ? `${accent}cc` : undefined }}>
+        {t('remote.arrowsHelp')} · {t('remote.xHelp')}
       </div>
     </div>
   );
@@ -98,8 +194,8 @@ function LandscapeRemote({ st, onSettings, onRoom, onLounge, fullscreen }: { st:
   const admin = st.slot === st.adminSlot;
   const game = localizeGame(st.game ? gameInfo(st.game) : GAMES[st.selection] ?? GAMES[0], language);
   return <div className="landscape-remote">
-    <header><JoyPadLogo size={38} /><span>JOYPAD <small>{t('remote.controllerMode')}</small></span><div><button onClick={onLounge}>{t('remote.profile')}</button>{admin && <button onClick={onRoom}>{t('remote.room')}</button>}<button aria-label={t('remote.phoneSettings')} onClick={onSettings}><Settings size={17} /></button><button aria-label={t('arcadePad.fullscreen')} onClick={fullscreen}><Maximize2 size={17} /></button></div></header>
-    {admin ? <main className="landscape-controls"><div className="landscape-dpad"><span className="pad-shoulder">{t('remote.navShoulder')}</span><div className="physical-dpad"><RemoteButton command="up" label={t('remote.up')} admin><ArrowUp /></RemoteButton><RemoteButton command="left" label={t('remote.left')} admin><ArrowLeft /></RemoteButton><span className="dpad-hub" /><RemoteButton command="right" label={t('remote.right')} admin><ArrowRight /></RemoteButton><RemoteButton command="down" label={t('remote.down')} admin><ArrowDown /></RemoteButton></div></div>
+    <header><JoyPadLogo size={38} /><span>JOYPAD <small>{t('remote.controllerMode')}</small></span><div><button onClick={onLounge}>{t('remote.profile')}</button>{admin && <button onClick={onRoom}>{t('remote.room')}</button>}<button aria-label={t('remote.phoneSettings')} onClick={onSettings}><Settings size={17} /></button><button aria-label={t('arcadePad.fullscreen')} onClick={fullscreen}><Maximize2 size={17} /></button>{admin && <button aria-label={t('remote.tvFullscreen')} title={t('remote.xHelp')} onClick={() => send('fullscreen')}><MonitorPlay size={17} /></button>}</div></header>
+    {admin ? <main className="landscape-controls"><div className="landscape-dpad"><span className="pad-shoulder">{t('remote.navShoulder')}</span><div className="physical-dpad"><RemoteButton className="dpad-xy is-x" command="x" label={t('remote.shortcutX')} admin><span>X</span></RemoteButton><RemoteButton className="pad-remote-up" command="up" label={t('remote.up')} admin><ArrowUp /></RemoteButton><RemoteButton className="dpad-xy is-y" command="y" label={t('remote.shortcutY')} admin><span>Y</span></RemoteButton><RemoteButton className="pad-remote-left" command="left" label={t('remote.left')} admin><ArrowLeft /></RemoteButton><NavStick hub size={52} admin={admin} label={t('remote.navStick')} /><RemoteButton className="pad-remote-right" command="right" label={t('remote.right')} admin><ArrowRight /></RemoteButton><RemoteButton className="pad-remote-down" command="down" label={t('remote.down')} admin><ArrowDown /></RemoteButton></div></div>
       <div className="landscape-display"><span className="os-eyebrow">{st.screen === 'lobby' ? t('remote.lobby') : st.screen === 'over' ? t('remote.results') : t('remote.prep')}</span><h1>{game.title}</h1>{st.options ? <p>{st.options.primaryValue} · {st.options.secondaryValue}</p> : <p>{st.screen === 'over' ? t('remote.roundHint') : t('remote.selectHint')}</p>}<div><button onClick={() => send('home')}><Home size={16} /> {t('remote.games')}</button><button onClick={onRoom}><Crown size={16} /> {t('remote.adminRole')}</button></div><small>{t('remote.rotateHint')}</small></div>
       <div className="landscape-ab"><span className="pad-shoulder">{t('remote.actionShoulder')}</span><button className="physical-b" aria-label={t('remote.back')} onClick={() => send('back')}>B<small>{t('remote.back')}</small></button><button className="physical-a" aria-label={t('remote.select')} onClick={() => send('select')}>A<small>{t('remote.select')}</small></button></div>
     </main> : <main className="landscape-wait"><div><JoyPadLogo size={110} /><h1>{t('remote.playerPass')}</h1><p>{st.nick}, {t('remote.crewStarting')}</p><button onClick={onLounge}>{t('remote.customizePass')}</button>{st.game && ['menu', 'setup', 'over'].includes(st.screen) && <button onClick={() => { const kind = st.screen === 'over' ? 'rematch' : 'ready'; padClient.sendIntent(kind, !st.roster.find(p => p.slot === st.slot)?.[kind]); }}>{st.screen === 'over' ? t('remote.rematchIntent') : st.roster.find(p => p.slot === st.slot)?.ready ? t('remote.readyIntentDone') : t('remote.readyIntent')}</button>}</div>{['lobby', 'over'].includes(st.screen) && <GameSuggestions st={st} />}</main>}

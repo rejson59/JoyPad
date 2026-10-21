@@ -33,6 +33,17 @@ function load() {
 let preferences = load();
 const listeners = new Set<() => void>();
 export const getPreferences = () => preferences;
+/**
+ * Czy animować: ustawienie konsoli wygaśnia preferencję systemu. Jedno miejsce dla
+ * wszystkich warstw (morfing okien, pierścień fokusa, przewijanie padem).
+ */
+export function motionReduced() {
+  try {
+    if (preferences.motion === 'reduced') return true;
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch { return true; }
+}
+export function motionBehavior(): ScrollBehavior { return motionReduced() ? 'instant' : 'smooth'; }
 export function setPreferences(patch: Partial<ConsolePreferences>) {
   preferences = sanitizePreferences({ ...preferences, ...patch });
   try { localStorage.setItem('joypad.console', JSON.stringify(preferences)); } catch { /* private browsing */ }
@@ -41,6 +52,6 @@ export function setPreferences(patch: Partial<ConsolePreferences>) {
   listeners.forEach(fn => fn());
 }
 export function useConsolePreferences() {
-  return useSyncExternalStore((fn) => { listeners.add(fn); return () => { listeners.delete(fn); }; }, getPreferences);
+  return useSyncExternalStore((fn) => { listeners.add(fn); return () => { listeners.delete(fn); }; }, getPreferences, getPreferences);
 }
 if (typeof document !== 'undefined') document.documentElement.dataset.motion = preferences.motion;

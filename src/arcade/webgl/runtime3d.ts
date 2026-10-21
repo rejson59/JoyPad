@@ -1,6 +1,7 @@
 import type { PadInput } from '../../net/protocol';
 import { type GameRound, type InputState, type RoundConfig, type RoundHud, type RoundResult } from '../runtime';
 import { gameAudio } from '../../game/audio';
+import { uiOwnsKeyboard } from '../../lib/inputOwnership';
 
 export type Vec3 = [number, number, number];
 export type Mat4 = Float32Array;
@@ -304,7 +305,7 @@ export abstract class WebGLRound3D implements GameRound {
     if (!this.finished) this.raf = requestAnimationFrame(this.frame);
   };
 
-  private keyDown = (event: KeyboardEvent) => { if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(event.code)) event.preventDefault(); if ((event.code === 'KeyP' || event.code === 'Escape') && !event.repeat) this.togglePause(); this.inputKeys.add(event.code); };
+  private keyDown = (event: KeyboardEvent) => { if (uiOwnsKeyboard(event)) return; if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(event.code)) event.preventDefault(); if ((event.code === 'KeyP' || event.code === 'Escape') && !event.repeat) this.togglePause(); this.inputKeys.add(event.code); };
   private keyUp = (event: KeyboardEvent) => { this.inputKeys.delete(event.code); };
   private blur = () => { this.inputKeys.clear(); };
   private visibilityChange = () => { if (document.hidden && !this.paused && !this.finished && this.countdown <= 0) { this.paused = true; this.config.onHud(this.hud()); } };

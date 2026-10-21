@@ -1,6 +1,6 @@
 # JoyPad — prompt dla nadchodzącej gry
 
-**Stan kontraktu: JoyPad OS 02, wrzesień 2026.** Turbo League i BlockCraft pozostają zapowiedziami (`wip: true`). Dokument zawiera prompt wyłącznie dla Turbo League oraz bezpieczną procedurę integracji ZIP; BlockCraft na tym etapie jest tylko teaserem, nie grywalną grą.
+**Stan kontraktu: JoyPad OS 02, wrzesień 2026 (aktualizacja: runda 19).** Turbo League jest już grywalna — silnik z `nitro-league.zip` wciągnięto procedurą z §2 (patrz [imported-games.md](imported-games.md)); prompt z §1 zostaje jako opis kontraktu dla kolejnej wersji. BlockCraft pozostaje zapowiedzią (`wip: true`) i jest tylko teaserem, nie grywalną grą.
 
 ## Jak używać
 

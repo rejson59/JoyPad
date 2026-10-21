@@ -1,13 +1,14 @@
-import { navigateResults } from '../console/resultsNavigation';
 import { useRecordedMoments } from '../platform/useRecordedMoments';
 import type { MomentEvent } from '../platform/momentRecorder';
 import { readChoice, remember } from '../console/history';
 import { GameSetup } from '../console/GameSetup';
+import { PlamekOrbit } from '../console/PlamekOrbit';
 import { GameResults } from '../console/GameResults';
 import { ConnectionsScreen } from '../components/ConnectionsScreen';
 import { PauseSheet } from '../console/PauseSheet';
+import { clearLeaveWish, isLeaving, wishToLeave } from '../lib/exitWish';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Gamepad2, Home, LoaderCircle, Pause, Smartphone, Timer, Volume2, VolumeX, Zap } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Gamepad2, Home, Pause, Smartphone, Timer, Volume2, VolumeX, Zap } from 'lucide-react';
 import { gameAudio } from '../game/audio';
 import { menuMusic } from '../game/menuMusic';
 import { PLAYER_DEFS } from '../game/types';
@@ -38,9 +39,25 @@ const RULES: Record<ArcadeId, Record<Language, GameRules>> = {
     en: { primaryLabel: 'SCORE TO WIN', primary: ['8 points', '12 points', '16 points'], secondaryLabel: 'AI RIVALS', secondary: ['No bots', '1 bot', '2 bots', '3 bots'], hint: 'Tap a direction on your phone or use the keyboard. Collect energy, avoid steel obstacles and rivals. Hold SPRINT to speed up — it uses energy.', action: 'SPRINT', win: 'First to the score target wins.' },
   },
   league: {
-    pl: { primaryLabel: 'LIMIT GOLI', primary: ['3 gole', '5 goli', '7 goli'], secondaryLabel: 'RYWALE SI', secondary: ['Bez botów', '1 bot', '2 boty', '3 boty'], hint: 'Pchaj piłkę do bramki. Joystick steruje autem, AKCJA to boost. Odbicia i turbo mają większą siłę niż zwykła jazda.', action: 'TURBO', win: 'Pierwsza drużyna do limitu wygrywa.' },
-    en: { primaryLabel: 'GOAL LIMIT', primary: ['3 goals', '5 goals', '7 goals'], secondaryLabel: 'AI RIVALS', secondary: ['No bots', '1 bot', '2 bots', '3 bots'], hint: 'Drive the ball into the goal. Steer with the stick and hold ACTION to boost. Bounces and turbo hits carry more force than regular driving.', action: 'TURBO', win: 'First team to the goal limit wins.' },
+    pl: { primaryLabel: 'LIMIT GOLI', primary: ['3 gole', '5 goli', '7 goli'], secondaryLabel: 'BOTY', secondary: ['Bez botów', '1 bot', '2 boty', '3 boty'], hint: 'Joystick wskazuje kierunek jazdy — auto samo skręca i przyspiesza, puszczona gałka hamuje. Przytrzymaj AKCJĘ, by użyć boosta; żółte pola uzupełniają paliwo. Niebiescy atakują w prawo, pomarańczowi w lewo.', action: 'BOOST', win: 'Pierwsza drużyna do limitu goli wygrywa; remis po 3 minutach rozstrzyga złoty gol.' },
+    en: { primaryLabel: 'GOAL LIMIT', primary: ['3 goals', '5 goals', '7 goals'], secondaryLabel: 'BOTS', secondary: ['No bots', '1 bot', '2 bots', '3 bots'], hint: 'The stick points where you want to drive — the car turns and accelerates by itself, and letting go brakes. Hold ACTION to boost; yellow pads refill it. Blue attacks to the right, orange to the left.', action: 'BOOST', win: 'First team to the goal limit wins; a tie after 3 minutes is settled by a golden goal.' },
   },
+  pizza: {
+    pl: { primaryLabel: 'DŁUGOŚĆ ZMIANY', primary: ['Krótka · 1:00', 'Zmiana · 2:00', 'Maraton · 3:00'], secondaryLabel: 'TRYB', secondary: ['Współpraca', 'Rywalizacja'], hint: 'Joystick: bieg. Przytrzymaj AKCJĘ — kurier wystrzeli sieć; puść w dole łuku, by nabrać rozpędu. Pizzę rzuca sam, gdy masz klienta przed sobą. Pusty plecak uzupełnisz przy furgonetce.', action: 'SIEĆ', win: 'Dowieźcie jak najwięcej pizz przed końcem zmiany.' },
+    en: { primaryLabel: 'SHIFT LENGTH', primary: ['Short · 1:00', 'Shift · 2:00', 'Marathon · 3:00'], secondaryLabel: 'MODE', secondary: ['Co-op', 'Versus'], hint: 'Stick: run. Hold ACTION — your courier shoots a web; let go at the bottom of the arc to gain speed. The pizza throws itself when a customer is ahead of you. Refill an empty bag at the van.', action: 'WEB', win: 'Deliver as many pizzas as you can before the shift ends.' },
+  },
+};
+
+/**
+ * Ustawienia rundy per gra: domyślne indeksy opcji (jak w `RULES`) i to, czy puste sloty
+ * zajmują boty. Jedna tabela zamiast rozsianych `id === 'race' || …` — nowa gra to jeden wiersz.
+ */
+const SETUP: Record<ArcadeId, { primary: number; secondary: number; bots: boolean }> = {
+  race: { primary: 1, secondary: 2, bots: true },
+  orbit: { primary: 0, secondary: 1, bots: false },
+  snake: { primary: 1, secondary: 1, bots: true },
+  league: { primary: 1, secondary: 2, bots: true },
+  pizza: { primary: 1, secondary: 0, bots: false },
 };
 
 const formatTime = (n: number) => `${Math.floor(n / 60)}:${String(Math.floor(n % 60)).padStart(2, '0')}`;
@@ -81,16 +98,40 @@ async function createRound(id: ArcadeId, canvas: HTMLCanvasElement, config: Roun
       // Wężowy Wir pozostaje celowo lekki: zawsze renderuje się w Canvas 2D.
       return new (await import('./games/Snake')).SnakeRound(canvas, config);
     case 'league': {
-      if (hasWebGL2(canvas)) return new (await import('./webgl/League3D')).League3DRound(canvas, config);
+      // Turbo League = silnik z nitro-league.zip (src/arcade/league-next) renderujący na płótnie platformy.
+      // Prosty prototyp Canvas 2D zostaje wyłącznie tam, gdzie WebGL2 w ogóle nie istnieje — po nieudanym
+      // starcie WebGL płótno ma już kontekst 3D i nie da się na nim założyć 2D, więc wtedy zgłaszamy błąd.
+      if (hasWebGL2(canvas)) return new (await import('./league-next/LeagueRound')).LeagueNextRound(canvas, config);
       return new (await import('./games/League')).LeagueRound(canvas, config);
+    }
+    case 'pizza': {
+      // WEBZA to czyste Three.js — bez WebGL2 nie ma wersji zastępczej, więc zgłaszamy to wprost
+      // (widok wraca do menu zamiast zawisnąć na pustym płótnie).
+      if (!hasWebGL2(canvas)) throw new Error('WEBZA wymaga WebGL2');
+      return new (await import('./pizza/PizzaRound')).PizzaRound(canvas, config);
     }
   }
 }
 
 function OptionStepper({ title, value, change, accent, help, language }: { title: string; value: string; change: (step: number) => void; accent: string; help: string; language: Language }) {
-  return <div className="arcade-option rounded-2xl p-4"><div className="joy-kicker text-slate-400">{title}</div><div className="mt-3 flex items-center justify-between gap-2"><button onClick={() => change(-1)} aria-label={`${language === 'en' ? 'Previous' : 'Poprzednie'}: ${title}`} className="joy-arrow"><ChevronLeft size={18} /></button><span key={value} className="flip-in block min-h-[26px] text-center text-sm font-bold sm:text-base" style={{ color: accent }}>{value}</span><button onClick={() => change(1)} aria-label={`${language === 'en' ? 'Next' : 'Następne'}: ${title}`} className="joy-arrow"><ChevronRight size={18} /></button></div><div className="mt-3 text-center text-[11px] text-slate-500">{help}</div></div>;
+  /**
+   * Wartość jest SAMODZIELNĄ pozycją nawigacji z `data-ui-stepper` (patrz
+   * `focusSurface.adjustable`): ←/→ przesuwa opcję pod Plamkiem, a ↑/↓ wychodzi na inną.
+   * Wcześniej strzałki obsługiwał rodzic (`stepPrimary`/`stepSecondary`), więc dało się
+   * zmieniać tylko dwie pierwsze opcje — reszta ekranu (widok, profil, format) była dla
+   * pada nieosiągalna. Strzałki po bokach zostają dla myszy i dotyku.
+   */
+  const valueRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const node = valueRef.current;
+    if (!node) return;
+    const onStep = (event: Event) => change((event as CustomEvent<{ delta: number }>).detail.delta > 0 ? 1 : -1);
+    node.addEventListener('ui-step', onStep);
+    return () => node.removeEventListener('ui-step', onStep);
+  }, [change]);
+  const prev = `${language === 'en' ? 'Previous' : 'Poprzednie'}: ${title}`, next = `${language === 'en' ? 'Next' : 'Następne'}: ${title}`;
+  return <div className="arcade-option rounded-2xl p-4"><div className="joy-kicker text-slate-400">{title}</div><div className="mt-3 flex items-center justify-between gap-2"><button onClick={() => change(-1)} aria-label={prev} className="joy-arrow"><ChevronLeft size={18} /></button><button ref={valueRef} type="button" data-ui-stepper="value" key={value} onClick={() => change(1)} aria-label={next} className="flip-in block min-h-[26px] cursor-pointer appearance-none border-0 bg-transparent p-0 text-center text-sm font-bold sm:text-base" style={{ color: accent }}>{value}</button><button onClick={() => change(1)} aria-label={next} className="joy-arrow"><ChevronRight size={18} /></button></div><div className="mt-3 text-center text-[11px] text-slate-500">{help}</div></div>;
 }
-
 function Segmented<T extends string>({ title, values, value, onChange, accent, labels, language }: { title: string; values: readonly T[]; value: T; onChange: (value: T) => void; accent: string; labels: Record<T, string>; language: Language }) {
   const descriptions: Record<string, string> = language === 'en' ? {
     split: '2–4 views on one screen', shared: 'One shared arena for the whole crew',
@@ -108,8 +149,8 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   const { language, t } = useT();
   const info = localizeGame(gameInfo(id), language), rules = RULES[id][language];
   const [stage, setStage] = useState<Stage>('menu');
-  const [primary, setPrimary] = useState(() => readChoice(`${id}.primary`, rules.primary.map((_, i) => i), id === 'race' || id === 'snake' || id === 'league' ? 1 : 0));
-  const [secondary, setSecondary] = useState(() => readChoice(`${id}.secondary`, rules.secondary.map((_, i) => i), id === 'race' || id === 'league' ? 2 : 1));
+  const [primary, setPrimary] = useState(() => readChoice(`${id}.primary`, rules.primary.map((_, i) => i), SETUP[id].primary));
+  const [secondary, setSecondary] = useState(() => readChoice(`${id}.secondary`, rules.secondary.map((_, i) => i), SETUP[id].secondary));
   const [displayMode, setDisplayMode] = useState<DisplayMode>(() => readPreference('joypad-display-mode', 'shared', ['shared', 'split'] as const));
   const [quality, setQuality] = useState<RenderQuality>(() => readPreference('joypad-render-quality', 'balanced', ['performance', 'balanced', 'quality'] as const));
   const [matchMode, setMatchMode] = useState<MatchMode>(() => readPreference('joypad-match-mode', 'classic', ['classic', 'tournament', '2v2'] as const));
@@ -165,13 +206,14 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   useEffect(() => { remember(`${id}.primary`, primary); remember(`${id}.secondary`, secondary); }, [id, primary, secondary]);
 
   const start = useCallback(() => {
+    clearLeaveWish();
     remember('game', id);
     // Start rundy idzie pod kurtyną w kolorze gry — menu znika, arena wstaje.
     curtain.begin(info.accent, () => {
       const pads = padHost.slots().filter((p): p is NonNullable<typeof p> => p !== null);
       const humans: Racer[] = pads.length ? pads.map(p => ({ slot: p.slot, name: p.nick, color: COLORS[p.slot], isBot: false })) : [{ slot: 0, name: language === 'en' ? 'PLAYER 1' : 'GRACZ 1', color: COLORS[0], isBot: false }];
       const bots: Racer[] = [];
-      if (id === 'race' || id === 'snake' || id === 'league') {
+      if (SETUP[id].bots) {
         for (let slot = 0; slot < 4 && bots.length < secondary; slot++) {
           if (humans.some(h => h.slot === slot)) continue;
           bots.push({ slot, name: `BOT ${bots.length + 1}`, color: COLORS[slot], isBot: true });
@@ -187,7 +229,10 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   }, [curtain, id, info.accent, secondary, language]);
 
   useEffect(() => {
-    padHost.onPauseRequest = () => round.current?.togglePause();
+    // Nowa sesja tej gry = czysta karta: intencja wyjścia z poprzedniego podejścia nie ma
+    // prawa blokować START-u po powrocie do menu.
+    clearLeaveWish();
+    padHost.onPauseRequest = () => { if (!isLeaving()) round.current?.togglePause(); };
     return () => { padHost.onPauseRequest = null; };
   }, []);
 
@@ -262,40 +307,45 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
     return () => { cancelled = true; if (!recording.finished) recording.video.dispose(); round.current?.destroy(); round.current = null; };
   }, [roundKey, stage, id, beginRecording, finishRecording]);
 
-  const handleCommand = useCallback((command: RemoteCommand) => {
-    const current = stageRef.current;
-    if (current === 'over' && navigateResults(command)) return;
-    if (showPads && current === 'menu') { window.dispatchEvent(new CustomEvent('joypad-dialog-command', { detail: command })); return; }
-    if (command === 'home' || (command === 'back' && current === 'menu')) { onExit(); return; }
-    if (current === 'menu') {
-      if (command === 'left') stepPrimary(-1);
-      if (command === 'right') stepPrimary(1);
-      if (command === 'up') stepSecondary(1);
-      if (command === 'down') stepSecondary(-1);
-      if (command === 'select') start();
-    } else if (current === 'game') {
-      if (command === 'pause' || command === 'back' || command === 'select') round.current?.togglePause();
-    } else if (current === 'over') {
-      if (command === 'select' || command === 'restart') start();
-      if (command === 'back') setStage('menu');
-    }
-  }, [onExit, start, stepPrimary, stepSecondary, showPads]);
+  // Kurtyna to kosmetyka, a komenda potrafi dotrzeć w jej trakcie (przytrzymany przycisk
+  // pada, powtórka z telefonu): od „wychodzę" nie ruszamy już pauzy ani startu.
+  const leave = useCallback(() => { wishToLeave(); onExit(); }, [onExit]);
 
+  const handleCommand = useCallback((command: RemoteCommand) => {
+    // Ruch po menu i po wynikach należy do silnika interfejsu (`useUiControls` +
+    // `focusSurface`): on decyduje, gdzie jest następna pozycja, i on mówi o tym Plamkowi.
+    // Stąd tu zostaje tylko to, czego interfejs nie załatwia: wyjście, pauza i zatwierdzenie,
+    // gdy fokus uciekł z elementów (czyli „start na pałę", bez patrzenia w kafelki).
+    const current = stageRef.current;
+    // Nakładka padów (PadHostPanel) nie jest <dialog>iem, więc silnik interfejsu jej nie
+    // domknie: `back`/`pause` muszą trafić w nią. Bez tego panelu nie dało się zamknąć
+    // pilotem, a Escape w trakcie rundy zamiast go sprzątnąć — pauzował grę.
+    if (showPads && (command === 'back' || command === 'pause')) { setShowPads(false); return; }
+    if (showPads && current === 'menu') { window.dispatchEvent(new CustomEvent('joypad-dialog-command', { detail: command })); return; }
+    if (command === 'home') { leave(); return; }
+    // BACK ma trzy twarze: pauza w rundzie, wyjście z okna, powrót z wyników do menu.
+    if (command === 'back') {
+      if (current === 'game') { if (!isLeaving()) round.current?.togglePause(); }
+      else if (current === 'menu') leave();
+      else if (current === 'over') setStage('menu'); // z wyników do menu — przed oznaczeniem wyjścia
+      return;
+    }
+    if (current === 'game' && (command === 'pause' || command === 'select') && !isLeaving()) round.current?.togglePause();
+    // START bez fokusa na elemencie (fokus na `body` lub na tekście) = to, co sugeruje
+    // duży napis: w menu rusza partia, w wynikach bierze rewanż.
+    // Po „wychodzę" (kurtyna już leci) nie odpalamy nic: dawne zachowanie potrafiło
+    // wystartować nową partię dokładnie w tej samej chwili, w której gracz prosił o bibliotekę.
+    if (isLeaving()) return;
+    if (command === 'select' && (current === 'menu' || current === 'over')) start();
+    if (command === 'restart' && current === 'over') start(); // `Y`/skrócony restart — jak dawniej
+  }, [leave, showPads, start]);
   const lastRemote = useRef(0);
   useEffect(() => {
     if (remote && remote.id !== lastRemote.current) { lastRemote.current = remote.id; handleCommand(remote.command); }
   }, [remote, handleCommand]);
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => {
-      if (stageRef.current === 'game' || e.target instanceof HTMLInputElement) return;
-      if (e.code === 'Enter' && e.target instanceof Element && e.target.closest('button,summary,a')) return;
-      const controls: Record<string, RemoteCommand> = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', Enter: 'select', Escape: 'back' };
-      if (controls[e.code]) { e.preventDefault(); handleCommand(controls[e.code]); }
-    };
-    window.addEventListener('keydown', key);
-    return () => window.removeEventListener('keydown', key);
-  }, [handleCommand]);
-
+  // Klawiatura telewizora chodzi tą samą drogą co pad: `uiControl` słucha w fazie
+  // przechwytującej i sama wygasza zdarzenie, więc własny nasłuch tylko by dublował
+  // ruch (i kasował fokus postawiony przez nawigację).
   const mute = () => { gameAudio.init(); gameAudio.setMuted(!muted); setMuted(!muted); };
   const cssVars = { '--game-accent': info.accent, '--game-soft': info.accentSoft } as React.CSSProperties;
   const modeLabels = language === 'en' ? { classic: 'QUICK MATCH', tournament: 'TOURNAMENT', '2v2': '2V2 / TEAMS' } : { classic: 'ZWYKŁA RUNDA', tournament: 'TURNIEJ', '2v2': '2V2 / DRUŻYNY' };
@@ -304,7 +354,7 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   const modeTag = matchMode === 'tournament' ? t('game.matchTournament', { n: tournamentRound + 1 }) : matchMode === '2v2' ? '2V2' : displayMode === 'split' ? (language === 'en' ? 'SPLIT' : 'PODZIELONY') : (language === 'en' ? 'SHARED' : 'WSPÓLNY');
 
   if (stage === 'menu') return <>
-    <GameSetup info={info} music={menuMusicOn} onMusic={() => toggleMenuMusic(!menuMusicOn)} onExit={onExit} onStart={start} onPads={() => setShowPads(true)} hint={rules.hint} win={rules.win}>
+    <GameSetup info={info} music={menuMusicOn} onMusic={() => toggleMenuMusic(!menuMusicOn)} onExit={leave} onStart={start} onPads={() => setShowPads(true)} hint={rules.hint} win={rules.win}>
       <OptionStepper title={rules.primaryLabel} value={rules.primary[primary]} accent={info.accent} change={stepPrimary} help={language === 'en' ? 'Remote: ← / →' : 'Pilot: ← / →'} language={language} /><OptionStepper title={rules.secondaryLabel} value={rules.secondary[secondary]} accent={info.accent} change={stepSecondary} help={language === 'en' ? 'Remote: ↑ / ↓' : 'Pilot: ↑ / ↓'} language={language} /><Segmented title={language === 'en' ? 'ARENA VIEW' : 'WIDOK ARENY'} values={['shared', 'split'] as const} value={displayMode} onChange={changeDisplay} accent={info.accent} labels={displayLabels} language={language} /><Segmented title={language === 'en' ? 'HARDWARE PROFILE' : 'PROFIL SPRZĘTU'} values={['performance', 'balanced', 'quality'] as const} value={quality} onChange={changeQuality} accent={info.accent} labels={qualityLabels} language={language} /><Segmented title={language === 'en' ? 'MATCH FORMAT' : 'FORMAT MECZU'} values={['classic', 'tournament', '2v2'] as const} value={matchMode} onChange={changeMatchMode} accent={info.accent} labels={modeLabels} language={language} />
     </GameSetup>
     {showPads && <ConnectionsScreen onClose={() => setShowPads(false)} />}
@@ -312,31 +362,31 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   </>;
 
   if (stage === 'over' && result) return <>
-    <GameResults replayNotice={replayNotice} moments={moments} info={info} title={result.title} subtitle={result.subtitle} players={result.players} winnerSlot={result.winnerSlot} allWon={result.allWon} record={record} onRestart={start} onSettings={() => curtain.begin(info.accent, () => setStage('menu'))} onExit={onExit} />
+    <GameResults replayNotice={replayNotice} moments={moments} info={info} title={result.title} subtitle={result.subtitle} players={result.players} winnerSlot={result.winnerSlot} allWon={result.allWon} record={record} onRestart={start} onSettings={() => curtain.begin(info.accent, () => setStage('menu'))} onExit={leave} />
     <ScreenCurtain state={curtain.state} />
   </>;
 
   return (
     <>
     <div className={`arcade-page arcade-${id} flex h-screen min-h-[360px] flex-col overflow-hidden text-white`} style={cssVars}>
-      <div className="z-20 flex shrink-0 items-center justify-between gap-2 border-b border-white/10 bg-[#0b0e12]/95 px-3 py-2 sm:px-5"><div className="flex min-w-0 items-center gap-2 sm:gap-4"><div className="arcade-title truncate text-sm font-bold sm:text-lg" style={{ color: info.accent }}>{info.title}</div><span className="hidden rounded-full border border-white/10 px-2 py-1 text-[10px] font-bold text-slate-300 sm:block">{hud?.status || t('game.statusLoading')}</span></div>
+      <div className="arcade-hudbar z-20 flex shrink-0 items-center justify-between gap-2 border-b border-white/10 bg-[#0b0e12]/95 px-3 py-2 sm:px-5"><div className="flex min-w-0 items-center gap-2 sm:gap-4"><div className="arcade-title truncate text-sm font-bold sm:text-lg" style={{ color: info.accent }}>{info.title}</div><span className="hidden rounded-full border border-white/10 px-2 py-1 text-[10px] font-bold text-slate-300 sm:block">{hud?.status || t('game.statusLoading')}</span></div>
         <div className="flex items-center gap-1.5 font-mono2 text-sm font-bold sm:gap-2 sm:text-lg"><Timer size={16} style={{ color: info.accent }} /> {formatTime(hud?.timeLeft ?? 0)}</div>
-        <div className="flex items-center gap-1"><span className="hidden rounded-full border border-white/10 px-2 py-1 text-[10px] font-bold text-slate-500 sm:block">{modeTag} · {qualityLabels[quality]}</span><button onClick={mute} title={muted ? t('game.soundOn') : t('game.mute')} className="arcade-icon">{muted ? <VolumeX size={17} /> : <Volume2 size={17} />}</button><button onClick={() => setShowPads(true)} title={t('game.pads')} className="arcade-icon"><Smartphone size={17} /></button><button onClick={() => round.current?.togglePause()} title={t('game.pause')} className="arcade-icon"><Pause size={17} /></button><button onClick={() => setStage('menu')} title={t('game.endRound')} className="arcade-icon text-amber-300"><Home size={17} /></button><button onClick={onExit} title={t('game.back')} className="arcade-icon text-orange-300"><Gamepad2 size={17} /></button></div>
+        <div className="flex items-center gap-1"><span className="hidden rounded-full border border-white/10 px-2 py-1 text-[10px] font-bold text-slate-500 sm:block">{modeTag} · {qualityLabels[quality]}</span><button onClick={mute} title={muted ? t('game.soundOn') : t('game.mute')} className="arcade-icon">{muted ? <VolumeX size={17} /> : <Volume2 size={17} />}</button><button onClick={() => setShowPads(true)} title={t('game.pads')} className="arcade-icon"><Smartphone size={17} /></button><button onClick={() => round.current?.togglePause()} title={t('game.pause')} className="arcade-icon"><Pause size={17} /></button><button onClick={() => setStage('menu')} title={t('game.endRound')} className="arcade-icon text-amber-300"><Home size={17} /></button><button onClick={leave} title={t('game.back')} className="arcade-icon text-orange-300"><Gamepad2 size={17} /></button></div>
       </div>
       <div className="relative min-h-0 flex-1 bg-[#06090c]"><canvas ref={canvas} className="absolute inset-0 h-full w-full" aria-label={language === 'en' ? `${info.title} game arena` : `Arena gry ${info.title}`} />
-        <div className="pointer-events-none absolute left-3 top-3 z-10 rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-[11px] font-bold backdrop-blur sm:left-5 sm:top-4 sm:text-sm" style={{ color: info.accent }}>{hud?.objective || rules.win}</div>
-        {hud?.powerUp && <div className={`pointer-events-none absolute right-3 top-3 z-10 w-[min(205px,52vw)] rounded-xl border bg-black/75 px-3 py-2.5 shadow-2xl backdrop-blur sm:right-5 sm:top-4 ${hud.powerUp.rolling ? 'animate-pulse' : ''}`} style={{ borderColor: `${hud.powerUp.color}66`, boxShadow: `0 10px 30px ${hud.powerUp.color}20` }}>
+        <div className="arcade-hudnote lg-enter pointer-events-none absolute left-3 top-3 z-10 rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-[11px] font-bold backdrop-blur sm:left-5 sm:top-4 sm:text-sm" style={{ color: info.accent }}>{hud?.objective || rules.win}</div>
+        {hud?.powerUp && <div className={`arcade-hudnote pointer-events-none absolute right-3 top-3 z-10 w-[min(205px,52vw)] rounded-xl border bg-black/75 px-3 py-2.5 shadow-2xl backdrop-blur sm:right-5 sm:top-4 ${hud.powerUp.rolling ? 'animate-pulse' : ''}`} style={{ borderColor: `${hud.powerUp.color}66`, boxShadow: `0 10px 30px ${hud.powerUp.color}20` }}>
           <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[.16em] text-white/55"><Zap size={13} style={{ color: hud.powerUp.color }} /> {t('game.actionBonus')}</div>
           <div className="mt-1 flex items-center justify-between gap-2"><b className="truncate text-sm font-black" style={{ color: hud.powerUp.color }}>{hud.powerUp.label}</b>{hud.powerUp.count > 1 && <span className="shrink-0 rounded-full px-1.5 py-0.5 font-mono2 text-[11px] font-bold text-black" style={{ background: hud.powerUp.color }}>×{hud.powerUp.count}</span>}</div>
           <div className="mt-1 text-[10px] leading-tight text-white/60">{hud.powerUp.hint}</div>
         </div>}
         {hud?.countdown !== undefined && hud.countdown > 0 && <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/30"><span className="joy-kicker text-white/70">{t('game.ready')}</span><span key={Math.ceil(hud.countdown)} className="count-pop arcade-title text-8xl font-black drop-shadow-lg sm:text-9xl" style={{ color: info.accent, textShadow: `0 0 70px ${info.accent}99` }}>{Math.ceil(hud.countdown)}</span></div>}
         {startFlash && <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"><span className="start-flash arcade-title text-7xl font-black sm:text-9xl" style={{ color: info.accent, textShadow: `0 0 90px ${info.accent}` }}>START</span></div>}
-        {hud?.paused && <PauseSheet game={info.title} onResume={() => round.current?.togglePause()} onExit={onExit} />}
-        {!hud && <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 text-sm text-slate-300"><LoaderCircle size={20} className="animate-spin" /> {t('game.loading')}</div>}
+        {hud?.paused && <PauseSheet game={info.title} onResume={() => { if (!isLeaving()) round.current?.togglePause(); }} onExit={leave} />}
+        {!hud && <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 text-sm text-slate-300"><PlamekOrbit size={44} /> {t('game.loading')}</div>}
         {showPads && <div className="absolute inset-0 z-40 flex items-center justify-center overflow-auto bg-black/80 p-4 backdrop-blur" onClick={() => setShowPads(false)}><div className="w-full max-w-2xl" onClick={e => e.stopPropagation()}><PadHostPanel players={PLAYER_DEFS} onClose={() => setShowPads(false)} context="arcade" /></div></div>}
       </div>
-      <div className="z-10 flex min-h-[76px] shrink-0 gap-2 overflow-x-auto border-t border-white/10 bg-[#0b0e12] p-2 sm:justify-center sm:p-3">{hud?.players.map(p => <div key={p.slot} className="min-w-[142px] flex-1 rounded-xl border border-white/10 bg-white/[.035] px-3 py-2 sm:max-w-[250px]"><div className="flex items-center justify-between gap-2"><span className="truncate text-xs font-bold" style={{ color: p.color }}>{p.name}{p.isBot && <span className="ml-1 text-[9px] text-slate-500">BOT</span>}</span><b className="font-mono2 text-base" style={{ color: p.color }}>{p.score}</b></div><div className="mt-1 truncate text-[11px] text-slate-400">{p.detail}</div>{p.value !== undefined && <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, p.value / (p.maxValue || 100) * 100))}%`, background: p.color }} /></div>}</div>)}</div>
+      <div className="arcade-huddeck lg-enter z-10 flex min-h-[76px] shrink-0 gap-2 overflow-x-auto border-t border-white/10 bg-[#0b0e12] p-2 sm:justify-center sm:p-3">{hud?.players.map(p => <div key={p.slot} className="arcade-hudcard min-w-[142px] flex-1 rounded-xl border border-white/10 bg-white/[.035] px-3 py-2 sm:max-w-[250px]"><div className="flex items-center justify-between gap-2"><span className="truncate text-xs font-bold" style={{ color: p.color }}>{p.name}{p.isBot && <span className="ml-1 text-[9px] text-slate-500">BOT</span>}</span><b className="font-mono2 text-base" style={{ color: p.color }}>{p.score}</b></div><div className="mt-1 truncate text-[11px] text-slate-400">{p.detail}</div>{p.value !== undefined && <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, p.value / (p.maxValue || 100) * 100))}%`, background: p.color }} /></div>}</div>)}</div>
     </div>
     <ScreenCurtain state={curtain.state} />
     </>

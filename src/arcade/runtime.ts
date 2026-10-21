@@ -3,6 +3,7 @@ import type { PadFx, PadInput } from '../net/protocol';
 import { PLAYER_DEFS } from '../game/types';
 import { gameAudio } from '../game/audio';
 import type { Language } from '../platform/i18n';
+import { uiOwnsKeyboard } from '../lib/inputOwnership';
 
 export const WIDTH = 1200;
 export const HEIGHT = 720;
@@ -181,6 +182,11 @@ export abstract class CanvasRound implements GameRound {
   };
 
   private keyDown = (e: KeyboardEvent) => {
+    // Nad areną stoi okienko (pauza, regulacje, wyniki) albo gracz coś wpisuje —
+    // klawiatura jest wtedy własnością interfejsu. Bez tego warunki nakładały się:
+    // `Esc` zamykał okienko (czyli wznawiał grę) i *jednocześnie* przełączał pauzę,
+    // a strzałki nie mogły przewinąć modalu ani przestawić `<select>` w ustawieniach.
+    if (uiOwnsKeyboard(e)) return;
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
     if ((e.code === 'KeyP' || e.code === 'Escape') && !e.repeat) this.togglePause();
     this.keys.add(e.code);

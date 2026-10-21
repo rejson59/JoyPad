@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Gamepad2, Monitor, Smartphone } from 'lucide-react';
 import { JoyPadLogo } from './JoyPadLogo';
+import { PlamekOrbit } from '../console/PlamekOrbit';
 import { useReducedMotion } from '../lib/useReducedMotion';
 import { useLanguage } from '../platform/i18n';
 
@@ -116,6 +117,8 @@ export function BootSplash({ onDone, variant = 'console' }: { onDone: () => void
       </div>}
 
       <button type="button" className="boot-skip relative z-10" onClick={skipNow}>
+        {/* Plamek w biegu = „sistema jeszcze startuje". Znika razem z ekranem. */}
+        <PlamekOrbit size={22} />
         <span>{en ? 'Tap or press Enter to skip' : 'Dotknij lub naciśnij Enter, aby pominąć'}</span>
         {!compact && <kbd>ENTER</kbd>}
       </button>

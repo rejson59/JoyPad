@@ -694,7 +694,9 @@ byłaby zmianą w ciemno; wszystko, co tu jest, da się sprawdzić bramkami.
 | Bramka nagrań czyta katalog | sekcja **PREVIEW** w `scripts/console-selftest.ts` | lista tytułów bierze się z `PREVIEW_GAMES` i jest porównywana z `catalog.ts`: grywalny tytuł bez nagrania odpada, `wip` nie ma prawa go żądać; formaty muszą istnieć parami, plik <12 MB, folder <60 MB |
 | Wersja **1.9.0** | `src/platform/whatsNewState.ts`, `package.json`, `src/platform/WhatsNew.tsx` | to nie poprawka w obrębie wydania: nowa oprawa rundy, akcenty gier i komplet nagrań zasługują na własny numer i własną listę w „Co nowego?” |
 
-**Dokończenie rundy (świadomie zostawione):** klipy `snake/league/pizza` powstają w CI — dopóki tam nie
-wyjdą, sekcja PREVIEW w `scripts/console-selftest.ts` trzyma je na liście `awaitingRecording`
-(i drukuje „w CI nagrywają się: …"). Gdy workflow dowiezie nagrania, lista ma zostać **pusta**: wtedy
-brama pilnuje kompletu sześciu tytułów przy każdej zmianie.
+**Dowiezione w CI:** klipy `snake`, `league`, `pizza` nagrał workflow `previews.yml`
+(commit `541f80a`, `publish` bramkuje je przez `selftest:console` przed zapisaniem), więc
+`awaitingRecording` w sekcji PREVIEW jest **pusta** i brama pilnuje kompletu sześciu tytułów
+przy każdej zmianie: pary mp4+webm, natywne 1920×1080, plik <12 MB, folder <60 MB
+(obecnie 33 MB). `PREVIEW_REVISION` podbity na `4`, żeby przeglądarki pobrały nowe klipy.
+Gdyby nagranie kiedyś celowo czekało na CI, wpis wraca na tę listę w tej samej rundzie.

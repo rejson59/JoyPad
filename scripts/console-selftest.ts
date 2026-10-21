@@ -210,10 +210,12 @@ assert.ok(previewGames.every(id => previewCatalog.some(game => game.id === id)),
   'PREVIEW_GAMES wskazuje tytuł spoza katalogu');
 /**
  * Nagrania powstają w CI (`.github/workflows/previews.yml`) — tam jest Chromium i ffmpeg.
- * Ta lista jest tymczasowa i ma zniknąć (zostać pusta), gdy workflow dowiezie klipy:
- * od tamtej chwili brama pilnuje kompletu sześciu tytułów przy każdej zmianie.
+ * Workflow dowiezł komplet (runda 21: `snake`, `league`, `pizza` obok `tanks`, `race`,
+ * `orbit`), więc lista oczekujących jest PUSTA i od tej pory brama pilnuje całości:
+ * każdy grywalny tytuł z `PREVIEW_GAMES` musi mieć parę mp4+webm w natywnym Full HD.
+ * Wpis trafia tu tylko wtedy, gdy nagranie celowo czeka na CI w tej samej rundzie.
  */
-const awaitingRecording = new Set(['snake', 'league', 'pizza']);
+const awaitingRecording = new Set<string>([]);
 let previewBytes = 0;
 const pending: string[] = [];
 for (const id of previewGames) {

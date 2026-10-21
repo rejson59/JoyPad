@@ -9,7 +9,7 @@ import { useT } from '../platform/i18n';
 export const PREVIEW_GAMES = ['tanks', 'race', 'orbit', 'snake', 'league', 'pizza'] as const;
 /** Bump when public/previews/* is re-recorded: the files keep stable names, so a query
  *  string is what stops browsers and CDNs from serving a previous recording. */
-const PREVIEW_REVISION = '3';
+const PREVIEW_REVISION = '4';
 /** Recorded offline: never import an engine, connect a pad or advance a real match here. */
 export function GamePreview({ game, suspended, controlsTarget }: { game: GameInfo; suspended: boolean; controlsTarget: HTMLElement | null }) {
   const prefs = useConsolePreferences();

@@ -3,6 +3,7 @@ import { MAPS, WORLD_H, WORLD_W } from './maps';
 import { gameAudio } from './audio';
 import type { PadFx, PadInput } from '../net/protocol';
 import type { Language } from '../platform/i18n';
+import { uiOwnsKeyboard } from '../lib/inputOwnership';
 
 export interface HudTank {
   id: number; name: string; color: string;
@@ -114,6 +115,11 @@ export class TankGame {
   viewX = 0; viewY = 0;
 
   keyDown = (e: KeyboardEvent) => {
+    // Nad areną stoi okienko (pauza, regulacje, wyniki) albo gracz coś wpisuje —
+    // klawiatura jest wtedy własnością interfejsu. Bez tego warunki nakładały się:
+    // `Esc` zamykał okienko (czyli wznawiał grę) i *jednocześnie* przełączał pauzę,
+    // a strzałki nie mogły przewinąć modalu ani przestawić `<select>` w ustawieniach.
+    if (uiOwnsKeyboard(e)) return;
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
     this.keys.add(e.code);
     if (e.code === 'KeyP' || e.code === 'Escape') this.togglePause();

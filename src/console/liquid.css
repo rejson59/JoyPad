@@ -1,0 +1,740 @@
+/* ============================================================================
+   JoyPad OS — warstwa „liquid glass".
+   ---------------------------------------------------------------------------
+   Zamiast wysuwanych paneli z boku: PIGUŁKI, KARTY i PŁYWAJĄCE OKIENKA.
+   Szkło jest ciemne (obsidian), więc tekst trzyma kontrast nawet nad jasną
+   rozgrywką w tle: tint + brightness + blur, wszystko przez tokeny --lg-*.
+
+   Trzy zasady, których ta warstwa pilnuje:
+   1. Czytelność — każde tło przechodzi przez --lg-base/--lg-fill, a te mają
+      wartości nieprzezroczyste w fallbackach (@supports, reduced-transparency).
+   2. Płynność — animujemy tylko transform/opacity; sprężyste krzywe --liquid-*,
+      morfing radiusu i przesuwający się menisk robią wrażenie „cieczy".
+   3. Wydajność — backdrop-filter wyłącznie z tokena --lg-glass (jeden na
+      warstwę), zero nieskończonych pętli, krótszy blur na telefonie i na TV 4K.
+   ========================================================================== */
+
+:root {
+  /* geometria */
+  --lg-gap: clamp(12px, 2.2vw, 34px);
+  --lg-r-card: clamp(16px, 1.5vw, 26px);
+  --lg-r-window: clamp(20px, 2vw, 34px);
+  --lg-r-cluster: clamp(26px, 2.4vw, 42px);
+  /* szkło */
+  --lg-blur: 26px;
+  --lg-sat: 155%;
+  --lg-bright: .72;
+  --lg-glass: blur(var(--lg-blur)) saturate(var(--lg-sat)) brightness(var(--lg-bright));
+  --lg-glass-soft: blur(calc(var(--lg-blur) * .55)) saturate(135%) brightness(.8);
+  /* Nad żywym canvasem (HUD w grze, tło okienka) liczy się każda klatka: pół ceny rozmycia. */
+  --lg-glass-hud: blur(calc(var(--lg-blur) * .5)) saturate(140%) brightness(.62);
+  --lg-base: #0d0d1199;
+  --lg-base-strong: #0b0b0fe0;
+  --lg-fill: #101014a6;
+  --lg-scrim: #0000003d;
+  --lg-field: #00000099;
+  --lg-field-focus: #000000b8;
+  --lg-tint: linear-gradient(158deg, #ffffff1f, #ffffff07 44%, #ffffff0f);
+  --lg-edge: #ffffff2b;
+  --lg-edge-soft: #ffffff17;
+  --lg-spec: inset 0 1px #ffffff42, inset 0 -1px #ffffff0d, inset 0 0 34px -16px #ffffff75;
+  --lg-shadow: 0 28px 66px -22px #000000b8, 0 3px 14px #00000059, 0 0 0 1px #00000047;
+  --lg-shadow-lift: 0 34px 78px -20px #000000c8, 0 6px 18px #00000066, 0 0 0 1px #00000047;
+  /* ruch */
+  --liquid-spring: cubic-bezier(.22, 1.28, .36, 1);
+  --liquid-glide: cubic-bezier(.2, .85, .25, 1);
+  --liquid-in: cubic-bezier(.16, 1, .3, 1);
+  --lg-t1: 140ms; --lg-t2: 260ms; --lg-t3: 420ms;
+  /* Farba Plamka: JEDEN token na cały system, oparty na stałym akcencie JoyPada.
+     Celowo NIE jest to `--os-nav-accent`, bo ten zmienia się z podświetlonym kafelkiem
+     (Wężowy Wir ma jaśniejszy odcień, BlockCraft zielony) i maskotka „osadzała się”
+     w innym kolorze na części biblioteki. Mascot ma jeden kolor, zawsze. */
+  --plamek-paint: var(--os-accent, #ff9a52);
+}
+
+/* --- Primitives ------------------------------------------------------------
+   :where() ma zerową specyficzność — to wartości bazowe dla nowych
+   komponentów, a każdą istniejącą powierzchnię i tak nadpisują jej reguły. */
+:where(.lg-card, .lg-pill, .lg-window) {
+  position: relative;
+  isolation: isolate;
+  border: 1px solid var(--lg-edge);
+  background-color: var(--lg-base);
+  background-image: var(--lg-tint);
+  box-shadow: var(--lg-shadow), var(--lg-spec);
+  color: var(--os-text);
+}
+:where(.lg-card, .lg-window) { border-radius: var(--lg-r-card); backdrop-filter: var(--lg-glass); -webkit-backdrop-filter: var(--lg-glass); }
+:where(.lg-pill) { border-radius: 999px; backdrop-filter: var(--lg-glass-soft); -webkit-backdrop-filter: var(--lg-glass-soft); }
+
+/* Odbicie światła po najechaniu — tylko na hover/focus, nigdy w pętli.
+   Pozycjonowanie jest częścią primitivu: ::after musi liczyć się od elementu,
+   nie od najbliższego przodka (inaczej odblask „przelatuje" przez całą sekcję). */
+.lg-sheen { position: relative; isolation: isolate; overflow: hidden; }
+.lg-sheen::after {
+  content: ''; position: absolute; inset: -1px; z-index: 2; pointer-events: none;
+  background: linear-gradient(104deg, transparent 26%, #ffffff24 46%, #ffffff08 55%, transparent 72%);
+  transform: translate3d(-118%, 0, 0);
+  opacity: 0;
+  transition: transform 620ms var(--liquid-in), opacity 220ms linear;
+}
+.lg-sheen:hover::after, .lg-sheen:focus-within::after { opacity: 1; transform: translate3d(118%, 0, 0); }
+
+/* Wejścia kart i okienek: krótkie, sprężyste, policzalne. */
+:where(.lg-field) {
+  border: 1px solid var(--lg-edge-soft);
+  border-radius: calc(var(--lg-r-card) - 6px);
+  background-color: var(--lg-field);
+  color: var(--os-text);
+  box-shadow: inset 0 1px #ffffff0f;
+  transition: border-color var(--lg-t2) linear, background-color var(--lg-t2) linear, box-shadow var(--lg-t2) linear;
+}
+:where(.lg-field):focus { border-color: color-mix(in srgb, var(--os-accent) 70%, transparent); background-color: var(--lg-field-focus); }
+:where(.lg-field)::placeholder { color: var(--os-muted); }
+
+@keyframes lg-rise { from { opacity: 0; transform: translate3d(0, 14px, 0) scale(.985); } }
+@keyframes lg-meniscus { from { opacity: .1; transform: scaleX(.55); } to { opacity: .55; transform: scaleX(1); } }
+.lg-enter { animation: lg-rise var(--lg-t3) var(--liquid-spring) both; }
+
+/* --- Pływające okienko systemu (zastępuje wysuwany panel z boku) --------- */
+dialog.os-sheet {
+  inset: 0;
+  margin: auto;
+  width: min(530px, calc(100vw - var(--lg-gap) * 2));
+  max-width: calc(100vw - var(--lg-gap) * 2);
+  height: fit-content;
+  max-height: calc(100dvh - var(--lg-gap) * 2);
+  border: 1px solid var(--lg-edge);
+  border-radius: var(--lg-r-window);
+  background-color: var(--lg-base-strong);
+  background-image: radial-gradient(ellipse 130% 70% at 12% -10%, #ff9a521c, transparent 62%), var(--lg-tint);
+  backdrop-filter: var(--lg-glass); -webkit-backdrop-filter: var(--lg-glass);
+  box-shadow: var(--lg-shadow-lift), var(--lg-spec);
+  overflow: hidden;
+  contain: layout paint;
+  transition: transform var(--lg-t3) var(--liquid-spring), opacity var(--lg-t2) linear;
+}
+.os-sheet-wide { width: min(880px, calc(100vw - var(--lg-gap) * 2)); }
+.os-sheet[open] { animation: lg-window-in var(--lg-t3) var(--liquid-spring) both; }
+@keyframes lg-window-in { from { opacity: 0; transform: scale(.94) translate3d(0, 16px, 0); } }
+
+/* --- Morfing z przycisku (FLIP) ------------------------------------------
+   Okienko wyrasta z elementu, w który trafiło kliknięcie, i wraca do niego przy
+   zamknięciu. Zmienne --win-* liczy src/console/windowOrigin.ts na realnych
+   kadrach, więc warstwa nie zakłada nic o rozmiarze przycisku ani o układzie.
+   W czasie ruchu płacimy mniej: mniejszy blur (płynność > detal), a warstwa
+   kompozytowa znika, gdy animacja dobiegnie. */
+/* W czasie ruchu płacimy mniej: krótsze rozmycie (lodowaty efekt przy okazji) i jedna
+   warstwa kompozytowa. Obie rzeczy schodzą, gdy animacja dobiegnie — `lg-morphed`
+   jest dokładane przez JS, więc pełne szkło wraca do okna, które stoi minutami. */
+.lg-morph-in:not(.lg-morphed), .lg-morph-out { --lg-blur: 10px; --lg-sat: 130%; will-change: transform; }
+.os-sheet.lg-morph-in {
+  animation-name: lg-morph-in; animation-duration: var(--lg-t3);
+  animation-timing-function: var(--liquid-spring); animation-fill-mode: both;
+}
+.os-sheet.lg-morph-out {
+  animation-name: lg-morph-out; animation-duration: var(--lg-t2);
+  animation-timing-function: var(--liquid-glide); animation-fill-mode: both;
+  pointer-events: none;
+}
+/* Treść wchodzi z opóźnieniem — nie widać, że jest spłaszczona razem z ramką. */
+.lg-morph-in > * { animation: lg-content-in var(--lg-t2) 70ms var(--liquid-in) both; }
+/* Wewnętrzne wniknięcia nie mogą konkurować z ruchem całego okna. */
+.lg-morph-in :is(.cine-personal-stats article, .cine-crew-member, .room-confirm) { animation: none; }
+
+/* Klatki „do" są celowo niepełne: przy `fill-mode: both` brak wartości w 100% znaczy
+   „weź to, co element ma naprawdę". Okienko nie zostaje więc sklinowane w
+   `transform: none` ani w radiusie z `--lg-r-window` — karta na telefonie nadal ma
+   kwadratowe rogi przy dolnej krawędzi, a telewizor mógłby ją kiedyś przesunąć. */
+@keyframes lg-morph-in {
+  from { opacity: 0; border-radius: var(--win-r0, 999px); transform: translate3d(var(--win-dx, 0), var(--win-dy, 0), 0) scale(var(--win-sx, .92), var(--win-sy, .92)); }
+  55% { opacity: 1; }
+}
+@keyframes lg-morph-out {
+  to { opacity: 0; border-radius: var(--win-r0, 999px); transform: translate3d(var(--win-dx, 0), var(--win-dy, 0), 0) scale(var(--win-sx, .92), var(--win-sy, .92)); }
+}
+@keyframes lg-content-in { from { opacity: 0; } }
+/* Tło też oddycha: bez tego ciemna ściana pojawia się i znika jak cegła, a to ją
+   widać najbardziej w trybie kinowym. Rozmycie tła jest statyczne, więc fade nic nie kosztuje. */
+.os-sheet[open]::backdrop { animation: lg-backdrop-in var(--lg-t2) linear both; }
+.os-sheet.lg-morph-out::backdrop { animation: lg-backdrop-out var(--lg-t2) linear both; }
+@keyframes lg-backdrop-in { from { opacity: 0; } }
+@keyframes lg-backdrop-out { to { opacity: 0; } }
+.os-sheet::backdrop { background: radial-gradient(ellipse at 50% 45%, #09090bcc, #05050af2 78%); backdrop-filter: var(--lg-glass-hud); -webkit-backdrop-filter: var(--lg-glass-hud); }
+.os-sheet-content {
+  max-height: inherit;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
+  padding: clamp(18px, 2.4vw, 30px) clamp(18px, 2.8vw, 36px) clamp(22px, 2.8vw, 34px);
+  scrollbar-width: thin;
+}
+.os-sheet-content > header { margin-bottom: clamp(18px, 2.4vw, 28px); gap: 14px; }
+.os-sheet-content > header h2 { font-size: clamp(22px, 2.1vw, 31px); margin-top: 8px; }
+.os-sheet .cine-setting-icon { background: var(--lg-fill); border: 1px solid var(--lg-edge-soft); box-shadow: inset 0 1px #ffffff26; }
+/* Uchwyt okienka na małych ekranach: sygnał „to karta, nie ściana". */
+.os-sheet::before {
+  content: ''; position: absolute; z-index: 3; pointer-events: none;
+  top: 9px; left: 50%; translate: -50% 0;
+  width: 46px; height: 4px; border-radius: 999px;
+  background: linear-gradient(90deg, transparent, #ffffff59, transparent);
+}
+@media(min-width: 621px) { .os-sheet::before { display: none; } }
+@media(max-width: 620px), (max-height: 520px) and (orientation: landscape) {
+  dialog.os-sheet, .os-sheet-wide {
+    --lg-gap: 0px;
+    inset: auto 0 0; margin: 0; width: 100%; max-width: 100%;
+    border-width: 1px 0 0; border-radius: var(--lg-r-window) var(--lg-r-window) 0 0;
+    max-height: min(92dvh, 760px);
+  }
+  .os-sheet[open] { animation-name: lg-sheet-up; }
+  /* Na telefonie karta i tak leży przy dolnej krawędzi: wjazd spod niej czyta się lepiej niż morfing z pigułki. */
+  .os-sheet.lg-morph-in { animation-name: lg-sheet-up; }
+  .os-sheet.lg-morph-out { animation-name: lg-sheet-down; }
+  .os-sheet-content { padding-bottom: max(26px, env(safe-area-inset-bottom)); }
+}
+@keyframes lg-sheet-up { from { opacity: .4; transform: translate3d(0, 22px, 0) scale(.99); } }
+@keyframes lg-sheet-down { to { opacity: 0; transform: translate3d(0, 22px, 0) scale(.99); } }
+dialog.cine-sheet { width: min(680px, calc(100vw - var(--lg-gap) * 2)); height: auto; }
+.cine-sheet .os-sheet-content { min-height: 0; }
+.cine-sheet-art img { height: 100%; opacity: .3; filter: blur(2px) saturate(.85); }
+.cine-sheet-art > span { background: linear-gradient(0deg, var(--lg-base-strong) 22%, #0b0b0fa8 62%, #0b0b0f59), linear-gradient(90deg, #0b0b0fd0, transparent 78%); }
+
+/* --- Pigułki: akcje, statusy, chipy ---------------------------------------
+   Pigułka tylko tam, gdzie element jest kompaktowy; pełne wiersze zostają
+   kartami, żeby tekst nie „uciekał" od ściany do ściany. */
+.os-play, .cine-start, .cine-resume, .os-add, .os-secondary, .arcade-secondary, .os-room-button,
+.room-confirm button, .lobby-votes > button, .pad-system-shortcuts button, .pad-intent button,
+.cine-choices button, .joy-status, .cine-back, .os-collection-heading button,
+.replay-actions :is(button, a), .gallery-save-large, .moment-save, .moments-gallery-player-head button,
+.os-again, .boot-skip, .moment-selector button, .pad-stage-status {
+  border-radius: 999px;
+}
+.os-play, .cine-start, .cine-resume {
+  padding: 16px 22px;
+  border: 1px solid #ffffff5c;
+  background-color: var(--os-accent);
+  background-image: linear-gradient(115deg, #ffffff40, #ffffff00 42%), linear-gradient(115deg, var(--os-accent-bright), var(--os-accent) 72%, #f08a3f);
+  box-shadow: 0 4px 0 var(--os-accent-deep), 0 16px 34px #00000059, inset 0 1px #ffffff80;
+  transition: transform var(--lg-t2) var(--liquid-spring), box-shadow var(--lg-t2) var(--liquid-glide), filter var(--lg-t1) linear;
+}
+.os-play:hover, .cine-start:hover, .cine-resume:hover { filter: brightness(1.06) saturate(1.05); transform: translateY(-2px); }
+.os-play:active, .cine-start:active, .cine-resume:active { transform: translateY(3px) scale(.995); box-shadow: 0 1px 0 var(--os-accent-deep), 0 5px 12px #0000004d, inset 0 1px #ffffff5c; }
+.cine-start-arrow, .cine-action-icon { border-radius: 999px; border: 1px solid #00000026; background: #ffffff33; width: 36px; height: 36px; }
+.os-add, .os-room-button, .os-secondary, .arcade-secondary, .cine-sound-switch, .pad-intent button,
+.room-confirm button, .lobby-votes > button, .pad-system-shortcuts button, .moment-selector button,
+.replay-actions :is(button, a), .gallery-save-large, .moment-save, .cine-back, .os-collection-heading button,
+.moments-gallery-player-head button, .boot-skip {
+  border: 1px solid var(--lg-edge-soft);
+  background-color: var(--lg-fill);
+  background-image: var(--lg-tint);
+  box-shadow: inset 0 1px #ffffff2b, 0 6px 18px #0000003d;
+  backdrop-filter: var(--lg-glass-soft); -webkit-backdrop-filter: var(--lg-glass-soft);
+  transition: transform var(--lg-t2) var(--liquid-spring), border-color var(--lg-t2) linear, background-color var(--lg-t2) linear, box-shadow var(--lg-t2) linear;
+}
+.os-add:hover, .os-room-button:hover, .os-secondary:hover, .arcade-secondary:hover, .cine-sound-switch:hover,
+.pad-intent button:hover, .lobby-votes > button:hover, .pad-system-shortcuts button:hover,
+.replay-actions :is(button, a):hover, .cine-back:hover, .os-collection-heading button:hover,
+.moments-gallery-player-head button:hover, .gallery-save-large:hover, .moment-save:not(:disabled):hover {
+  border-color: #ff9a5275;
+  background-color: color-mix(in srgb, var(--os-accent) 16%, var(--lg-base)); transform: translateY(-1px); }
+.os-add:active, .os-room-button:active, .os-secondary:active, .arcade-secondary:active, .pad-intent button:active,
+.cine-sound-switch:active, .pad-system-shortcuts button:active, .replay-actions :is(button, a):active { transform: translateY(1px) scale(.985); box-shadow: inset 0 1px #ffffff1a, 0 2px 6px #00000033; }
+.os-icon, .pad-icon, .arcade-icon, .joy-arrow, .cine-configuration .joy-arrow {
+  border: 1px solid var(--lg-edge-soft);
+  background-color: var(--lg-fill);
+  background-image: linear-gradient(160deg, #ffffff26, #ffffff00 58%);
+  box-shadow: inset 0 1px #ffffff33, 0 4px 12px #0000003d;
+  backdrop-filter: var(--lg-glass-soft); -webkit-backdrop-filter: var(--lg-glass-soft);
+  transition: transform var(--lg-t2) var(--liquid-spring), border-color var(--lg-t1) linear, background-color var(--lg-t1) linear, box-shadow var(--lg-t1) linear;
+}
+.os-icon:hover, .pad-icon:hover, .arcade-icon:hover, .joy-arrow:hover { background-color: color-mix(in srgb, var(--os-accent) 18%, var(--lg-base)); border-color: #ff9a527a; transform: translateY(-1px); box-shadow: inset 0 1px #ffffff42, 0 8px 20px #00000047; }
+.os-icon:active, .pad-icon:active, .arcade-icon:active, .joy-arrow:active { transform: scale(.94); }
+.joy-status { padding: 6px 12px; border-color: #ffffff26; box-shadow: inset 0 1px #ffffff1f; }
+.os-again { padding: 9px 15px; border: 1px solid transparent; transition: background-color var(--lg-t2) linear, border-color var(--lg-t2) linear, color var(--lg-t2) linear; }
+.os-again:hover { background-color: var(--lg-fill); border-color: var(--lg-edge-soft); }
+.cine-choices { gap: 8px; padding: 6px; border-radius: 999px; background: var(--lg-scrim); border: 1px solid var(--lg-edge-soft); box-shadow: inset 0 1px #ffffff14; }
+.cine-choices button { padding: 12px 16px; text-align: center; border: 1px solid transparent; background-color: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.cine-choices button > span { font-size: 12px; }
+.cine-choices button[aria-pressed="true"] {
+  border-color: #ff9a5266;
+  background-color: color-mix(in srgb, var(--os-accent) 22%, var(--lg-base));
+  background-image: linear-gradient(160deg, #ffffff33, #ffffff00 60%);
+  box-shadow: inset 0 1px #ffffff42, 0 6px 18px #ff9a521f;
+  color: var(--os-accent-bright);
+}
+.cine-choice-check { top: 50%; right: 10px; translate: 0 -50%; }
+
+/* Płynne przełączniki: menisk zamiast skoku. */
+.cine-sound-switch, .cine-change-game, .cine-proposals button, .pad-remote-button { border-radius: var(--lg-r-card); }
+.cine-sound-switch, .cine-change-game { background-color: var(--lg-fill); }
+.cine-switch-track, .room-switches i { height: 24px; border-radius: 999px; background: #00000059; border: 1px solid var(--lg-edge-soft); box-shadow: inset 0 1px #ffffff14; transition: background-color var(--lg-t2) var(--liquid-glide), box-shadow var(--lg-t2) linear; }
+.cine-switch-track { width: 44px; padding: 3px; }
+.cine-switch-track i, .room-switches i::after { width: 16px; height: 16px; box-shadow: 0 2px 6px #00000073; transition: transform var(--lg-t3) var(--liquid-spring), background-color var(--lg-t2) linear; }
+.room-switches i { width: 44px; }
+.room-switches i::after { top: 3px; left: 3px; }
+.room-switches [aria-checked="true"] i::after { transform: translateX(20px); }
+.cine-sound-switch[aria-checked="true"] .cine-switch-track, .room-switches [aria-checked="true"] i { background: linear-gradient(120deg, #ff9a5245, #ff9a5221); border-color: #ff9a527a; box-shadow: inset 0 1px #ffffff3d, 0 0 20px #ff9a5226; }
+
+/* --- Karty --------------------------------------------------------------- */
+.os-session {
+  --lg-blur: 30px;
+  border: 1px solid var(--lg-edge);
+  border-radius: var(--lg-r-cluster);
+  background-color: var(--lg-base);
+  background-image: radial-gradient(ellipse 120% 60% at 82% -8%, #ff9a521f, transparent 58%), var(--lg-tint);
+  box-shadow: var(--lg-shadow), var(--lg-spec);
+  backdrop-filter: var(--lg-glass); -webkit-backdrop-filter: var(--lg-glass);
+  transition: box-shadow var(--lg-t3) var(--liquid-glide), transform var(--lg-t3) var(--liquid-spring);
+}
+.os-session:hover { transform: translateY(-2px); }
+.os-session .os-pairing { border: 1px solid var(--lg-edge-soft); border-radius: calc(var(--lg-r-card) - 4px); background: var(--lg-scrim); box-shadow: inset 0 1px #ffffff14; }
+/* Jasna płytka kodu musi być czytelna z drugiego końca pokoju: cień pod nią, nie obok. */
+.os-session .os-pairing .qr-frame { border-radius: 14px; box-shadow: 0 16px 34px -18px #000000c4, inset 0 0 0 1px #00000014; }
+.os-session .os-pairing-side strong { text-shadow: 0 1px 12px #000a; }
+.os-session .os-pairing--hidden { grid-template-columns: 1fr; gap: 10px; text-align: center; justify-items: center; padding: 13px; }
+.os-session .os-player > span { background: var(--lg-scrim); border-radius: 14px; backdrop-filter: var(--lg-glass-soft); -webkit-backdrop-filter: var(--lg-glass-soft); }
+.os-session .os-roster { gap: 10px; }
+.os-session .os-player { border-radius: 12px; padding: 4px 6px; transition: background-color var(--lg-t2) linear; }
+.os-session .os-player.is-connected { background-color: var(--lg-fill); }
+.os-lab-link, .os-session-invite { border-radius: 999px; padding: 10px 12px; border: 1px solid transparent; transition: background-color var(--lg-t2) linear, border-color var(--lg-t2) linear, color var(--lg-t2) linear; }
+.os-lab-link:hover, .os-session-invite:hover { background-color: var(--lg-fill); border-color: var(--lg-edge-soft); }
+
+.os-game-tile {
+  border-radius: var(--lg-r-card);
+  border-color: var(--lg-edge-soft);
+  box-shadow: 0 18px 40px -18px #000000b8, inset 0 1px #ffffff1f;
+  transition: transform var(--lg-t3) var(--liquid-spring), border-color var(--lg-t2) linear, box-shadow var(--lg-t3) var(--liquid-glide);
+}
+.os-game-tile::before { background: linear-gradient(0deg, #09090be0, #09090b1a 46%, transparent 78%), linear-gradient(150deg, #ffffff14, transparent 42%); }
+.os-game-tile:hover { transform: translateY(-4px) scale(1.006); border-color: #ffffff40; box-shadow: 0 30px 54px -18px #000000c8, inset 0 1px #ffffff2b; }
+.os-game-tile > div { bottom: 18px; left: 18px; }
+.os-game-tile h3 { text-shadow: 0 2px 16px #000b; }
+/* Menisk: wybrany tytuł dostaje świetlny, „płynny" brzeg zamiast twardej ramki. */
+.os-game-tile.is-selected { border-color: #ff9a527a; box-shadow: 0 26px 54px -18px #000000cc, inset 0 1px #ffffff38, 0 0 40px -8px #ff9a5255; }
+.os-game-tile.is-selected::after {
+  content: ''; position: absolute; left: 16px; right: 16px; bottom: 11px; height: 3px; z-index: 3;
+  border-radius: 999px; pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--os-accent) 22%, #fff2 50%, var(--os-accent) 78%, transparent);
+  animation: lg-meniscus 420ms var(--liquid-in) both;
+}
+.os-tile-arrow { right: 16px; bottom: 18px; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 999px; background: #ff9a5233; border: 1px solid #ff9a5266; backdrop-filter: var(--lg-glass-soft); -webkit-backdrop-filter: var(--lg-glass-soft); opacity: 0; transform: scale(.86); transition: opacity var(--lg-t2) linear, transform var(--lg-t2) var(--liquid-spring); }
+.os-game-tile.is-selected .os-tile-arrow { opacity: 1; transform: none; }
+.os-game-rail { scroll-behavior: smooth; }
+
+.cine-launch-deck, .arcade-option, .moment-cards > button, .room-switches > button, .lounge-pass,
+.lounge-suggestions button, .pad-proposals button, .os-test-grid section, .metal-panel, .joy-room,
+.os-exit-confirm, .room-confirm, .cine-personal-stats article, .cine-proposals button, .cine-change-game,
+.os-upcoming > div, .avatar-choices button, .join-splash-card, .os-device-choices button,
+.moments-gallery-grid article, .moments-gallery-intro, .whats-new-list article, .whats-new-hero,
+.profile-progress > div, .achievement-row, .replay-notice, .moment-empty {
+  border: 1px solid var(--lg-edge-soft);
+  border-radius: var(--lg-r-card);
+  background-color: var(--lg-base);
+  background-image: var(--lg-tint);
+  box-shadow: 0 20px 44px -22px #000000a6, inset 0 1px #ffffff26;
+}
+.cine-launch-deck { --lg-blur: 22px; border-radius: var(--lg-r-cluster); background-color: var(--lg-base); backdrop-filter: var(--lg-glass); -webkit-backdrop-filter: var(--lg-glass); box-shadow: var(--lg-shadow), var(--lg-spec); }
+.cine-launch-side { background: var(--lg-scrim); border-left: 1px solid var(--lg-edge-soft); }
+.cine-deck-heading { background: linear-gradient(100deg, #ffffff0f, transparent 70%); border-bottom: 1px solid var(--lg-edge-soft); }
+.cine-configuration .arcade-option { padding: 14px 16px; transition: background-color var(--lg-t2) linear, border-color var(--lg-t2) linear; }
+.cine-configuration .arcade-option:hover { background-color: var(--lg-fill); border-color: #ff9a523d; }
+.cine-rules { background: var(--lg-scrim); border-top: 1px solid var(--lg-edge-soft); }
+.cine-results-art img { filter: blur(3px) saturate(.8); opacity: .2; }
+.room-switches > button, .lounge-suggestions button, .pad-proposals button, .os-device-choices button,
+.avatar-choices button, .moment-cards > button, .whats-new-list article, .moments-gallery-grid article {
+  background-color: var(--lg-fill);
+  transition: transform var(--lg-t3) var(--liquid-spring), border-color var(--lg-t2) linear, background-color var(--lg-t2) linear, box-shadow var(--lg-t3) var(--liquid-glide);
+}
+.room-switches > button:hover, .lounge-suggestions button:hover, .pad-proposals button:hover,
+.moment-cards > button:hover, .os-device-choices button:hover, .whats-new-list article:hover,
+.moments-gallery-grid article:hover { border-color: #ff9a526b; background-color: color-mix(in srgb, var(--os-accent) 14%, var(--lg-base)); transform: translateY(-2px); box-shadow: 0 24px 44px -20px #000000b8, inset 0 1px #ffffff33; }
+.room-switches > button:active, .lounge-suggestions button:active, .moment-cards > button:active { transform: translateY(0) scale(.99); }
+.cine-crew-member > span:first-child { border-radius: 12px; background: var(--lg-fill); border-color: var(--lg-edge-soft); box-shadow: inset 0 1px #ffffff1f; }
+.cine-crew-member.is-present > span:first-child { box-shadow: inset 0 1px #ffffff33, 0 0 18px color-mix(in srgb, var(--player-color) 30%, transparent); }
+.cine-ranking li { border-radius: var(--lg-r-card); border: 1px solid transparent; transition: transform var(--lg-t3) var(--liquid-spring), border-color var(--lg-t2) linear, background-color var(--lg-t2) linear; }
+.cine-ranking li:hover { border-color: var(--lg-edge-soft); background-color: var(--lg-fill); }
+.cine-personal-stats article, .cine-proposals button, .cine-change-game { backdrop-filter: var(--lg-glass-soft); -webkit-backdrop-filter: var(--lg-glass-soft); transition: transform var(--lg-t3) var(--liquid-spring), border-color var(--lg-t2) linear, background-color var(--lg-t2) linear; }
+.cine-personal-stats article:hover, .cine-proposals button:hover, .cine-change-game:hover { transform: translateY(-2px); border-color: #ff9a5255; background-color: color-mix(in srgb, var(--os-accent) 14%, var(--lg-base)); }
+.os-help li { border: 1px solid var(--lg-edge-soft); border-radius: var(--lg-r-card); background-color: var(--lg-fill); padding: 15px 18px; margin-bottom: 10px; }
+.os-upcoming > div { padding: 14px; align-items: flex-start; }
+.os-upcoming img { border-radius: calc(var(--lg-r-card) - 6px); }
+
+/* --- Chmury statusu i powiadomienia --------------------------------------- */
+.join-splash-card, .pad-reminder, .pad-stage-status, .os-link-state, .room-confirm, .os-exit-confirm,
+.moments-gallery-toolbar label, .joy-screen-rest > button {
+  background-color: var(--lg-base-strong);
+  backdrop-filter: var(--lg-glass); -webkit-backdrop-filter: var(--lg-glass);
+}
+.join-splash-card, .pad-stage-status, .os-link-state, .room-confirm button, .joy-screen-rest > button { border-radius: 999px; }
+.join-splash-card { border-radius: var(--lg-r-cluster); }
+.pad-reminder, .os-link-state { border-radius: var(--lg-r-card); }
+.pad-stage-status { padding: 9px 16px; border-color: var(--lg-edge-soft); box-shadow: inset 0 1px #ffffff26, 0 10px 26px #00000059; }
+.os-link-state { background-color: var(--lg-base-strong); border-color: var(--os-warning); }
+.join-splash { align-items: center; padding-top: 0; }
+.joy-toast {
+  border: 1px solid #ffffff33;
+  background-color: var(--lg-base-strong);
+  background-image: linear-gradient(135deg, #ffffff24, #ffffff05 48%, #ffffff12);
+  backdrop-filter: var(--lg-glass); -webkit-backdrop-filter: var(--lg-glass);
+  box-shadow: 0 22px 46px -14px #000000c8, inset 0 1px #ffffff59;
+  animation: lg-toast 5s var(--liquid-spring) both;
+}
+.joy-toast-icon { background: #edbd781f; border-color: #edbd7845; box-shadow: inset 0 1px #ffffff26; border-radius: 999px; }
+@keyframes lg-toast {
+  0% { opacity: 0; transform: translate3d(0, -16px, 0) scale(.9); }
+  7% { opacity: 1; transform: translate3d(0, 2px, 0) scale(1.014); }
+  12%, 90% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translate3d(0, -8px, 0) scale(.97); }
+}
+
+/* --- Wspólny HUD gier arcade: pływające pigułki nad areną ---------------- */
+.arcade-hudbar {
+  --lg-glass: var(--lg-glass-hud);
+  border: 1px solid var(--lg-edge-soft);
+  border-radius: 0 0 var(--lg-r-card) var(--lg-r-card);
+  background-color: var(--lg-base-strong);
+  background-image: linear-gradient(180deg, #ffffff14, transparent 60%);
+  backdrop-filter: var(--lg-glass); -webkit-backdrop-filter: var(--lg-glass);
+  box-shadow: 0 18px 40px -22px #000000cc, inset 0 1px #ffffff1f;
+  margin: 0 clamp(10px, 2vw, 28px);
+  padding-block: 8px;
+}
+.arcade-huddeck {
+  --lg-glass: var(--lg-glass-hud);
+  border: 1px solid var(--lg-edge-soft);
+  background-color: var(--lg-base-strong);
+  backdrop-filter: var(--lg-glass); -webkit-backdrop-filter: var(--lg-glass);
+  padding: 10px clamp(10px, 2vw, 28px) max(10px, env(safe-area-inset-bottom));
+  gap: 10px;
+}
+.arcade-hudcard {
+  border: 1px solid var(--lg-edge-soft);
+  border-radius: 18px;
+  background-color: var(--lg-fill);
+  background-image: linear-gradient(155deg, #ffffff17, #ffffff03);
+  box-shadow: inset 0 1px #ffffff2b;
+  backdrop-filter: var(--lg-glass-soft); -webkit-backdrop-filter: var(--lg-glass-soft);
+  transition: transform var(--lg-t3) var(--liquid-spring), border-color var(--lg-t2) linear, box-shadow var(--lg-t2) linear;
+}
+.arcade-hudcard:hover { transform: translateY(-2px); border-color: #ff9a5255; }
+.arcade-hudnote {
+  --lg-glass: var(--lg-glass-hud);
+  border: 1px solid var(--lg-edge-soft);
+  border-radius: 999px;
+  background-color: var(--lg-base-strong);
+  backdrop-filter: var(--lg-glass); -webkit-backdrop-filter: var(--lg-glass);
+  box-shadow: 0 12px 30px -12px #000000b8, inset 0 1px #ffffff33;
+}
+.arcade-icon { border-radius: 999px; min-width: 38px; height: 38px; width: 38px; }
+.arcade-page { background-image: radial-gradient(ellipse 90% 60% at 50% -8%, #ffffff0a, transparent 60%); }
+.arcade-hudbar b, .arcade-hudcard b, .arcade-hudnote { text-shadow: 0 1px 10px #000000a6; }
+
+/* --- Pasek systemowy biblioteki: grupa piguł w szklanej oprawie ---------- */
+.os-topbar { border-bottom: 0; height: auto; padding-block: 16px; }
+.os-topbar nav {
+  gap: 6px; padding: 6px; border-radius: 999px;
+  border: 1px solid var(--lg-edge-soft);
+  background-color: var(--lg-base);
+  background-image: var(--lg-tint);
+  box-shadow: inset 0 1px #ffffff1f, 0 12px 30px -14px #000000b8;
+  backdrop-filter: var(--lg-glass-soft); -webkit-backdrop-filter: var(--lg-glass-soft);
+}
+.os-network { padding: 7px 13px; margin-right: 8px; border: 1px solid var(--lg-edge-soft); border-radius: 999px; background-color: var(--lg-fill); box-shadow: inset 0 1px #ffffff14; backdrop-filter: var(--lg-glass-soft); -webkit-backdrop-filter: var(--lg-glass-soft); }
+.os-footer { border-top: 1px solid var(--lg-edge-soft); }
+.os-footer kbd, .joy-shell kbd { border-radius: 8px; background-color: var(--lg-fill); box-shadow: inset 0 1px #ffffff14; }
+
+/* --- Telefon-pilot: szkło na menu, fizyczność zostaje przy sterowaniu ----- */
+.landscape-remote > header { border-bottom: 0; }
+.landscape-remote header button, .landscape-display button, .landscape-display > div { border-radius: 999px; }
+.landscape-remote header button, .landscape-display button {
+  border: 1px solid var(--lg-edge-soft);
+  background-color: var(--lg-fill);
+  background-image: var(--lg-tint);
+  box-shadow: inset 0 1px #ffffff26;
+  backdrop-filter: var(--lg-glass-soft); -webkit-backdrop-filter: var(--lg-glass-soft);
+  transition: transform var(--lg-t2) var(--liquid-spring), background-color var(--lg-t1) linear, border-color var(--lg-t1) linear;
+}
+.landscape-remote header button:active, .landscape-display button:active { transform: scale(.96); }
+.landscape-display {
+  border-radius: var(--lg-r-cluster);
+  border: 1px solid var(--lg-edge);
+  background-color: var(--lg-base);
+  background-image: radial-gradient(ellipse 120% 70% at 50% -10%, #ffffff14, transparent 60%), var(--lg-tint);
+  box-shadow: var(--lg-shadow), var(--lg-spec);
+  backdrop-filter: var(--lg-glass); -webkit-backdrop-filter: var(--lg-glass);
+}
+.landscape-remote > footer { border-top: 1px solid var(--lg-edge-soft); }
+.pad-joy :is(input, select) { border-color: var(--lg-edge-soft); }
+.pad-system-shortcuts { padding: 6px; border: 1px solid var(--lg-edge-soft); border-radius: 999px; background-color: var(--lg-base); backdrop-filter: var(--lg-glass-soft); -webkit-backdrop-filter: var(--lg-glass-soft); }
+.pad-system-shortcuts button { border: 1px solid transparent; background-color: transparent; background-image: none; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.pad-system-shortcuts button:hover { background-color: color-mix(in srgb, var(--os-accent) 16%, transparent); }
+.os-quick-test button, .pad-quick-test header button { border-radius: 999px; border: 1px solid var(--lg-edge-soft); background-color: var(--lg-fill); box-shadow: inset 0 1px #ffffff1f; }
+.os-test-stick { border: 1px solid var(--lg-edge); background-color: var(--lg-base); backdrop-filter: var(--lg-glass-soft); -webkit-backdrop-filter: var(--lg-glass-soft); box-shadow: inset 0 1px #ffffff1a, var(--lg-shadow); }
+
+/* --- Boot i ekrany pomocnicze -------------------------------------------- */
+.boot-step { border: 1px solid var(--lg-edge-soft); border-radius: var(--lg-r-card); background-color: var(--lg-base); backdrop-filter: var(--lg-glass-soft); -webkit-backdrop-filter: var(--lg-glass-soft); box-shadow: inset 0 1px #ffffff1a; }
+.boot-step-icon { border-radius: 999px; }
+.pad-joy .joy-room, .pad-shell .metal-panel { border-radius: var(--lg-r-cluster); }
+.pad-remote-button { transition: transform var(--lg-t2) var(--liquid-spring), box-shadow var(--lg-t2) var(--liquid-glide), background var(--lg-t1) linear; }
+.pad-remote-button:active { transform: translateY(3px) scale(.985); }
+.lounge-pass { border-radius: var(--lg-r-cluster); }
+.moments-gallery-toolbar label { border-radius: 999px; background-color: var(--lg-fill); }
+.moments-gallery-actions { padding: 8px; }
+.moments-gallery-actions :is(button, a) { border-radius: 999px; border: 1px solid var(--lg-edge-soft); background-color: var(--lg-fill); transition: transform var(--lg-t2) var(--liquid-spring), background-color var(--lg-t2) linear, color var(--lg-t2) linear; }
+.moments-gallery-actions :is(button, a):hover { transform: translateY(-1px); }
+.moments-gallery-storage-track, .profile-progress > div { box-shadow: inset 0 1px #ffffff14; }
+.whats-new-icon { border-radius: 999px; box-shadow: inset 0 1px #ffffff26; }
+
+/* --- Plamek (Splash): maskotka sterowania i podpowiedzi -------------------
+   Plamek to JEDNA plama farby, która przybiera dwie postacie: kołnierz wokół
+   przycisku i bulwę z buźką. Nie ma tu już „obwódki + osobnego kółka\": kształt
+   rysuje jedna ścieżka `<svg>` (`.plamek-collar`), a główka jest jej wybrzuszeniem —
+   inaczej kulka zawsze tylko STAŁABY na pierścieniu. Geometrię, masy i fazy liczy
+   `plamek.ts`; widok przepisuje je na atrybuty. Zero wypełnienia pod napisem,
+   `pointer-events: none`, farba na zewnątrz ramki — nic nie może zasłonić tekstu.
+   -------------------------------------------------------------------------- */
+.plamek {
+  /* Farba bierze się z `:root` (`--plamek-paint`) — nie z akcentu podświetlonego kafelka,
+     bo ten zmienia się przy każdej grze i maskotka zmieniałaby kolor. Wyraźność trzyma
+     ciemny keyline w `<filter>`, nie jasność wypełnienia. */
+  position: fixed; inset: 0; z-index: 120; display: block;
+  pointer-events: none; opacity: 0;
+  transition: opacity var(--lg-t2) var(--liquid-glide);
+  contain: layout style;
+}
+.plamek.is-on { opacity: 1; }
+.plamek.is-scoped { position: absolute; inset: 0; z-index: 3; }
+.plamek > i, .plamek-face > * { position: absolute; left: 0; top: 0; }
+/* `overflow: visible` jest kluczowe: ścieżka wychodzi poza box `<svg>`, a przycięty
+   SVG uciąłby kroplę i rozmycie na krawędzi regionu. */
+.plamek-liquid { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+/* Region maski liczy <filter> w jednostkach użytkownika (patrz `filterUnits` w widoku),
+   więc grupa nie potrzebuje własnego boxa ani kompensaty. */
+/* Kolor farby jest w CSS, a nie atrybutem: `fill` na grupie dziedziczą wszystkie
+   ścieżki, a reakcje (`is-dodge`, `is-blocked`) nadpisują go wyższą specyficznością.
+   Bez tej reguły SVG malowałby czernią. */
+/* Wskazówka dla rasteryzatora: priorytet precyzji krzywych. Nie zastępuje
+   wygładzania krawędzi po przejściu przez filtr alfa. */
+/* Bez `transition: fill`: kolor jest stały. Gdyby ktoś go kiedyś zmieniał, nie może to
+   dziać się „w locie” — tak właśnie wyglądało zgłoszenie o gubionym kolorze. */
+.plamek-goo { fill: var(--plamek-paint); shape-rendering: geometricPrecision; }
+/* Bulwa nie ma własnego koloru — dziedziczy farbę grupy. To zarazem deklaracja
+   kontraktu „jedno źródło koloru": `selftest:console` przyłapuje każdą próbę
+   podmiany wypełnienia na inny odcień (zgłoszenie: „Plamek bywa jaśniejszy"). */
+.plamek-blob { fill: inherit; }
+/* Krawędzi nie rysujemy `stroke`-iem: próg alfa maski zjadał kreskę o alfa .28, więc
+   obwódka istniała w CSS, a nie na ekranie. Keyline robi łańcuch w `<filter>` (rozmycie i niższy próg
+   liczone PO scaleniu farby), więc obrysowuje zlaną bryłę, a nie każdy path osobno. */
+/* Połysk mokrej farby: JEDEN przebieg po rozlaniu i delikatna pozostałość w spoczynku.
+   Rozmycie ustawia model co klatkę (`sheenBlurFor`) — względem bulwy, nie stałą liczbą.
+   Osobny element POZA grupą maski, bo `filter` na dziecku filtrowanej grupy
+   podwajałoby liczenie regionu. */
+.plamek-sheen { fill: #fff6ea; opacity: .3; filter: blur(1.6px); transform-box: fill-box; transform-origin: center; }
+.plamek.is-settle .plamek-sheen { animation: plamek-sheen 520ms var(--liquid-glide); }
+@keyframes plamek-sheen {
+  0% { opacity: .5; transform: translate(-9px, 4px) scale(.8); }
+  100% { opacity: .22; transform: none; }
+}
+.plamek-splat { transform-box: fill-box; transform-origin: center; }
+.plamek-splat.is-pop { animation: plamek-splat 460ms var(--liquid-glide); }
+@keyframes plamek-splat {
+  0% { opacity: .95; transform: scale(.35); }
+  60% { opacity: .5; }
+  100% { opacity: 0; transform: scale(1.15); }
+}
+/* Poświata i puls domknięcia — POZA mokrą farbą: próg alfy maski zjada delikatne
+   cienie, więc to ten element odpowiada za „coś się scała\". Trzeci cień jest CZARNY
+   i przesunięty w dół: to on kładzie farbę na szkle (odległość od powierzchni).
+   Przesunięcie i rozmycie pisze model (`contactShadowFor`) — rosną z grubością farby;
+   dlatego każda reguła nadpisująca `box-shadow` musi dokleić `var(--plamek-contact)`. */
+.plamek-glow {
+  --plamek-contact: 0 var(--halo-dy, 7px) var(--halo-blur, 18px) -9px #000000b0;
+  transform: translate3d(var(--halo-x, 0), var(--halo-y, 0), 0);
+  width: var(--halo-w, 0); height: var(--halo-h, 0);
+  border-radius: var(--halo-r, 18px);
+  opacity: var(--halo-a, 0);
+  box-shadow:
+    0 8px 30px -8px var(--plamek-paint),
+    inset 0 0 26px -10px var(--plamek-paint),
+    var(--plamek-contact);
+  transition: box-shadow var(--lg-t2) var(--liquid-glide);
+}
+.plamek[data-phase="hug"][data-mood="calm"] .plamek-glow { box-shadow: 0 10px 34px -8px var(--plamek-paint), inset 0 0 30px -10px var(--plamek-paint), var(--plamek-contact); }
+.plamek.is-fuse .plamek-glow { animation: plamek-fuse var(--plamek-fuse, 340ms) var(--liquid-glide); }
+@keyframes plamek-fuse {
+  0% { box-shadow: 0 0 0 0 #ff9a52b0, 0 8px 30px -8px var(--plamek-paint), inset 0 0 26px -10px var(--plamek-paint), var(--plamek-contact); }
+  100% { box-shadow: 0 0 0 14px #ff9a5200, 0 8px 30px -8px var(--plamek-paint), inset 0 0 26px -10px var(--plamek-paint), var(--plamek-contact); }
+}
+/* Twarz idzie NAD mokrą farbą i dzieli box bulwy (`--ball-*` na korzeniu warstwy):
+   pod maską goo rozmyłoby się oko, a buźka ma być ostra w każdej klatce. */
+.plamek-face {
+  transform: translate3d(var(--ball-x, 0), var(--ball-y, 0), 0) scale(1, var(--ball-sy, 1));
+  width: var(--ball-size, 22px); height: var(--ball-size, 22px);
+}
+.plamek-eye, .plamek-mouth, .plamek-snore { z-index: 1; }
+.plamek-eye {
+  width: 17%; height: 25%; top: 31%; border-radius: 999px; background: #26120a;
+  transform: translate3d(var(--look-x, 0px), var(--look-y, 0px), 0);
+  transition: height 110ms linear, width 110ms linear;
+}
+.plamek-eye.is-left { left: 23%; }
+/* `left: auto` jest konieczne: reguła zbiorcza `.plamek > i` wstawia left:0, a z width
+   to przeciążenie — bez tego oboje oczu stałoby po lewej. */
+.plamek-eye.is-right { left: auto; right: 23%; }
+.plamek-mouth {
+  width: 34%; height: 20%; left: 33%; top: 60%; border-radius: 0 0 999px 999px;
+  background: #26120a;
+  transition: height 130ms linear, width 130ms linear, border-radius 160ms var(--liquid-spring);
+}
+/* Miny. To one robią z plamy postać, a nie kropeczkę. */
+.plamek[data-mood="curious"] .plamek-mouth { width: 24%; height: 24%; border-radius: 999px; }
+.plamek[data-mood="zoom"] .plamek-mouth, .plamek[data-mood="boom"] .plamek-mouth { width: 26%; height: 26%; border-radius: 999px; }
+.plamek[data-mood="zoom"] .plamek-eye, .plamek[data-mood="boom"] .plamek-eye { height: 30%; }
+.plamek[data-mood="happy"] .plamek-mouth { width: 46%; height: 26%; }
+.plamek[data-mood="sleepy"] .plamek-mouth { width: 20%; height: 5%; border-radius: 999px; }
+.plamek[data-mood="sleepy"] .plamek-eye { height: 5%; }
+.plamek.is-blink .plamek-eye { height: 4%; }
+.plamek-snore {
+  width: 12px; height: 12px; left: 78%; top: -26%; border-radius: 999px;
+  display: grid; place-items:center; font: 700 9px/1 var(--font-mono, ui-monospace); color: var(--os-accent-bright, #ff9a52);
+  opacity: 0; transition: opacity var(--lg-t3) linear;
+}
+.plamek-snore::after { content: 'z'; }
+.plamek.is-asleep .plamek-snore { opacity: .85; }
+
+/* Reakcje na resztę systemu — tylko Properties, których JS nie pisze co klatkę
+   (`box-shadow` poświaty i grubość keyline'u; geometria ścieżki jest własnością modelu).
+   KONTRAKT KOLORU (tura 15): żadna reakcja nie przemalowuje farby. Użytkownik zgłosił,
+   że Plamek „zmienia kolor na jaśniejszy" — winne były `brightness(1.12)` przy kiwnięciu,
+   kremowy `fill` przy uniku i `brightness(1.5)` przy przebudzeniu. Hue = akcent gry,
+   płaski i zawsze ten sam; nastrój niosą kształt, poświata i obwódka. */
+.plamek.is-nod .plamek-glow { box-shadow: 0 6px 16px -4px #000000c4, 0 0 0 7px #ff9a5233, 0 0 30px -4px var(--plamek-paint), var(--plamek-contact); }
+.plamek.is-poke .plamek-glow { box-shadow: 0 0 34px -4px var(--plamek-paint), inset 0 0 34px -8px var(--plamek-paint), var(--plamek-contact); }
+.plamek.is-confirm .plamek-eye { height: 15%; }
+.plamek.is-confirm .plamek-mouth { width: 44%; height: 24%; }
+/* „Nie ma dalej": kontrast bierze się z mocniejszego obrzeża, nie z podmiany koloru. */
+.plamek.is-blocked .plamek-liquid feFlood { flood-opacity: .95; }
+.plamek.is-blocked .plamek-eye { height: 34%; }
+/* Przebudzenie: błysk poświaty wokół farby (rura świetlna), zero rozjaśniania wypełnienia. */
+.plamek.is-wake .plamek-glow { animation: plamek-wake 340ms var(--liquid-spring); }
+@keyframes plamek-wake {
+  0% { box-shadow: 0 0 0 3px #ff9a5240, 0 14px 44px -6px var(--plamek-paint), inset 0 0 34px -8px var(--plamek-paint), var(--plamek-contact); }
+  100% { box-shadow: 0 0 0 0 #ff9a5200, 0 8px 30px -8px var(--plamek-paint), inset 0 0 26px -10px var(--plamek-paint), var(--plamek-contact); }
+}
+
+
+.ui-hints { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 10px; letter-spacing: .4px; color: var(--os-secondary); }
+.ui-hint { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.ui-hint kbd {
+  min-width: 20px; padding: 3px 6px; border-radius: 999px; font: inherit; font-size: 9px; font-weight: 700;
+  letter-spacing: .6px; text-align: center; color: var(--os-text);
+  background-color: var(--lg-fill); border: 1px solid var(--lg-edge-soft);
+  box-shadow: inset 0 1px #ffffff1f;
+}
+.ui-hint.is-armed { color: var(--os-text); }
+.ui-hint.is-armed kbd { color: var(--os-bg); background: var(--os-accent-bright); border-color: transparent; }
+.ui-hint kbd.is-xy { color: var(--os-accent-bright, #ff9a52); border-color: color-mix(in oklab, var(--os-accent-bright, #ff9a52) 38%, transparent); background-color: color-mix(in oklab, var(--os-accent-bright, #ff9a52) 14%, transparent); }
+.ui-hints--sheet { margin-top: 26px; padding-top: 14px; border-top: 1px solid var(--lg-edge-soft); }
+/* Mini-Plamek w pasku podpowiedzi: kiwa głową, gdy skrót naprawdę coś zrobił. */
+/* Mini-Plamek w pasku podpowiedzi siedzi na DOLE strony, więc zgłoszenie „farba bywa
+   jaśniejsza na przyciskach na dole” mogło dotyczyć także jego: stary gradient zaczynał
+   się od prawie białego #ffe0bd. Teraz to ten sam płaski akcent, a szkło dają cienie. */
+.plamek-mini { position: relative; width: 14px; height: 14px; border-radius: 999px; background: var(--plamek-paint); box-shadow: 0 1px 4px #000000a6, inset 0 -2px 3px -1px #00000059, inset 0 1px 0 #ffffff2e; }
+.plamek-mini i { position: absolute; width: 15%; height: 22%; top: 32%; border-radius: 999px; background: #26120a; }
+.plamek-mini i:nth-child(1) { left: 26%; }
+.plamek-mini i:nth-child(2) { right: 26%; }
+.plamek-mini.is-nod { animation: plamek-mini-nod 300ms var(--liquid-spring); }
+@keyframes plamek-mini-nod { 0% { } 40% { transform: translateY(2px) scaleY(.86); } 100% { transform: none; } }
+
+/* --- Plamek a natywny outline ------------------------------------------------
+   Maskotka mierzy wyłącznie elementy z listy nawigacji, więc outline'u nie wycinamy
+   do zera (element poza listą musiałby zostać bez niczego). Zamiast dublować sygnał,
+   schodzimy z niego do szeptu: 1px, niska kontra, bez offsetu.
+   -------------------------------------------------------------------------- */
+html[data-plamek] :is(button, a, input, select, summary, [tabindex]):focus-visible {
+  outline: 1px solid color-mix(in oklab, var(--os-accent) 34%, transparent);
+  outline-offset: 2px;
+}
+html[data-plamek] .os-game-tile:focus-visible { outline-width: 1px; outline-offset: 3px; }
+html[data-plamek] .os-icon:focus-visible, html[data-plamek] .os-add:focus-visible { box-shadow: 0 0 0 1px #ffffff14; }
+html[data-plamek] .boot-skip:focus-visible { outline-color: color-mix(in oklab, var(--os-accent) 34%, transparent); }
+
+/* --- Dostosowanie do urządzenia ------------------------------------------ */
+/* Telewizor: duży blur nad pełnoekranową grą to najdroższa operacja warstwy. */
+@media(min-width: 1900px) {
+  :root { --lg-blur: 18px; --lg-bright: .62; --lg-r-card: 26px; --lg-glass-hud: blur(9px) saturate(130%) brightness(.58); }
+  /* Z kanapy 1 px znika, więc TV dokłada wyłącznie mocniejszy keyline i poświatę:
+     `flood-opacity` jest właściwością CSS, więc nie trzeba drugiego filtra ani JSX-a. */
+  /* Na telewizorze keyline jest i grubszy (σ liczy `rimSwellFor` od gabarytu celu), i
+     mocniejszy w kontrze — bez ruszenia koloru farby, bo o czytelności decyduje obrzeże. */
+  .plamek-liquid feFlood { flood-opacity: .82; }
+  .plamek-glow { box-shadow: 0 12px 40px -8px var(--plamek-paint), inset 0 0 34px -10px var(--plamek-paint), var(--plamek-contact); }
+  .plamek-eye { width: 15%; }
+  .ui-hints { font-size: 12px; gap: 8px 18px; }
+  .ui-hint kbd { min-width: 24px; font-size: 11px; }
+  .plamek-mini { width: 18px; height: 18px; }
+}
+/* Telefon/tablet: krótszy blur i mocniejsza domieszka ciemnej bazy dla kontrastu. */
+@media(max-width: 820px) {
+  :root { --lg-blur: 16px; --lg-base: #0d0d11d1; --lg-base-strong: #0b0b0ff2; --lg-fill: #ffffff12; }
+  .arcade-hudbar { margin: 0; border-width: 0 0 1px; border-radius: 0; }
+  .arcade-hudcard { padding: 8px 10px; }
+}
+@media(pointer: coarse) {
+  .os-icon, .pad-icon, .arcade-icon { min-width: 46px; min-height: 46px; }
+  .arcade-icon { width: 46px; height: 46px; }
+  .cine-choices button, .moment-selector button { min-height: 48px; }
+}
+@media(max-width: 420px) {
+  :root { --lg-r-card: 18px; --lg-r-window: 24px; --lg-r-cluster: 26px; }
+  .cine-launch-side { padding: 20px; }
+  .os-topbar nav { padding: 5px; gap: 5px; }
+}
+
+/* --- Fallbacki: bez backdrop-filter i przy ograniczonej przezroczystości.
+   Szkło idzie przez tokeny, więc tu wystarcza ich podmiana. */
+@supports not ((backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px))) {
+  :root { --lg-glass: none; --lg-glass-soft: none; --lg-glass-hud: none; --lg-base: #14141a; --lg-base-strong: #101014; --lg-fill: #1f1f26; --lg-scrim: #00000059; --lg-field: #08080c; --lg-field-focus: #0c0c11; --lg-tint: linear-gradient(158deg, #ffffff14, #ffffff03 46%, #ffffff0a); }
+  .os-sheet::backdrop { background: #05050ae6; }
+}
+@media(prefers-reduced-transparency: reduce) {
+  :root { --lg-glass: none; --lg-glass-soft: none; --lg-glass-hud: none; --lg-base: #131318; --lg-base-strong: #101014; --lg-fill: #1e1e26; --lg-scrim: #00000073; --lg-field: #0a0a0e; --lg-field-focus: #0e0e13; --lg-tint: none; --lg-shadow: 0 18px 40px -20px #000000cc; --lg-shadow-lift: 0 20px 44px -18px #000000cc; }
+  .os-sheet::backdrop { background: #05050af2; }
+  .os-game-tile::before, .cine-sheet-art > span { background: #09090be6; }
+  .lg-sheen::after { display: none; }
+}
+@media(prefers-contrast: more) {
+  :root { --lg-base: #08080af2; --lg-base-strong: #060608fa; --lg-fill: #24242e; --lg-scrim: #0000008c; --lg-field: #000000; --lg-field-focus: #050508; --lg-edge: #ffffff6b; --lg-edge-soft: #ffffff47; --lg-bright: .5; }
+}
+
+/* --- Ruch: szacunek dla preferencji systemu i ustawienia konsoli --------- */
+@media(prefers-reduced-motion: reduce) {
+  .lg-enter, .lg-sheen::after, .os-game-tile.is-selected::after, .joy-toast, dialog.os-sheet, .os-sheet[open],
+  .os-sheet.lg-morph-in, .os-sheet.lg-morph-out, .lg-morph-in > *, .os-sheet::backdrop,
+  .os-session, .os-game-tile, .arcade-hudcard, .cine-ranking li, .room-switches > button, .lounge-suggestions button,
+  .pad-proposals button, .moment-cards > button, .cine-personal-stats article, .cine-proposals button,
+  .cine-change-game, .whats-new-list article, .moments-gallery-grid article, .moments-gallery-actions :is(button, a),
+  .os-again, .pad-remote-button, .os-game-rail, .ui-hint kbd {
+    animation: none !important; transition: none !important; transform: none !important; scroll-behavior: auto !important;
+  }
+  /* Plamek NIE może stracić transformu — na nim jedzie pozycja i kształt, więc
+     wspólna lista z `transform: none` zjadłaby maskotkę. Dostaje własną: wygaszone
+     przejścia, znikająca smuga i bryzgi, ale geometria zostaje tam, gdzie ją postawił model. */
+  .plamek, .plamek-goo, .plamek-face, .plamek-eye, .plamek-mouth, .plamek-mini { transition: none !important; animation: none !important; }
+  .plamek-echo, .plamek-splat, .plamek-strand, .plamek-src { display: none !important; }
+  .plamek-sheen { animation: none !important; }
+  .plamek-orbit-run, .plamek-orbit-echo, .plamek-orbit-ball { animation: none !important; }
+}
+html[data-motion="reduced"] :is(.lg-enter, dialog.os-sheet, .os-sheet[open], .os-sheet::backdrop,
+  .os-sheet.lg-morph-in, .os-sheet.lg-morph-out,
+  .lg-morph-in > *, .joy-toast, .os-session, .os-game-tile,
+  .arcade-hudcard, .cine-ranking li, .room-switches > button, .lounge-suggestions button, .pad-proposals button,
+  .moment-cards > button, .cine-personal-stats article, .cine-proposals button, .cine-change-game,
+  .whats-new-list article, .moments-gallery-grid article, .os-again, .pad-remote-button, .ui-hint kbd) {
+  animation: none !important; transition: none !important; transform: none !important;
+}
+html[data-motion="reduced"] :is(.plamek, .plamek-goo, .plamek-face, .plamek-sheen, .plamek-eye, .plamek-mouth, .plamek-mini) { animation: none !important; transition: none !important; }
+html[data-motion="reduced"] :is(.plamek-echo, .plamek-splat, .plamek-strand, .plamek-src, .plamek-sheen) { display: none; }
+html[data-motion="reduced"] :is(.plamek-orbit-run, .plamek-orbit-echo, .plamek-orbit-ball) { animation: none !important; }
+html[data-motion="reduced"] .lg-sheen::after { display: none; }

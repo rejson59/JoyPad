@@ -1,4 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
+// Numery bierzemy ze źródła, a nie z literałów: przy każdym bumpie testy muszą nadal
+// pomijać okna startowe, a nie czekać, aż któreś z nich przechwyci kliknięcie.
+import { WHATS_NEW_VERSION } from '../src/platform/whatsNewState';
+import { FILM_VERSION } from '../src/cinema/script';
 
 async function harness(page: Page) {
   await page.route('**/__moments_test', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><html lang="pl"><body></body></html>' }));
@@ -10,11 +14,30 @@ async function harness(page: Page) {
   });
 }
 
+/**
+ * Pytanie o poradnik („Witaj w JoyPad!") otwiera się przy pierwszym wejściu i jako
+ * modal przechwytuje kliknięcia — biblioteka pod nim jest widoczna, ale nieosiągalna,
+ * więc test klikał w kafelek gry aż do przekroczenia limitu czasu. Zapisujemy
+ * odpowiedziane preferencje filmu (`src/cinema/store.ts`) przed skryptami strony.
+ */
+async function skipStartupWelcome(page: Page) {
+  await page.addInitScript(version => localStorage.setItem('joypad.cinema', JSON.stringify({
+    answered: true, declined: false, askOnStart: false, version, plays: 0,
+  })), FILM_VERSION);
+}
+
 async function skipStartupReleaseNotes(page: Page) {
-  await page.addInitScript(() => localStorage.setItem('joypad.whats-new-version', '1.7.0'));
+  await page.addInitScript(version => localStorage.setItem('joypad.whats-new-version', version), WHATS_NEW_VERSION);
+}
+
+/** Czysta biblioteka: żadne z dwóch okien startowych nie zasłania interfejsu. */
+async function skipStartupSheets(page: Page) {
+  await skipStartupWelcome(page);
+  await skipStartupReleaseNotes(page);
 }
 
 test('localized release notes appear at startup once and can be dismissed', async ({ page }) => {
+  await skipStartupWelcome(page);
   await page.goto('/');
   const whatsNew = page.getByRole('dialog', { name: 'Co nowego?' });
   await expect(whatsNew).toBeVisible({ timeout: 15_000 });
@@ -67,7 +90,7 @@ for (const [id, split] of [['tanks', false], ['race', false], ['race', true], ['
 }
 
 test('recording preference persists and can be switched off on TV', async ({ page }) => {
-  await skipStartupReleaseNotes(page);
+  await skipStartupSheets(page);
   await page.goto('/');
   await page.getByRole('button', { name: 'Ustawienia systemu' }).click();
   const control = page.getByRole('switch', { name: 'Moments · powtórki wideo', exact: true });
@@ -98,10 +121,11 @@ test('actual TV flow: captured pickup → results → video → rematch → new 
     expect(patched).not.toBe(code);
     await route.fulfill({ response, body: patched });
   });
-  await page.addInitScript(() => {
+  await skipStartupWelcome(page);
+  await page.addInitScript(version => {
     localStorage.setItem('joypad.evening.game', JSON.stringify('tanks'));
-    localStorage.setItem('joypad.whats-new-version', '1.7.0');
-  });
+    localStorage.setItem('joypad.whats-new-version', version);
+  }, WHATS_NEW_VERSION);
   await page.goto('/');
   await page.locator('[data-game-index="0"]').click();
   await page.getByRole('button', { name: 'Rozpocznij pojedynek', exact: false }).click();

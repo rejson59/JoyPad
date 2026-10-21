@@ -220,7 +220,7 @@ function SensorLab({ onClose }: { onClose: () => void }) {
   ];
 
   return (
-    <div className="fixed inset-0 z-[100] select-none overflow-hidden bg-[#07090f] text-white" role="dialog" aria-label={en ? 'Controller lab' : 'Lab kontrolera'}>
+    <div className="fixed inset-0 z-[100] select-none overflow-hidden bg-[#07090f] text-white" role="dialog" aria-label={en ? 'Controller lab' : 'Lab kontrolera'} data-ui-scope="lab" data-ui-focus="button">
       <div className="pointer-events-none absolute inset-0 opacity-[.05]" style={{ backgroundImage: 'linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px)', backgroundSize: '48px 48px' }} />
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
       <div className="pointer-events-none absolute inset-0 flex flex-col p-5 sm:p-8">

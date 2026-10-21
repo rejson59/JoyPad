@@ -5,6 +5,7 @@ import { padUrlFor } from '../net/protocol';
 import { ConnectionCheck } from './ConnectionCheck';
 import type { PlayerConfig } from '../game/types';
 import { QrFrame, QrFrameError } from '../components/QrFrame';
+import { linkProgress } from '../console/connectionProgress';
 import { useT } from '../platform/i18n';
 
 export function usePadHost() {
@@ -101,7 +102,7 @@ export function PadHostPanel({ players, compact, onClose, context = 'tanks' }: P
         <div className="flex flex-col items-center gap-2">
           {s.status === 'error'
             ? <QrFrameError size={168} />
-            : <QrFrame src={codeUsable ? qr : ''} size={168} loadingLabel={en ? 'Waiting for signaling server…' : 'Czekam na serwer sygnalizacji…'} />}
+            : <QrFrame src={codeUsable ? qr : ''} size={168} loadingLabel={en ? 'Waiting for signaling server…' : 'Czekam na serwer sygnalizacji…'} progress={linkProgress(s)} />}
           <div className="text-[10px] font-bold tracking-widest text-zinc-500">{en ? 'ROOM CODE' : 'KOD POKOJU'}</div>
           <div className="font-mono2 rounded-lg border border-orange-300/40 bg-black/60 px-4 py-1.5 text-3xl font-extrabold tracking-[0.35em] text-orange-200">{s.code}</div>
         </div>

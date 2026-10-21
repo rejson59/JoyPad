@@ -1,7 +1,7 @@
 {
   "name": "joypad",
   "private": true,
-  "version": "1.7.0",
+  "version": "1.8.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,11 +11,20 @@
     "preview": "vite preview",
     "selftest:relay": "esbuild scripts/relay-selftest.ts --bundle --format=esm --platform=node --outfile=.cache/relay-selftest.mjs --log-level=warning && node .cache/relay-selftest.mjs",
     "selftest:arcade": "esbuild scripts/arcade-selftest.ts --bundle --format=esm --platform=node --define:import.meta.env={} --outfile=.cache/arcade-selftest.mjs --log-level=warning && node .cache/arcade-selftest.mjs",
+    "selftest:cinema": "esbuild scripts/cinema-selftest.ts --bundle --format=esm --platform=node --define:import.meta.env={} --outfile=.cache/cinema-selftest.mjs --log-level=warning && node .cache/cinema-selftest.mjs",
+    "selftest:cinema-render": "esbuild scripts/cinema-render-selftest.tsx --bundle --format=cjs --platform=node --jsx=automatic --define:import.meta.env={} --resolve-extensions=.ts,.tsx,.jsx,.js,.css,.json --outfile=.cache/cinema-render-selftest.cjs --log-level=warning && node .cache/cinema-render-selftest.cjs",
     "selftest:console": "esbuild scripts/console-selftest.ts --bundle --format=esm --platform=node --define:import.meta.env={} --outfile=.cache/console-selftest.mjs --log-level=warning && node .cache/console-selftest.mjs",
     "selftest:platform": "esbuild scripts/platform-selftest.ts --bundle --format=esm --platform=node --define:import.meta.env={} --outfile=.cache/platform-selftest.mjs --log-level=warning && node .cache/platform-selftest.mjs",
+    "selftest:ui": "node scripts/ui-smoke.mjs",
+    "selftest:preview": "node scripts/preview-smoke.mjs",
+    "selftest:delivery": "node scripts/preview-check.mjs",
     "selftest:replay": "esbuild scripts/replay-selftest.ts --bundle --format=esm --platform=node --define:import.meta.env={} --outfile=.cache/replay-selftest.mjs --log-level=warning && node .cache/replay-selftest.mjs",
     "test:replay": "playwright test",
-    "selftest:v16": "esbuild scripts/v16-selftest.ts --bundle --format=esm --platform=node --define:import.meta.env={} --outfile=.cache/v16-selftest.mjs --log-level=warning && node .cache/v16-selftest.mjs"
+    "selftest:v16": "esbuild scripts/v16-selftest.ts --bundle --format=esm --platform=node --define:import.meta.env={} --outfile=.cache/v16-selftest.mjs --log-level=warning && node .cache/v16-selftest.mjs",
+    "selftest:all": "npm run selftest:arcade && npm run selftest:console && npm run selftest:relay && npm run selftest:platform && npm run selftest:replay && npm run selftest:v16 && npm run selftest:cinema && npm run selftest:cinema-render && npm run selftest:league && npm run selftest:pizza && npm run selftest:ui",
+    "verify": "npm run lint && npm run typecheck && npm run selftest:all && npm run build",
+    "selftest:pizza": "esbuild scripts/pizza-selftest.ts --bundle --format=esm --platform=node --define:import.meta.env={} --outfile=.cache/pizza-selftest.mjs --log-level=warning && node .cache/pizza-selftest.mjs",
+    "selftest:league": "esbuild scripts/league-selftest.ts --bundle --format=esm --platform=node --define:import.meta.env={} --outfile=.cache/league-selftest.mjs --log-level=warning && node .cache/league-selftest.mjs"
   },
   "dependencies": {
     "@fontsource/black-ops-one": "^5.3.0",
@@ -45,6 +54,7 @@
     "@vitejs/plugin-react": "5.1.1",
     "eslint": "^10.11.0",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "jsdom": "^30.1.2",
     "tailwindcss": "4.1.17",
     "typescript": "5.9.3",
     "typescript-eslint": "^8.70.1",

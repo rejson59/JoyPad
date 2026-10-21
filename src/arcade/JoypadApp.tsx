@@ -1,17 +1,26 @@
-import { SessionNotifications } from '../platform/notifications';
+import { SessionNotifications, notify } from '../platform/notifications';
+// Film i ekran powitalny ładowane leniwie: biblioteka nie ma po co ciągnąć
+// silnika scen, dopóki nikt nie poprosi o poradnik. Każdy z nich przechodzi przez
+// `ChunkGate`, więc nieudane pobranie ma widoczny komunikat, automatyczną próbę
+// i przycisk „Spróbuj ponownie” zamiast czarnej pustki (runda 16).
+const loadFilm = () => import('../cinema/Film').then(module => ({ default: module.Film }));
+const loadWelcome = () => import('../cinema/Welcome').then(module => ({ default: module.Welcome }));
+import { answerWelcome, closeCinema, markWatched, openCinema, shouldAskOnStart, useCinemaRequest } from '../cinema/store';
 import { JoyPadLogo } from '../components/JoyPadLogo';
 import { lastGame } from '../console/history';
-import { Component, lazy, Suspense, useCallback, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
+import { Component, useCallback, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
 import { ConsoleLibrary } from '../console/ConsoleLibrary';
-import { nextPlayable } from '../console/navigation';
 import { systemSound } from '../console/sound';
-const TankApp = lazy(() => import('../App'));
+const loadTank = () => import('../App').then(module => ({ default: module.default }));
 import { PLAYER_DEFS } from '../game/types';
 import { menuMusic } from '../game/menuMusic';
 import { padHost } from '../net/padHost';
 import type { RemoteCommand, RemoteEvent } from '../net/protocol';
 import { usePadHost } from '../pad/PadHostPanel';
 import { BootSplash } from '../components/BootSplash';
+import { Plamek } from '../console/Plamek';
+import { ChunkGate } from '../components/ChunkGate';
+import { useUiControls } from '../console/uiControl';
 import { ConnectionsScreen } from '../components/ConnectionsScreen';
 import { JoyLab } from '../components/JoyLab';
 import { ScreenCurtain, useCurtain } from '../components/motion';
@@ -48,9 +57,12 @@ class GameErrorBoundary extends Component<GameErrorBoundaryProps, GameErrorBound
 }
 
 export default function JoypadApp() {
-  const { language } = useT();
+  const { language, t } = useT();
   const [selected, setSelected] = useState<GameId | null>(null);
   const [booted, setBooted] = useState(false);
+  /** Pytanie „pierwsze wejście" — jedno na instalację, potem tylko z ustawień. */
+  const [welcome, setWelcome] = useState(() => shouldAskOnStart());
+  const cinema = useCinemaRequest();
   const [showConnections, setShowConnections] = useState(false);
   const [showLab, setShowLab] = useState(false);
   const overlay = useRef(false);
@@ -122,76 +134,86 @@ export default function JoypadApp() {
     focusRef.current = i; setFocus(i);
   }, []);
 
+  // Pilot z telefonu: to samo wejście co klawiatura i pad USB — silnik interfejsu
+  // (uiControl) decyduje, czy komenda jest ruchem po ekranie, czy sprawą aplikacji.
+  const handleCommand = useCallback((command: RemoteCommand) => {
+    // Film jest modalny: dopóki leci, pilot i pad należą wyłącznie do niego.
+    if (cinema.open) { window.dispatchEvent(new CustomEvent('joypad-dialog-command', { detail: command })); return; }
+    if (padHost.session().room?.dimmed) {
+      if (command === 'select' || command === 'back' || command === 'home') padHost.manageRoom({ kind: 'dimmed', value: false });
+      return;
+    }
+    if (showLab) { if (command === 'back' || command === 'home') closeLab(); return; }
+    // Ekran startowy ma własny pilot (A/B/Start pomijają boot) — oddajemy mu komendę w całości.
+    if (document.querySelector('.boot-splash')) { window.dispatchEvent(new CustomEvent('joypad-dialog-command', { detail: command })); return; }
+    if (selectedRef.current) { setRemote({ id: ++serial.current, command }); return; }
+    if (showConnections || overlay.current || welcome) { window.dispatchEvent(new CustomEvent('joypad-dialog-command', { detail: command })); return; }
+    if (command === 'back') {
+      // W bibliotece „wstecz" nie ma od czego uciekać — wracamy na kolejkę gier.
+      document.querySelector<HTMLElement>(`[data-game-index="${focusRef.current}"]`)?.focus({ preventScroll: true });
+      systemSound('back');
+    }
+  }, [cinema.open, closeLab, showConnections, showLab, welcome]);
+
+  // Kto rządzi komendami: dopóki gra nie kręci rundy, pilot i klawiatura obsługują
+  // interfejs — także menu samej gry (ustawienia, wyniki). `state.screen` utrzymują
+  // same gry (`padHost.setScreen(stage)`), więc bramka jest jedna dla wszystkich
+  // tytułów: 'game' = pad gra, cokolwiek innego = pad steruje menu.
+  // Podczas filmu silnik interfejsu milknie — inaczej A uruchomiłoby grę pod filmem.
+  const uiOwnsInput = booted && !cinema.open && !state.room.dimmed && (!selected || state.screen !== 'game');
+  // Powrót z gry zostawia bibliotekę bez fokusa (elementy okienka zniknęły razem z grą),
+  // a bez fokusa nie ma Plamka i pierwsze naciśnięcie strzałki startuje od środka ekranu.
+  // Wskakujemy więc na tę samą grę, z której wychodzimy — maskotka czeka na niej.
   useEffect(() => {
-    const handle = (command: RemoteCommand) => {
-      if (padHost.session().room?.dimmed) {
-        if (['select', 'back', 'home'].includes(command)) padHost.manageRoom({ kind: 'dimmed', value: false });
-        return;
-      }
-      if (showLab) { if (command === 'back' || command === 'home' || command === 'select') closeLab(); return; }
-      if (showConnections || overlay.current || document.querySelector('dialog[open], .boot-splash')) { window.dispatchEvent(new CustomEvent('joypad-dialog-command', { detail: command })); return; }
-      if (selectedRef.current) { setRemote({ id: ++serial.current, command }); return; }
-      const active = document.activeElement as HTMLElement | null;
-      if (command === 'up') { document.querySelector<HTMLElement>('.os-topbar nav button')?.focus(); return; }
-      if (command === 'down') { document.querySelector<HTMLElement>(`[data-game-index="${focusRef.current}"]`)?.focus(); return; }
-      if (command === 'left' || command === 'right') {
-        if (active?.closest('.os-topbar')) {
-          const buttons = Array.from(document.querySelectorAll<HTMLElement>('.os-topbar nav button'));
-          const at = buttons.indexOf(active);
-          buttons[(at + (command === 'left' ? -1 : 1) + buttons.length) % buttons.length]?.focus();
-        } else {
-          const next = nextPlayable(focusRef.current, command === 'left' ? -1 : 1);
-          choose(next);
-          if (active?.closest('.os-game-rail')) document.querySelector<HTMLElement>(`[data-game-index="${next}"]`)?.focus({ preventScroll: true });
-        }
-      }
-      if (command === 'select') {
-        if (active?.closest('.os-topbar,.os-footer,.os-collection-heading,.os-session') && active.matches('button,a')) active.click();
-        else open(GAMES[focusRef.current].id);
-      }
-    };
-    padHost.onAdminCommand = handle;
+    if (selected || !booted || state.room.dimmed) return;
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active !== document.body && active !== document.documentElement) return;
+    document.querySelector<HTMLElement>(`[data-game-index="${focusRef.current}"]`)?.focus({ preventScroll: true });
+  }, [selected, booted, state.room.dimmed]);
+  useUiControls({
+    enabled: uiOwnsInput,
+    onCommand: handleCommand,
+    // Pad zatwierdza to, co wskazujemy; dopiero gdy fokus uciekł z elementów,
+    // A uruchamia podświetloną grę (stare zachowanie konsoli).
+    onSelect: () => {
+      if (selectedRef.current || !booted || state.room.dimmed) return false;
+      open(GAMES[focusRef.current].id);
+      return true;
+    },
+  });
+
+  useEffect(() => {
     padHost.onGameChoice = (index) => {
       if ((selectedRef.current && padHost.session().screen !== 'over') || showLab || showConnections || overlay.current || !GAMES[index] || GAMES[index].wip || GAMES[index].id === selectedRef.current) return;
       choose(index); open(GAMES[index].id);
     };
-    const key = (e: KeyboardEvent) => {
-      if (selectedRef.current || document.querySelector('.boot-splash') || (e.target instanceof Element && e.target.closest('input,select,textarea,dialog'))) return;
-      if ((e.code === 'Enter' || e.code === 'Space') && e.target instanceof Element && e.target.closest('button,a')) return;
-      const map: Record<string, RemoteCommand> = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', Enter: 'select', Escape: 'back' };
-      if (map[e.code]) { e.preventDefault(); handle(map[e.code]); }
-    };
-    window.addEventListener('keydown', key);
-    let raf = 0; let held = ''; let repeatAt = 0;
-    const poll = (now: number) => {
-      if (!document.hidden && !selectedRef.current) {
-        const pad = navigator.getGamepads?.().find(p => p?.mapping === 'standard');
-        let command: RemoteCommand | '' = '';
-        if (pad) {
-          if (pad.buttons[14]?.pressed || pad.axes[0] < -.6) command = 'left';
-          else if (pad.buttons[15]?.pressed || pad.axes[0] > .6) command = 'right';
-          else if (pad.buttons[12]?.pressed || pad.axes[1] < -.6) command = 'up';
-          else if (pad.buttons[13]?.pressed || pad.axes[1] > .6) command = 'down';
-          else if (pad.buttons[0]?.pressed) command = 'select';
-          else if (pad.buttons[1]?.pressed) command = 'back';
-        }
-        if (command && (command !== held || ((command === 'left' || command === 'right') && now > repeatAt))) { handle(command); repeatAt = now + (command === held ? 180 : 400); }
-        held = command;
-      }
-      raf = requestAnimationFrame(poll);
-    };
-    raf = requestAnimationFrame(poll);
-    return () => { cancelAnimationFrame(raf); padHost.onAdminCommand = null; padHost.onGameChoice = null; window.removeEventListener('keydown', key); };
-  }, [open, choose, showConnections, showLab, closeLab]);
+    return () => { padHost.onGameChoice = null; };
+  }, [choose, open, showConnections, showLab]);
+
+  const watchTutorial = () => { answerWelcome(true); openCinema('welcome'); };
+  const declineTutorial = () => { answerWelcome(false); setWelcome(false); };
+  const finishFilm = (reason: 'ended' | 'skipped') => {
+    markWatched();
+    closeCinema();
+    if (reason === 'ended') notify(t('notifications.tutorialDone'), t('notifications.tutorialDoneDetail'), 'success');
+    else notify(t('notifications.tutorialSkipped'), t('notifications.tutorialSkippedDetail'));
+    setWelcome(false);
+  };
 
   let content: ReactNode;
-  if (!booted) {
+  if (cinema.open) {
+    content = (
+      <ChunkGate loader={loadFilm}>
+        {Film => <Film mode={cinema.mode} onDone={finishFilm} />}
+      </ChunkGate>
+    );
+  } else if (!booted) {
     content = <BootSplash variant="console" onDone={() => setBooted(true)} />;
   } else if (selected) {
     content = (
       <GameErrorBoundary key={selected} onExit={exit} language={language}>
         {selected === 'tanks'
-          ? <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-[#0a0c0d] text-orange-300">{language === 'en' ? 'Loading Steel Front…' : 'Ładowanie Stalowego Frontu…'}</div>}><TankApp onExit={exit} remote={remote} /></Suspense>
+          ? <ChunkGate loader={loadTank}>{TankApp => <TankApp onExit={exit} remote={remote} />}</ChunkGate>
           : selected === 'blockcraft'
             ? <div className="flex min-h-screen flex-col items-center justify-center bg-[#090d12] px-6 text-center text-white"><div className="joy-kicker text-emerald-300">{language === 'en' ? 'COMING SOON' : 'ZAPOWIEDŹ'}</div><h1 className="joy-heading mt-3 text-4xl font-bold">BlockCraft</h1><p className="mt-3 max-w-lg text-sm text-slate-300">{language === 'en' ? 'A block-building sandbox is in the works. This preview is not playable yet.' : 'Sandbox z budowaniem z bloków jest w przygotowaniu. Ta zapowiedź nie jest jeszcze grywalna.'}</p><button type="button" onClick={exit} className="mt-6 rounded-xl bg-orange-400 px-5 py-3 font-bold text-black">{language === 'en' ? 'Back to library' : 'Wróć do biblioteki'}</button></div>
             : <ArcadeGameView key={selected} id={selected} onExit={exit} remote={remote} />}
@@ -208,6 +230,17 @@ export default function JoypadApp() {
   return (
     <>
       {content}
+      {/* Pytanie wchodzi PO ekranie startowym — inaczej zasłoniłoby boot, a jego
+          przycisk „pomiń" byłby nieosiągalny. */}
+      {welcome && booted && !cinema.open && (
+        <ChunkGate loader={loadWelcome}>
+          {Welcome => <Welcome onWatch={watchTutorial} onDecline={declineTutorial} />}
+        </ChunkGate>
+      )}
+      {/* Pierścień fokusa żyje obok treści; w okienkach montuje się jego własna kopia.
+          Pod roundzie 10 maskotka chodzi też po menu gier — znika dopiero, gdy runda
+          starts (tam ekran jest areny, a nie interfejsu). */}
+      {uiOwnsInput && <Plamek />}
       <ScreenCurtain state={curtain.state} />
       <SessionNotifications session={padHost.session()} />
       {state.room.dimmed && <div className="joy-screen-rest"><JoyPadLogo size={150} /><span className="os-eyebrow">JOYPAD / {language === 'en' ? 'BREAK TIME' : 'CHWILA PRZERWY'}</span><h1>{language === 'en' ? 'The evening is still yours.' : 'Dobry wieczór trwa.'}</h1><p>{language === 'en' ? 'The crew is still connected. Come back whenever you like.' : 'Ekipa nadal jest połączona. Wróćcie, kiedy chcecie.'}</p><button onClick={() => padHost.manageRoom({ kind: 'dimmed', value: false })}>{language === 'en' ? 'Back to screen' : 'Wróć do ekranu'}</button><small>{language === 'en' ? 'The admin can also wake the screen from a phone.' : 'Administrator może też odsłonić ekran z telefonu.'}</small></div>}

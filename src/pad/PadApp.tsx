@@ -432,7 +432,7 @@ function PadContent() {
             autoCorrect="off"
             spellCheck={false}
             maxLength={CODE_LENGTH}
-            className="font-mono2 mt-1.5 w-full rounded-xl border border-white/15 bg-black/60 px-4 py-3 text-center text-3xl font-extrabold tracking-[0.4em] text-orange-300 outline-none focus:border-orange-400"
+            className="lg-field lg-pill font-mono2 mt-1.5 w-full px-4 py-3 text-center text-3xl font-extrabold tracking-[0.4em] text-orange-300 outline-none"
           />
           <label htmlFor="pad-nickname" className="mt-4 block text-[11px] font-bold tracking-widest text-zinc-400">{t('pad.yourNick')}</label>
           <input
@@ -442,12 +442,12 @@ function PadContent() {
             onKeyDown={e => { if (e.key === 'Enter') connect(); }}
             placeholder={t('pad.nicknameExample')}
             maxLength={14}
-            className="mt-1.5 w-full rounded-xl border border-white/15 bg-black/60 px-4 py-2.5 text-base font-bold text-white outline-none focus:border-orange-400"
+            className="lg-field mt-1.5 w-full rounded-xl px-4 py-2.5 text-base font-bold text-white outline-none"
           />
           <button
             onClick={connect}
             disabled={busy || normalizeCode(code).length !== CODE_LENGTH}
-            className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-400 to-amber-200 py-3.5 text-lg font-black tracking-widest text-[#070a10] shadow-[0_0_30px_rgba(249,115,22,0.24)] disabled:opacity-40 disabled:shadow-none"
+            className="lg-pill lg-sheen mt-5 flex w-full items-center justify-center gap-2 bg-gradient-to-r from-orange-400 to-amber-200 py-3.5 text-lg font-black tracking-widest text-[#070a10] shadow-[0_0_30px_rgba(249,115,22,0.24)] disabled:opacity-40 disabled:shadow-none"
           >
             {busy ? <><Loader2 className="h-5 w-5 animate-spin" /> {t('pad.connecting')}</> : <><Wifi className="h-5 w-5" /> {t('pad.connect')}</>}
           </button>

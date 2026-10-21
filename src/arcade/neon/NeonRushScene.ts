@@ -13,6 +13,7 @@ import { ItemManager } from './items';
 import { driveAI, aiUseItem } from './ai';
 import type { Language } from '../../platform/i18n';
 import { AudioFX } from './audio';
+import { uiOwnsKeyboard } from '../../lib/inputOwnership';
 
 export const KART_COLORS = [
   { name: 'Cyber Błękit', color: 0x0a4cff, accent: 0x00f0ff, css: '#00f0ff' },
@@ -460,6 +461,11 @@ export class NeonRushScene {
   };
 
   private onKeyDown = (e: KeyboardEvent) => {
+    // Nad areną stoi okienko (pauza, regulacje, wyniki) albo gracz coś wpisuje —
+    // klawiatura jest wtedy własnością interfejsu. Bez tego warunki nakładały się:
+    // `Esc` zamykał okienko (czyli wznawiał grę) i *jednocześnie* przełączał pauzę,
+    // a strzałki nie mogły przewinąć modalu ani przestawić `<select>` w ustawieniach.
+    if (uiOwnsKeyboard(e)) return;
     const k = e.code;
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(k)) e.preventDefault();
     if (e.repeat) return;

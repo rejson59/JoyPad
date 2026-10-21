@@ -1,8 +1,9 @@
-import { navigateResults } from './console/resultsNavigation';
 import { useRecordedMoments } from './platform/useRecordedMoments';
 import { ReadyStatus } from './console/ReadyStatus';
 import { readChoice, remember } from './console/history';
+import { clearLeaveWish, isLeaving, wishToLeave } from './lib/exitWish';
 import { GameSetup } from './console/GameSetup';
+import { focusUiScope } from './console/focusSurface';
 import { ConnectionsScreen } from './components/ConnectionsScreen';
 import { useMenuMusic } from './lib/useMenuMusic';
 import { GameResults } from './console/GameResults';
@@ -125,6 +126,15 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
 
   // Przejścia między ekranami bitwy idą pod kurtyną — bez twardych cutów.
   const curtain = useCurtain();
+  // Konfiguracja bitwy jest powierzchnią interfejsu: bez tego pierwsze naciśnięcie
+  // strzałki na tym ekranie nie miałoby od czego wystartować.
+  const setupRoot = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (screen !== 'setup') return;
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && (active.closest('dialog') || setupRoot.current?.contains(active))) return;
+    focusUiScope(setupRoot.current);
+  }, [screen]);
   const goScreen = useCallback((next: Screen) => {
     curtain.begin(next === 'game' ? '#f59e0b' : '#f97316', () => setScreen(next));
   }, [curtain]);
@@ -156,7 +166,10 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
         ? { ...p, name: slots[i]!.nick, enabled: true, isBot: false }
         : { ...p, name: PLAYER_DEFS[i].name }));
     };
-    padHost.onPauseRequest = () => gameRef.current?.togglePause();
+    // Wejście w grę kasuje intencję wyjścia z poprzedniego podejścia — inaczej „Wróć do
+    // biblioteki" kliknięte raz blokowałoby START także w następnej sesji.
+    clearLeaveWish();
+    padHost.onPauseRequest = () => { if (!isLeaving()) gameRef.current?.togglePause(); };
     return () => { padHost.onSlotsChanged = null; padHost.onPauseRequest = null; };
   }, []);
   useEffect(() => {
@@ -192,6 +205,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
   }, [menuChoice, mapId, mode, killLimit, lives, players]);
 
   const startGame = useCallback((quick?: { count: number; bots: number }) => {
+    clearLeaveWish();
     remember('game', 'tanks');
     // Bitwa startuje pod kurtyną — menu chowa się, arena wstaje.
     curtain.begin('#f59e0b', () => {
@@ -217,34 +231,49 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
     });
   }, [curtain, players]);
 
-  const handleRemote = useCallback((command: RemoteCommand) => {
-    const stage = screenRef.current;
-    if (stage === 'over' && navigateResults(command)) return;
-    if (showPad && stage === 'menu') { window.dispatchEvent(new CustomEvent('joypad-dialog-command', { detail: command })); return; }
-    if (command === 'home' || (command === 'back' && stage === 'menu')) { onExit(); return; }
-    if (command === 'pause' || (command === 'back' && stage === 'game')) { gameRef.current?.togglePause(); return; }
-    if (stage === 'menu') {
-      if (command === 'left' || command === 'up') setMenuChoice(i => (i + 2) % 3);
-      if (command === 'right' || command === 'down') setMenuChoice(i => (i + 1) % 3);
-      if (command === 'select') {
-        if (menuChoice === 0) { gameAudio.init(); startGame({ count: 2, bots: 0 }); }
-        else {
-          setPlayers(PLAYER_DEFS.map((p, i) => ({ ...p, enabled: menuChoice === 1 ? true : i < 3, isBot: menuChoice === 2 && i > 0 && i < 3 })));
-          goScreen('setup');
-        }
-      }
-    } else if (stage === 'setup') {
-      const maps = Object.keys(MAPS) as MapId[];
-      if (command === 'left' || command === 'right') setMapId(id => maps[(maps.indexOf(id) + (command === 'right' ? 1 : maps.length - 1)) % maps.length]);
-      if (command === 'up' || command === 'down') setMode(m => m === 'deathmatch' ? 'survival' : 'deathmatch');
-      if (command === 'select') { gameAudio.init(); startGame(); }
-      if (command === 'back') goScreen('menu');
-    } else if (stage === 'over') {
-      if (command === 'select' || command === 'restart') startGame();
-      if (command === 'back') goScreen('setup');
-    }
-  }, [goScreen, menuChoice, onExit, startGame, showPad]);
+  /**
+   * Tryb z menu: 0 = od razu pojedynek, 1/2 = konfiguracja. Wyodrębnione, bo wchodzi
+   * i z dużego przycisku, i z `select` rzuconego „w pustkę" (fokus na `body`).
+   */
+  const confirmMenu = useCallback(() => {
+    if (menuChoice === 0) { gameAudio.init(); startGame({ count: 2, bots: 0 }); return; }
+    setPlayers(PLAYER_DEFS.map((player, i) => ({ ...player, enabled: menuChoice === 1 ? true : i < 3, isBot: menuChoice === 2 && i > 0 && i < 3 })));
+    goScreen('setup');
+  }, [goScreen, menuChoice, startGame]);
 
+  // Wyjście do biblioteki jest decydujące i natychmiastowe: od tej chwili żadna komenda
+   // (powtórzone `back`/`select` z pada, `Pauza` z HUD-u, `pause` z telefonu) nie ma prawa
+   // tknąć pauzy — „Wróć do biblioteki" z otwartego okna pauzy odpauzowywało grę.
+  const leave = useCallback(() => { wishToLeave(); onExit(); }, [onExit]);
+
+  const handleRemote = useCallback((command: RemoteCommand) => {
+    // Ruch po menu, konfiguracji i wynikach robi silnik interfejsu (`useUiControls`
+    // + `focusSurface`) — on też mówi o tym Plamkowi. Tu zostaje to, czego interfejs
+    // nie załatwia: pauza, wyjścia i zatwierdzenie bez fokusa na elemencie.
+    const stage = screenRef.current;
+    // Nakładka padów nad areną (PadHostPanel) nie jest <dialog>iem, więc silnik jej nie
+    // domknie: pilot musi sam trafić w `back`/`pause` — inaczej Escape w bitwie pauzował
+    // grę zamiast sprzątnąć panel. W menu `showPad` to `ConnectionsScreen` (modal) i tam
+    // rządą zasady okienka, więc sprawdzamy, czy nic nie jest otwarte.
+    if (showPad && (command === 'back' || command === 'pause') && !document.querySelector('dialog[open]')) { setShowPad(false); return; }
+    if (showPad && stage === 'menu') { window.dispatchEvent(new CustomEvent('joypad-dialog-command', { detail: command })); return; }
+    if (command === 'home') { leave(); return; }
+    if (isLeaving()) return;
+    if (command === 'pause' || (command === 'back' && stage === 'game')) { gameRef.current?.togglePause(); return; }
+    if (command === 'back') {
+      if (stage === 'menu') leave();
+      // Z wyników wracamy tam, gdzie się je ustawiło — do konfiguracji, nie na sam początek.
+      else if (stage === 'over') goScreen('setup');
+      else if (stage === 'setup') goScreen('menu');
+      return;
+    }
+    if (isLeaving()) return; // kurtyna w drodze do biblioteki: nic już nie startujemy
+    if (command === 'select' || command === 'restart') {
+      if (stage === 'menu' && command === 'select') confirmMenu();
+      else if (stage === 'setup' && command === 'select') { gameAudio.init(); startGame(); }
+      else if (stage === 'over') startGame();
+    }
+  }, [confirmMenu, goScreen, leave, showPad, startGame]);
   const lastRemote = useRef(0);
   useEffect(() => {
     if (remote && remote.id !== lastRemote.current) {
@@ -252,16 +281,9 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
       handleRemote(remote.command);
     }
   }, [remote, handleRemote]);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (screenRef.current === 'game' || e.target instanceof HTMLInputElement) return;
-      if (e.code === 'Enter' && e.target instanceof Element && e.target.closest('button,summary,a')) return;
-      const keys: Record<string, RemoteCommand> = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', Enter: 'select', Escape: 'back' };
-      if (keys[e.code]) { e.preventDefault(); handleRemote(keys[e.code]); }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [handleRemote]);
+  // Klawiatura telewizora idzie tą samą drogą co pad: `uiControl` słucha w fazie
+  // przechwytującej i sam wygasza zdarzenie, więc własny nasłuch tylko dublowałby
+  // ruch i kasował fokus postawiony przez nawigację.
 
   // engine lifecycle
   useEffect(() => {
@@ -323,14 +345,14 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
 
   /* ============ MENU ============ */
   if (screen === 'menu') return <>
-    <GameSetup info={info} music={menuMusicOn} onMusic={() => toggleMenuMusic(!menuMusicOn)} onExit={onExit} onStart={() => handleRemote('select')} onPads={() => setShowPad(true)} startLabel={menuChoice === 0 ? (en ? 'Start duel' : 'Rozpocznij pojedynek') : (en ? 'Configure match' : 'Dopasuj rozgrywkę')} navigationHint={en ? '← → / ↑ ↓ Choose a mode · Enter confirm' : '← → / ↑ ↓ Wybierz tryb · Enter zatwierdź'}
+    <GameSetup info={info} music={menuMusicOn} onMusic={() => toggleMenuMusic(!menuMusicOn)} onExit={leave} onStart={confirmMenu} onPads={() => setShowPad(true)} startLabel={menuChoice === 0 ? (en ? 'Start duel' : 'Rozpocznij pojedynek') : (en ? 'Configure match' : 'Dopasuj rozgrywkę')} navigationHint={en ? '← → / ↑ ↓ Choose a mode · Enter confirm' : '← → / ↑ ↓ Wybierz tryb · Enter zatwierdź'}
       hint={en ? 'Left stick drives the tank; right stick aims the turret. Use cover and ricochets.' : 'Lewy joystick prowadzi czołg, prawy celuje wieżą. Wykorzystuj osłony i rykoszety.'} win={en ? 'Reach the kill limit or outlast the opposing tanks.' : 'Zdobądź ustaloną liczbę fragów lub przetrwaj przeciwników.'}>
       <div className="cine-tank-modes" role="group" aria-label={en ? 'Battle mode' : 'Tryb bitwy'}>
         {[
           { title: en ? 'Duel 1v1' : 'Pojedynek 1v1', detail: en ? 'Two players. One winner.' : 'Dwóch graczy. Jeden zwycięzca.', tag: en ? 'QUICK START' : 'SZYBKI START', icon: <Users size={23} /> },
           { title: en ? 'Four-player battle' : 'Bitwa 4 graczy', detail: en ? 'The whole crew on one battlefield.' : 'Cała ekipa na jednym polu bitwy.', tag: en ? 'SHARED ARENA' : 'WSPÓLNA ARENA', icon: <Flame size={23} /> },
           { title: en ? 'Bot training' : 'Trening z botami', detail: en ? 'Learn the map. Sharpen your aim.' : 'Poznaj teren. Dopracuj celność.', tag: en ? 'YOU + 2 BOTS' : 'TY + 2 BOTY', icon: <Bot size={23} /> },
-        ].map((choice, index) => <button key={choice.title} aria-pressed={menuChoice === index} onClick={() => { setMenuChoice(index); gameAudio.uiClick(); }}><span>{choice.icon}<small>0{index + 1}</small></span><small>{choice.tag}</small><h3>{choice.title}</h3><p>{choice.detail}</p><i /></button>)}
+        ].map((choice, index) => <button key={choice.title} aria-pressed={menuChoice === index} onFocus={() => setMenuChoice(index)} onClick={() => { setMenuChoice(index); gameAudio.uiClick(); }}><span>{choice.icon}<small>0{index + 1}</small></span><small>{choice.tag}</small><h3>{choice.title}</h3><p>{choice.detail}</p><i /></button>)}
         <button className="cine-full-config" onClick={() => goScreen('setup')}><Settings2 size={16} /> {en ? 'Full battle setup' : 'Pełna konfiguracja bitwy'}</button>
       </div>
     </GameSetup>
@@ -342,7 +364,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
   if (screen === 'setup') {
     return (
       <>
-      <div className="cine-tank-setup relative min-h-screen bg-[#0a0a0b] text-white">
+      <div data-ui-scope="tank-setup" data-ui-focus="[data-ui-entry]" ref={setupRoot} className="cine-tank-setup relative min-h-screen bg-[#0a0a0b] text-white">
         <div className="hazard-stripes h-2 w-full opacity-80" />
         <div className="mx-auto w-full max-w-6xl px-4 py-6">
           <div className="flex items-center justify-between">
@@ -350,7 +372,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
               <Home className="h-4 w-4" /> {en ? 'MENU' : 'MENU'}
             </button>
             <h2 className="font-display text-2xl tracking-wide text-orange-400 sm:text-3xl">{en ? 'BATTLE SETUP' : 'KONFIGURACJA BITWY'}</h2>
-            <button onClick={onExit} className="flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-bold text-zinc-300 hover:text-orange-300"><Home className="h-4 w-4" /> <span className="hidden sm:inline">JOYPAD</span></button>
+            <button onClick={leave} className="flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-bold text-zinc-300 hover:text-orange-300"><Home className="h-4 w-4" /> <span className="hidden sm:inline">JOYPAD</span></button>
           </div>
 
           {/* phones as pads */}
@@ -497,6 +519,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
 
           <div className="rise-in mt-6 flex flex-col items-center gap-2" style={{ animationDelay: '350ms' }}>
             <button
+              data-ui-entry
               onClick={() => { if (canStart) { gameAudio.init(); gameAudio.uiClick(); startGame(); } }}
               disabled={!canStart}
               className={`flex items-center gap-3 rounded-2xl px-12 py-4 text-xl font-black tracking-widest transition-all ${canStart ? 'bg-gradient-to-b from-orange-400 to-orange-600 text-black shadow-[0_0_40px_rgba(251,146,60,0.4)] hover:scale-105' : 'cursor-not-allowed bg-zinc-800 text-zinc-500'}`}
@@ -520,7 +543,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
     return <>
       <GameResults replayNotice={replayNotice} moments={moments} info={info} title={winner ? winner.name : (en ? 'Draw.' : 'Remis.')} subtitle={winner ? `${winner.kills} ${en ? 'kills. The battlefield is yours.' : 'fragów. Pole bitwy należy do Ciebie.'}` : (en ? 'No tank took control of the battlefield.' : 'Żaden czołg nie zdominował pola bitwy.')} winnerSlot={results.winner ?? null} scoreLabel={en ? 'KILLS' : 'FRAGI'}
         players={sorted.map(t => ({ slot: t.id, name: t.name, color: t.color, score: t.kills, detail: `${t.deaths} ${en ? 'deaths' : 'zgonów'} · K/D ${(t.kills / Math.max(1, t.deaths)).toFixed(2)}${mode === 'survival' ? ` · ${t.lives} ${en ? 'lives' : 'żyć'}` : ''}` }))}
-        onRestart={() => startGame()} onSettings={() => goScreen('setup')} onMenu={() => goScreen('menu')} onExit={onExit} />
+        onRestart={() => startGame()} onSettings={() => goScreen('setup')} onMenu={() => goScreen('menu')} onExit={leave} />
       <ScreenCurtain state={curtain.state} />
     </>;
   }
@@ -558,7 +581,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
           <button onClick={() => { gameAudio.uiClick(); goScreen('setup'); }} title={en ? 'End battle and return to setup' : 'Zakończ bitwę i wróć do ustawień'} className="rounded-lg border border-red-500/40 bg-red-500/10 p-2 text-red-300 hover:bg-red-500/20">
             <Home className="h-4 w-4" />
           </button>
-          <button onClick={onExit} title={en ? 'Back to JoyPad' : 'Wróć do JoyPad'} className="rounded-lg border border-orange-400/40 bg-orange-500/10 p-2 text-orange-200 hover:bg-orange-500/20"><Gamepad2 className="h-4 w-4" /></button>
+          <button onClick={leave} title={en ? 'Back to JoyPad' : 'Wróć do JoyPad'} className="rounded-lg border border-orange-400/40 bg-orange-500/10 p-2 text-orange-200 hover:bg-orange-500/20"><Gamepad2 className="h-4 w-4" /></button>
         </div>
       </div>
 
@@ -603,7 +626,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
           </div>
 
           {/* pause overlay */}
-          {hud?.paused && <PauseSheet game={info.title} onResume={() => gameRef.current?.togglePause()} onExit={onExit} />}
+          {hud?.paused && <PauseSheet game={info.title} onResume={() => { if (!isLeaving()) gameRef.current?.togglePause(); }} onExit={leave} />}
 
           {/* pad overlay */}
           {showPad && (

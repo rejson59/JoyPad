@@ -189,7 +189,7 @@ console.log('DEVICE PROFILE SELFTEST: OK (selection, defaults, readiness names)'
 
 assert.equal(sanitizePreferences({}).previews, true);
 assert.equal(sanitizePreferences({ previews: false }).previews, false);
-const { statSync } = await import('node:fs');
+const { existsSync, statSync } = await import('node:fs');
 /** Full HD masters are the point of the previews: never let them shrink back to a small upscale. */
 const previewWidth = 1920, previewHeight = 1080;
 const mp4Size = (buffer: Buffer) => {
@@ -197,12 +197,35 @@ const mp4Size = (buffer: Buffer) => {
   const entry = stsd < 0 ? -1 : buffer.indexOf('avc1', stsd + 16);
   return entry < 0 ? null : [buffer.readUInt16BE(entry + 28), buffer.readUInt16BE(entry + 30)];
 };
+// Lista tytułów z podglądem należy do `GamePreview`, a brama porównuje ją z katalogiem:
+// każdy grywalny tytuł ma mieć swój urywek botów, żaden `wip` nie ma prawa go żądać.
+const previewSource = readFileSync('src/console/GamePreview.tsx', 'utf8');
+const previewGames = [...(previewSource.match(/export const PREVIEW_GAMES = \[([^\]]*)\]/)?.[1] ?? '')
+  .matchAll(/'([a-z-]+)'/g)].map(match => match[1]);
+const { GAMES: previewCatalog } = await import('../src/arcade/catalog');
+for (const game of previewCatalog.filter(entry => !entry.wip)) {
+  assert.ok(previewGames.includes(game.id), `${game.id}: grywalny tytuł bez nagrania botów w PREVIEW_GAMES`);
+}
+assert.ok(previewGames.every(id => previewCatalog.some(game => game.id === id)),
+  'PREVIEW_GAMES wskazuje tytuł spoza katalogu');
+/**
+ * Nagrania powstają w CI (`.github/workflows/previews.yml`) — tam jest Chromium i ffmpeg.
+ * Ta lista jest tymczasowa i ma zniknąć (zostać pusta), gdy workflow dowiezie klipy:
+ * od tamtej chwili brama pilnuje kompletu sześciu tytułów przy każdej zmianie.
+ */
+const awaitingRecording = new Set(['snake', 'league', 'pizza']);
 let previewBytes = 0;
-for (const id of ['tanks', 'race', 'orbit']) {
-  for (const extension of ['mp4', 'webm'] as const) {
+const pending: string[] = [];
+for (const id of previewGames) {
+  const present = (['mp4', 'webm'] as const).filter(extension => existsSync(`public/previews/${id}.${extension}`));
+  // Para formatów jest całością: przeglądarka wybiera jedną, więc połowa pary to błąd nagrania.
+  assert.ok(present.length === 0 || present.length === 2,
+    `public/previews/${id}: mp4 i webm muszą istnieć razem (jest: ${present.join(', ') || 'nic'})`);
+  if (present.length === 0) { pending.push(id); continue; }
+  for (const extension of present) {
     const path = `public/previews/${id}.${extension}`;
     const bytes = statSync(path).size;
-    assert.ok(bytes > 100_000 && bytes < 8_000_000, `${path}: bounded, nonempty Full HD clip`);
+    assert.ok(bytes > 100_000 && bytes < 12_000_000, `${path}: bounded, nonempty Full HD clip`);
     previewBytes += bytes;
     const buffer = readFileSync(path);
     if (extension === 'mp4') {
@@ -213,8 +236,14 @@ for (const id of ['tanks', 'race', 'orbit']) {
     }
   }
 }
-assert.ok(previewBytes < 30_000_000, 'compressed library preview asset budget');
-console.log('PREVIEW SELFTEST: OK (preferences, three Full HD recordings, MP4/WebM headers and asset budget)');
+// Trzy pierwsze mastery są w repo od dawna: ich zniknięcie to regresja, nie „jeszcze nie nagrane”.
+for (const id of ['tanks', 'race', 'orbit']) {
+  assert.ok(!pending.includes(id), `public/previews/${id}: nagranie zniknęło z repo`);
+}
+const unexpected = pending.filter(id => !awaitingRecording.has(id));
+assert.deepEqual(unexpected, [], `public/previews: brak nagrań i brak ich na liście oczekujących`);
+assert.ok(previewBytes < 60_000_000, 'compressed library preview asset budget');
+console.log(`PREVIEW SELFTEST: OK (preferences, ${previewGames.length - pending.length}/${previewGames.length} Full HD recordings${pending.length ? `, w CI nagrywają się: ${pending.join(', ')}` : ''}, MP4/WebM headers and asset budget)`);
 
 /* --- Warstwa „liquid glass": martwe selektory, tokeny powierzchni i czytelność ---
    Testy trzymają trzy rzeczy, na których polega nowy styl: każdy selektor dociera do

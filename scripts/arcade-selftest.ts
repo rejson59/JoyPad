@@ -314,3 +314,127 @@ console.log('NEON PARTICLES SELFTEST: OK (per-emitter opacity, unchanged default
   console.log('KEYBOARD OWNERSHIP SELFTEST: OK (pięć silników rezygnuje z klawisza pod modalem i przy wpisaniu)');
 }
 
+
+// --- HUD gry: jedna paleta, jedna typografia, jedna obudowa rundy ---
+{
+  const fs = await import('node:fs');
+  const read = (path: string) => fs.readFileSync(path, 'utf8');
+  const kit = read('src/arcade/hudKit.ts');
+  const palette = read('src/console/palette.css');
+
+  // 1. Płótno nie czyta CSS-ów, więc `HUD` jest lustrem tokenów `--os-*`.
+  const mirrors: Array<[string, string]> = [
+    ['bg', '--os-bg'], ['surface', '--os-surface'], ['panel', '--os-panel'], ['raised', '--os-raised'],
+    ['edge', '--os-edge'], ['text', '--os-text'], ['secondary', '--os-secondary'], ['muted', '--os-muted'],
+    ['accent', '--os-accent'], ['accentBright', '--os-accent-bright'],
+    ['success', '--os-success'], ['warning', '--os-warning'], ['danger', '--os-danger'],
+  ];
+  for (const [key, token] of mirrors) {
+    const declared = palette.match(new RegExp(`${token}:\\s*(#[0-9a-f]{6})`))?.[1];
+    const mirrored = kit.match(new RegExp(`\\b${key}:\\s*'(#[0-9a-f]{6})'`))?.[1];
+    assert.ok(declared, `palette.css: brak tokena ${token}`);
+    assert.equal(mirrored, declared, `hudKit: ${key} rozjechał się z ${token} — arena i interfejs muszą mówić tym samym kolorem`);
+  }
+
+  // 2. Rodziny czcionek pochodzą z systemu konsoli (Outfit / Space Grotesk / JetBrains Mono).
+  for (const family of ['Outfit', 'Space Grotesk', 'JetBrains Mono']) {
+    assert.ok(kit.includes(family), `hudKit: brak rodziny ${family}`);
+  }
+  assert.ok(/export function hudFont\(/.test(kit) && /export function drawWorldLabel\(/.test(kit)
+    && /export function drawArenaWatermark\(/.test(kit), 'hudKit: brakuje któregoś z trzech narzędzi');
+  assert.ok(/ctx\.font = previousFont/.test(kit), 'hudKit: napis musi oddać płótnu jego poprzedni stan');
+
+  // 3. Żaden kod interfejsu nie wymyśla własnej czcionki — tylko `hudFont()`.
+  //    Wyjątkiem są malarze tekstur świata (ekrany stadionu, billboardy, stroje),
+  //    gdzie krój jest elementem scenografii, nie HUD-em.
+  const scenery = new Set([
+    'src/arcade/hudKit.ts',
+    'src/arcade/neon/textures.ts',
+    'src/arcade/league-next/textures.ts',
+    'src/arcade/league-next/stadium.ts',
+    'src/arcade/league-next/markers.ts',
+    'src/arcade/pizza/assets.ts',
+  ]);
+  const offenders: string[] = [];
+  for (const file of fs.readdirSync('src', { recursive: true }) as string[]) {
+    if (!/\.(ts|tsx)$/.test(file)) continue;
+    const path = `src/${file}`;
+    if (scenery.has(path)) continue;
+    const source = read(path);
+    source.split('\n').forEach((line, index) => {
+      if (/\.font\s*=/.test(line) && !/\.font\s*=\s*hudFont\(/.test(line) && !line.trim().startsWith('//')) {
+        offenders.push(`${path}:${index + 1}`);
+      }
+    });
+  }
+  assert.deepEqual(offenders, [], 'czcionkę płótna ustawia wyłącznie hudFont() — inaczej arena wraca do `sans-serif`');
+
+  // 4. Znak wodny areny ma jedną formę we wszystkich grach płóciennych.
+  for (const game of ['Race', 'Orbit', 'Snake', 'League']) {
+    const source = read(`src/arcade/games/${game}.ts`);
+    assert.ok(/drawArenaWatermark\(/.test(source), `${game}: arena bez wspólnego znaku wodnego`);
+    assert.ok(/import \{[^}]*drawArenaWatermark[^}]*\} from '\.\.\/hudKit'/.test(source),
+      `${game}: znak wodny musi iść przez hudKit, nie przez własny fillText`);
+  }
+
+  // 5. Obudowa rundy jest jedna: znaczniki `arcade-*` żyją wyłącznie w RoundChrome.
+  const hudCss = read('src/console/gamehud.css');
+  const chrome = read('src/console/RoundChrome.tsx');
+  for (const klass of ['arcade-hudbar', 'arcade-arena', 'arcade-huddeck', 'arcade-side', 'arcade-keys']) {
+    assert.ok(hudCss.includes(`.${klass}`), `gamehud.css: brak .${klass}`);
+    assert.ok(chrome.includes(klass), `RoundChrome: brak ${klass} — obudowa nie jest wspólna`);
+  }
+  // Klasy obudowy rundy (paski, karty, nakładki, klawisze) — ekrany gier składają je
+  // z komponentów, więc znaczniki nie mogą wrócić do App.tsx / ArcadeGameView.tsx.
+  // Klasy ekranu ustawień (`arcade-option`, `arcade-buffs` w treści karty) tu nie należą.
+  const chromeClasses = [
+    'arcade-hudbar', 'arcade-hudgroup', 'arcade-title', 'arcade-chip', 'arcade-timer', 'arcade-actions',
+    'arcade-icon', 'arcade-badge', 'arcade-arena', 'arcade-objective', 'arcade-powerup', 'arcade-count',
+    'arcade-startflash', 'arcade-loading', 'arcade-huddeck', 'arcade-hudcard', 'arcade-card-', 'arcade-meter',
+    'arcade-pips', 'arcade-side', 'arcade-info', 'arcade-overlay', 'arcade-help', 'arcade-feed',
+    'arcade-keys', 'arcade-phone', 'arcade-mini', 'keycap',
+  ];
+  for (const screen of ['src/App.tsx', 'src/arcade/ArcadeGameView.tsx']) {
+    const source = read(screen);
+    assert.ok(/from '[./]*console\/RoundChrome'/.test(source),
+      `${screen}: ekran rundy nie korzysta ze wspólnego chrome`);
+    const handBuilt = chromeClasses.filter(klass => source.includes(`"${klass}`) || source.includes(`'${klass}`) || source.includes(`\`${klass}`) || source.includes(` ${klass}`));
+    assert.deepEqual(handBuilt, [], `${screen}: obudowę rundy budują komponenty RoundChrome, nie gołe klasy`);
+  }
+  // Kolejność arkuszy: szkło z `liquid.css` musi mieć ostatnie słowo nad obudową rundy.
+  const entry = read('src/main.tsx');
+  const sheets = [...entry.matchAll(/^import\s+["']([^"']+\.css)["'];?\s*$/gm)].map(match => match[1]);
+  const at = (name: string) => sheets.findIndex(sheet => sheet.endsWith(name));
+  for (const name of ['platform.css', 'gamehud.css', 'liquid.css']) {
+    assert.ok(at(name) >= 0, `main.tsx: brak arkusza ${name}`);
+  }
+  assert.ok(at('platform.css') < at('gamehud.css') && at('gamehud.css') < at('liquid.css'),
+    `main.tsx: gamehud.css musi leżeć po platform.css, a przed liquid.css (jest: ${sheets.join(' → ')})`);
+
+  // 6. Każdy tytuł ma własny akcent, ale wszystkie w tej samej jakości kontrastu.
+  const { GAMES } = await import('../src/arcade/catalog');
+  const luminance = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map(i => Number.parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map(c => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const contrast = (a: string, b: string) => {
+    const hi = Math.max(luminance(a), luminance(b));
+    const lo = Math.min(luminance(a), luminance(b));
+    return (hi + 0.05) / (lo + 0.05);
+  };
+  const panel = palette.match(/--os-panel:\s*(#[0-9a-f]{6})/)?.[1] ?? '#19191d';
+  const accents = new Set<string>();
+  for (const game of GAMES) {
+    assert.match(game.accent, /^#[0-9a-f]{6}$/, `${game.id}: akcent musi być sześciocyfrowym hexem`);
+    assert.match(game.accentSoft, /^#[0-9a-f]{6}$/, `${game.id}: miękki akcent musi być sześciocyfrowym hexem`);
+    assert.ok(!accents.has(game.accent), `${game.id}: akcent ${game.accent} należy już do innej gry — tytuły zlewają się w jeden`);
+    accents.add(game.accent);
+    assert.ok(contrast(game.accent, panel) >= 7,
+      `${game.id}: akcent ${game.accent} ma ${contrast(game.accent, panel).toFixed(2)}:1 na panelu — potrzeba ≥7:1`);
+    assert.ok(luminance(game.accentSoft) < luminance(game.accent),
+      `${game.id}: miękki akcent ma być cieniem akcentu, nie jego kopią`);
+    assert.ok(luminance(game.accent) > 0.05, `${game.id}: akcent nie może być czernią ani tłem`);
+  }
+  console.log(`GAME HUD SELFTEST: OK (13 luster palety, hudFont w ${fs.readdirSync('src', { recursive: true }).filter(f => /\.(ts|tsx)$/.test(String(f))).length - scenery.size} plikach bez wyjątków, wspólny znak wodny 4 aren, jeden chrome rundy, ${accents.size} odrębnych akcentów ≥7:1)`);
+}

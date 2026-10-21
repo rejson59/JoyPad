@@ -1,5 +1,6 @@
 import { CanvasRound, HEIGHT, WIDTH, clamp, glow, rand, roundRect, type Racer, type RoundConfig, type RoundHud, type RoundPlayer } from '../runtime';
 import { gameAudio } from '../../game/audio';
+import { drawArenaWatermark, drawWorldLabel } from '../hudKit';
 
 type Cell = { x: number; y: number };
 interface Serpent extends Racer { body: Cell[]; prevBody: Cell[]; dir: Cell; next: Cell; score: number; hearts: number; energy: number; timer: number; stepDuration: number; respawn: number; shield: number }
@@ -183,11 +184,11 @@ export class SnakeRound extends CanvasRound {
           for (const side of [-1, 1]) { ctx.beginPath(); ctx.arc(x + TILE / 2 + ex + (s.dir.y || 1) * side * 5, y + TILE / 2 + ey + (s.dir.x || 1) * side * 5, 2.5, 0, Math.PI * 2); ctx.fill(); }
           if (s.shield > 0) { ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2; ctx.strokeRect(x - 2, y - 2, TILE + 4, TILE + 4); }
           roundRect(ctx, x - 14, y - 23, 56, 16, 4, 'rgba(2,12,19,.8)');
-          ctx.fillStyle = s.color; ctx.textAlign = 'center'; ctx.font = 'bold 10px sans-serif'; ctx.fillText(s.name.toUpperCase().slice(0, 9), x + 14, y - 11);
+          drawWorldLabel(ctx, s.name.toUpperCase().slice(0, 9), x + 14, y - 11, { color: s.color, size: 10 });
         }
       }
       ctx.globalAlpha = 1;
     }
-    ctx.fillStyle = '#b8a27d'; ctx.textAlign = 'left'; ctx.font = 'bold 12px monospace'; ctx.fillText(this.isEnglish ? 'SNAKE VORTEX  /  STEEL ARENA' : 'WĘŻOWY WIR  /  STALOWA ARENA', 25, HEIGHT - 18);
+    drawArenaWatermark(ctx, this.isEnglish ? 'SNAKE VORTEX  /  STEEL ARENA' : 'WĘŻOWY WIR  /  STALOWA ARENA', HEIGHT - 18);
   }
 }

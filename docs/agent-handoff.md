@@ -112,9 +112,13 @@ Czyli: integracja = pisanie adaptera od zera + decyzje produktowe, nie przepakow
 5. **Moments.** Z `HudState`/`FeedItem` da się uczciwie wyjąć: gol (`objective`/`score`, weight ~110),
    asysta (`score` ~70), obrona (`objective` ~90 — tylko realny strzał w światło bramki), zwycięski gol
    w dogrywce (~120), wyrównanie w końcówce (~100). **Bez** „epickiej obrony" od zwykłego odbicia.
-6. **Podgląd w bibliotece.** `GamePreview.PREVIEW_GAMES = ['tanks','race','orbit']`. Odblokowanie `league`
-   powinno iść w parze z nagraniem `previews/league.mp4|webm` (`scripts/previews/capture.mjs`) i bumpem
-   `PREVIEW_REVISION`; `selftest:console` sprawdza wymiary Full HD masterów. Bez nagrania — zostać przy okładce.
+6. **Podgląd w bibliotece — rozstrzygnięte w rundzie 21.** `GamePreview.PREVIEW_GAMES` obejmuje wszystkie
+   grywalne tytuły (`tanks,race,orbit,snake,league,pizza`); `PREVIEW_REVISION` = 3. Nagrania `league`, `pizza`
+   i `snake` dopisano do `scripts/previews/capture.mjs`, a ponieważ sandbox agenta nie ma Chromium, powstał
+   workflow `.github/workflows/previews.yml`: nagrywa jeden silnik na job, sprawdza klipy `selftest:console`
+   i commituje je do gałęzi, z której wystartował. Bramka PREVIEW czyta listę z `GamePreview.tsx`, porównuje
+   ją z `catalog.ts` (grywalny tytuł bez nagrania odpada, `wip` nie żąda nic), wymaga par mp4/webm, pilnuje
+   wymiarów Full HD masterów i budżetu (plik <12 MB, folder <60 MB).
 7. **Zakres odblokowania.** Tylko `league` (`wip: false`); `blockcraft` pozostaje teaserem.
 
 ## 6. Gotowy plan integracji (kolejność działań)
@@ -610,7 +614,7 @@ i trzynastu nowych/zmienionych modułów. Bez commita i pusha.
 3. **bramka przed odpowiedzią:** `npm run verify` (lint + typecheck + `selftest:all` + build),
    a po buildzie z `VITE_BASE` jeszcze `JOYPAD_PREVIEW_DIR=dist npm run selftest:preview`;
 4. nie commituj i nie pushuj, jeśli użytkownik o to nie poprosił; ZIP-y i staging nie lądują
-   w commitach; pracujesz wyłącznie na `arena/01a0f36b-joypad`.
+   w commitach; pracujesz wyłącznie na gałęzi sesji (obecnie `arena/95e6edaf-joypad`).
 5. `docs/console-testing.md` — testy konsolowe i lista review-checków do samodzielnego klikania;
    `docs/game-building-prompts.md` §2 i `docs/imported-games.md` — procedura wciągania paczki ZIP
    (na jej podstawie zintegrowano `nitro-league.zip`, patrz §4 i §5 tego dokumentu).
@@ -621,7 +625,7 @@ już zostało rozstrzygnięte, i nie podejmować tych decyzji raz jeszcze.
 ## Ostatnia bramka przed wysłaniem zmiany do użytkownika
 
 - [ ] `npm run lint && npm run typecheck && npm run build` na zero;
-- [ ] `npm run --silent selftest:all` — jedenaście skryptów, 53 sekcje na OK (w tym ANTY-SPAM z tury 12, raster maski z tury 13, film z tury 14 i `RAIL SELFTEST` z rundy 20);
+- [ ] `npm run --silent selftest:all` — jedenaście skryptów, 54 sekcje na OK (w tym ANTY-SPAM z tury 12, raster maski z tury 13, film z tury 14, `RAIL SELFTEST` z rundy 20 i `GAME HUD SELFTEST` z rundy 21);
 - [ ] patrz sekcja „Samodzielny przegląd" w `docs/console-testing.md` — kliknij okienka i `Esc`
       z fokusem na ikonie pomocy, przejdź listę gier strzałkami; na telefonie dołącz pada
       i sprawdź pozycje `0/0` przy odświeżaniu kodu;
@@ -667,3 +671,30 @@ i każda ma swoją bramkę — bez nowej grafiki, tylko usunięte rozjazdy międ
 
 Numer wydania zostaje **1.8.0**: to poprawki w obrębie wydania, a panel „Co nowego?”
 opisuje zakres v1.8 (bump bez nowej listy pokazałby tę samą treść z innym numerem).
+
+## Stan po unifikacji gier i nagraniach botów (2026-10-21, runda 21, gałąź `arena/95e6edaf-joypad`)
+
+Prośba brzmiała: *„nagraj rozgrywkę botów dla każdej gry, której jeszcze jej brak, i zrób mocną
+aktualizację, która poprawi każdą grę z osobna i zepnie wszystkie z powłoką konsoli"*. Odpowiedź jest
+w dwóch warstwach: **wspólna oprawa rundy** (jedno źródło znaczników, kolorów i krojów dla HUD-ów
+DOM-owych i płóciennych) oraz **tożsamość gry** (akcent z katalogu barwi tło areny, klawisze i poświatę
+okładki). Symulacje gier nie były ruszane — sandbox agenta nie ma przeglądarki, więc zmiana fizyki
+byłaby zmianą w ciemno; wszystko, co tu jest, da się sprawdzić bramkami.
+
+| Co | Gdzie | Dlaczego |
+|---|---|---|
+| Wspólna obudowa rundy | `src/console/RoundChrome.tsx` + `src/console/gamehud.css` | Stalowy Front miał własny HUD z `index.css` (cztery kopiowane klocki: pasek, karty, nakładki, klawisze), a gry arcade drugi — ta sama runda wyglądała inaczej zależnie od tytułu |
+| Ekrany rundy złożone z komponentów | `src/App.tsx`, `src/arcade/ArcadeGameView.tsx` | oba ekrany czytają teraz te same klocki; brama w `selftest:arcade` pilnuje, żeby klasy `arcade-*` nie wróciły do znaczników gier |
+| Zestaw HUD dla płótna | `src/arcade/hudKit.ts` (`HUD`, `hudFont`, `drawWorldLabel`, `drawArenaWatermark`) | silniki rysowały napisy po swojemu (`bold 12px monospace`, `sans-serif`, `#80a0bd`, `#6e8aaa`, `#f5d5a1`) — arena nie pasowała do reszty konsoli, choć HUD DOM-owy już tak |
+| Płótno mówi kolorem systemu | `engine.ts`, `games/{Snake,Race,Orbit,League}.ts`, `starclash/Game.ts`, `arcade/runtime.ts`, `pizza/fx.ts`, `JoyLab.tsx`, `JoyLabPad.tsx` | `HUD.*` to lustra tokenów `--os-*`; `GAME HUD SELFTEST` porównuje je z `palette.css` i nie pozwala `ctx.font` omijać `hudFont()` (wyjątkiem są malarze tekstur świata: `neon/textures`, `league-next/{textures,stadium,markers}`, `pizza/assets`) |
+| Tożsamość gry = akcent | `src/arcade/catalog.ts` (`accent`, `accentSoft`), `liquid.css` (`.arcade-page` jako ambient akcentu, klawisze START/WRÓĆ), `GameResults.tsx`, `PauseSheet.tsx` | siedem tytułów grało tym samym pomarańczem; teraz Pęd jest neonowo różowy, Fala fioletowa, Liga cyanowa, Dostawa kwasowo zielona, Wir piaskowy — każdy ≥7:1 na `--os-panel`, więc bramka kontrastu nadal trzyma |
+| Martwe tła gier usunięte | `src/index.css` (`.arcade-race/-orbit/-snake/-league`, `.arcade-page{background:#0a0e0f}`) | nadpisywały paletę i nie pasowały do ambientu z akcentu; jedna reguła zamiast pięciu |
+| Nagrania botów: `snake`, `league`, `pizza` | `scripts/previews/capture.mjs` (trzy nowe gałęzie), `GamePreview.tsx` (`PREVIEW_GAMES`, `PREVIEW_REVISION` 3) | trzy grywalne tytuły pokazywały w bibliotece tylko okładkę, choć mechanizm nagrywania istniał od rundy 14 |
+| Nagrywanie w CI | `.github/workflows/previews.yml` (`plan` → `record` (macierz) → `publish`) | sandbox agenta nie pobiera Chromium, a render programowy WebGL trwa minuty na klatek — workflow startuje Vite, nagrywa jeden silnik na job, sprawdza klipy `selftest:console` i commituje je do gałęzi (`workflow_dispatch` albo zmiana potoku przechwytywania) |
+| Bramka nagrań czyta katalog | sekcja **PREVIEW** w `scripts/console-selftest.ts` | lista tytułów bierze się z `PREVIEW_GAMES` i jest porównywana z `catalog.ts`: grywalny tytuł bez nagrania odpada, `wip` nie ma prawa go żądać; formaty muszą istnieć parami, plik <12 MB, folder <60 MB |
+| Wersja **1.9.0** | `src/platform/whatsNewState.ts`, `package.json`, `src/platform/WhatsNew.tsx` | to nie poprawka w obrębie wydania: nowa oprawa rundy, akcenty gier i komplet nagrań zasługują na własny numer i własną listę w „Co nowego?” |
+
+**Dokończenie rundy (świadomie zostawione):** klipy `snake/league/pizza` powstają w CI — dopóki tam nie
+wyjdą, sekcja PREVIEW w `scripts/console-selftest.ts` trzyma je na liście `awaitingRecording`
+(i drukuje „w CI nagrywają się: …"). Gdy workflow dowiezie nagrania, lista ma zostać **pusta**: wtedy
+brama pilnuje kompletu sześciu tytułów przy każdej zmianie.

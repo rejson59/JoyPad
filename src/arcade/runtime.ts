@@ -2,6 +2,7 @@ import type { MomentEvent } from '../platform/momentRecorder';
 import type { PadFx, PadInput } from '../net/protocol';
 import { PLAYER_DEFS } from '../game/types';
 import { gameAudio } from '../game/audio';
+import { hudFont } from './hudKit';
 import type { Language } from '../platform/i18n';
 import { uiOwnsKeyboard } from '../lib/inputOwnership';
 
@@ -247,7 +248,7 @@ export abstract class CanvasRound implements GameRound {
       this.ctx.fillStyle = 'rgba(4,7,10,.76)';
       this.ctx.fillRect(x + 10, y + 10, 74, 23);
       this.ctx.fillStyle = this.config.players[panel]?.color || '#fbbf24';
-      this.ctx.font = '700 12px monospace';
+      this.ctx.font = hudFont(700, 12, 'mono');
       this.ctx.textAlign = 'left';
       this.ctx.fillText(`P${panel + 1}  ${this.config.players[panel]?.name?.toUpperCase().slice(0, 7) || ''}`, x + 17, y + 26);
       this.ctx.restore();

@@ -1,0 +1,156 @@
+name: Previews
+
+# Nagrania botów do biblioteki powstają poza maszyną deweloperską: ten workflow startuje
+# Vite, przechwytuje klatki w Chromium (Playwright, renderowanie programowe) i koduje je ffmpeg-iem,
+# a potem dokłada gotowe klipy do `public/previews/` w tej samej gałęzi. Silniki grają
+# własnymi botami — workflow nie dotyka kodu produkcji — zapisuje tylko obraz.
+#
+# Uruchomienie ręczne: Actions → Previews → Run workflow (lista silników, długość, fps).
+# Uruchomienie automatyczne: zmiana potoku przechwytywania (`scripts/previews/capture.mjs`)
+# albo tego pliku — wtedy nagrywane są tytuły, których jeszcze nie ma w `public/previews/`.
+on:
+  workflow_dispatch:
+    inputs:
+      games:
+        description: 'Silniki do nagrania (po przecinku): tanks,race,orbit,snake,league,pizza'
+        required: false
+        default: 'snake,league,pizza'
+      seconds:
+        description: 'Długość urywka w sekundach'
+        required: false
+        default: '8'
+      fps:
+        description: 'Klatki na sekundę'
+        required: false
+        default: '24'
+      force:
+        description: 'Nagraj ponownie także tytuły, które już mają klipy'
+        required: false
+        default: 'false'
+        type: boolean
+  push:
+    branches: [main, arena/**]
+    paths:
+      - 'scripts/previews/capture.mjs'
+      - '.github/workflows/previews.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: previews-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      games: ${{ steps.plan.outputs.games }}
+      seconds: ${{ steps.plan.outputs.seconds }}
+      fps: ${{ steps.plan.outputs.fps }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: plan
+        run: |
+          REQUESTED="${{ inputs.games }}"
+          REQUESTED="${REQUESTED:-snake,league,pizza}"
+          SECONDS_PER_CLIP="${{ inputs.seconds }}"
+          FPS="${{ inputs.fps }}"
+          echo "seconds=${SECONDS_PER_CLIP:-8}" >> "$GITHUB_OUTPUT"
+          echo "fps=${FPS:-24}" >> "$GITHUB_OUTPUT"
+          LIST=""
+          IFS=',' read -ra WANTED <<< "$REQUESTED"
+          for raw in "${WANTED[@]}"; do
+            game="$(echo "$raw" | tr -d '[:space:]')"
+            [ -z "$game" ] && continue
+            if [ "${{ inputs.force }}" != "true" ] \
+              && [ -f "public/previews/$game.mp4" ] && [ -f "public/previews/$game.webm" ]; then
+              echo "::notice::$game ma już oba klipy — pomijam (force=true nagrywa ponownie)"
+              continue
+            fi
+            LIST="$LIST\"$game\","
+          done
+          echo "games=[${LIST%,}]" >> "$GITHUB_OUTPUT"
+          echo "Do nagrania: [${LIST%,}]"
+
+  record:
+    needs: plan
+    if: needs.plan.outputs.games != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        game: ${{ fromJson(needs.plan.outputs.games) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Chromium for capture
+        run: npx playwright install --with-deps chromium
+      - name: FFmpeg (libx264 + libvpx-vp9)
+        run: ffmpeg -hide_banner -encoders | grep -E 'libx264|libvpx'
+      - name: Vite dev server (capture imports engine sources)
+        run: |
+          npm run dev -- --host 127.0.0.1 --port 5173 --strictPort > .cache-vite.log 2>&1 &
+          for _ in $(seq 1 60); do
+            curl -sf http://localhost:5173/ > /dev/null && break
+            sleep 1
+          done
+          curl -sf http://localhost:5173/ > /dev/null || { cat .cache-vite.log; exit 1; }
+      - name: Record ${{ matrix.game }} (native 1920x1080, silent)
+        run: |
+          BASE_URL=http://localhost:5173 \
+          FFMPEG_PATH=ffmpeg \
+          CAPTURE_GAME=${{ matrix.game }} \
+          CAPTURE_SECONDS=${{ needs.plan.outputs.seconds }} \
+          CAPTURE_FPS=${{ needs.plan.outputs.fps }} \
+          CAPTURE_TIMEOUT=600000 \
+          node scripts/previews/capture.mjs
+      - name: Clip shape
+        run: ffprobe -v error -select_streams v:0 -show_entries stream=width,height,avg_frame_rate -of default=nw=1 "public/previews/${{ matrix.game }}.mp4"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: previews-${{ matrix.game }}
+          path: |
+            public/previews/${{ matrix.game }}.mp4
+            public/previews/${{ matrix.game }}.webm
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: [plan, record]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: previews-*
+          path: public/previews
+          merge-multiple: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Gate the recordings before committing them
+        run: npm run selftest:console
+      - name: Commit clips to this branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/previews
+          if git diff --cached --quiet; then
+            echo "Brak nowych nagrań — nic do zapisania."
+            exit 0
+          fi
+          GAMES="$(ls -1 public/previews/*.mp4 | xargs -n1 basename | sed 's/\.mp4$//' | paste -sd, -)"
+          git commit -m "Nagrania botów: ${GAMES} (Full HD, bez dźwięku)"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

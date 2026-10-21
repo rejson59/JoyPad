@@ -1,5 +1,6 @@
 import { CanvasRound, HEIGHT, WIDTH, clamp, distance, glow, rand, roundRect, type Racer, type RoundConfig, type RoundHud, type RoundPlayer } from '../runtime';
 import { gameAudio } from '../../game/audio';
+import { drawArenaWatermark, drawWorldLabel, hudFont } from '../hudKit';
 
 interface Ship extends Racer { x: number; y: number; vx: number; vy: number; angle: number; hp: number; lives: number; score: number; fireAt: number; invulnerable: number; respawn: number; shield: number; rapid: number }
 interface Drone { x: number; y: number; vx: number; vy: number; hp: number; radius: number; kind: 'scout' | 'brute'; fireAt: number; phase: number }
@@ -224,7 +225,7 @@ export class OrbitRound extends CanvasRound {
     for (const bonus of this.bonuses) {
       glow(ctx, bonus.x, bonus.y, 33, 'rgba(52,211,153,.26)');
       ctx.save(); ctx.translate(bonus.x, bonus.y); ctx.rotate(this.clock); roundRect(ctx, -11, -11, 22, 22, 4, bonus.kind === 'repair' ? '#4ade80' : bonus.kind === 'shield' ? '#67e8f9' : '#fbbf24', '#f8fafc'); ctx.restore();
-      ctx.fillStyle = '#071223'; ctx.font = 'bold 15px monospace'; ctx.textAlign = 'center'; ctx.fillText(bonus.kind === 'repair' ? '+' : bonus.kind === 'shield' ? '◇' : '↯', bonus.x, bonus.y + 5);
+      ctx.fillStyle = '#071223'; ctx.font = hudFont(800, 15, 'mono'); ctx.textAlign = 'center'; ctx.fillText(bonus.kind === 'repair' ? '+' : bonus.kind === 'shield' ? '◇' : '↯', bonus.x, bonus.y + 5);
     }
     for (const drone of this.drones) {
       glow(ctx, drone.x, drone.y, drone.radius * 2, 'rgba(251,113,133,.24)');
@@ -248,9 +249,9 @@ export class OrbitRound extends CanvasRound {
       ctx.fillStyle = '#0a2032'; ctx.beginPath(); ctx.arc(2, 0, 5, 0, Math.PI * 2); ctx.fill(); ctx.restore();
       if (ship.shield > 0) { ctx.strokeStyle = '#67e8f9'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(ship.x, ship.y, 26, 0, Math.PI * 2); ctx.stroke(); }
       ctx.globalAlpha = 1;
-      ctx.fillStyle = ship.color; ctx.textAlign = 'center'; ctx.font = 'bold 11px sans-serif'; ctx.fillText(ship.name.toUpperCase(), ship.x, ship.y - 28);
+      drawWorldLabel(ctx, ship.name.toUpperCase(), ship.x, ship.y - 28, { color: ship.color, size: 11 });
     }
     for (const s of this.sparks) { ctx.globalAlpha = clamp(s.life / s.max, 0, 1); ctx.fillStyle = s.color; ctx.fillRect(s.x, s.y, 3, 3); } ctx.globalAlpha = 1;
-    ctx.fillStyle = '#6e8aaa'; ctx.textAlign = 'left'; ctx.font = 'bold 12px monospace'; ctx.fillText(this.isEnglish ? 'ORBITAL WAVE  /  SECTOR 07' : 'ORBITALNA FALA  /  SEKTOR 07', 25, HEIGHT - 22);
+    drawArenaWatermark(ctx, this.isEnglish ? 'ORBITAL WAVE  /  SECTOR 07' : 'ORBITALNA FALA  /  SEKTOR 07', HEIGHT - 22);
   }
 }

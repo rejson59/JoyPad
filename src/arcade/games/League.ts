@@ -1,5 +1,6 @@
 import { CanvasRound, HEIGHT, WIDTH, clamp, distance, glow, rand, roundRect, type Racer, type RoundConfig, type RoundHud, type RoundPlayer } from '../runtime';
 import { gameAudio } from '../../game/audio';
+import { HUD, drawArenaWatermark, drawWorldLabel } from '../hudKit';
 
 interface Car extends Racer { x: number; y: number; vx: number; vy: number; angle: number; boost: number; score: number; team: 0 | 1; kickCooldown: number; spin: number }
 interface Ball { x: number; y: number; vx: number; vy: number; spin: number }
@@ -172,10 +173,10 @@ export class LeagueRound extends CanvasRound {
       polygon(ctx, [carPoint(car, 10, 8), carPoint(car, -8, 7), carPoint(car, -8, -7), carPoint(car, 10, -8)], car.team === 0 ? '#542a2a' : '#15364d', '#d8ecf0');
       for (const side of [-12, 12]) { const w = carPoint(car, -9, side); ctx.fillStyle = '#111820'; ctx.beginPath(); ctx.ellipse(w.x, w.y, 6, 3, car.angle, 0, Math.PI * 2); ctx.fill(); }
       if (car.boost > 1) { const flame = carPoint(car, -25, 0); ctx.fillStyle = '#fbbf24'; ctx.beginPath(); ctx.moveTo(flame.x, flame.y); ctx.lineTo(flame.x - Math.cos(car.angle) * 15 + Math.sin(car.angle) * 6, flame.y - Math.sin(car.angle) * 15 - Math.cos(car.angle) * 6); ctx.lineTo(flame.x - Math.cos(car.angle) * 15 - Math.sin(car.angle) * 6, flame.y - Math.sin(car.angle) * 15 + Math.cos(car.angle) * 6); ctx.closePath(); ctx.fill(); }
-      roundRect(ctx, car.x - 29, car.y - 34, 58, 14, 4, 'rgba(5,10,14,.76)'); ctx.fillStyle = '#fff6dd'; ctx.textAlign = 'center'; ctx.font = '700 9px sans-serif'; ctx.fillText(car.name.toUpperCase().slice(0, 9), car.x, car.y - 24);
+      roundRect(ctx, car.x - 29, car.y - 34, 58, 14, 4, 'rgba(5,10,14,.76)'); drawWorldLabel(ctx, car.name.toUpperCase().slice(0, 9), car.x, car.y - 24, { color: HUD.text, size: 9, scrim: false });
     }
     for (const spark of this.sparks) { ctx.globalAlpha = Math.max(0, spark.life / .65); ctx.fillStyle = spark.color; ctx.fillRect(spark.x, spark.y, 4, 4); }
     ctx.globalAlpha = 1;
-    ctx.fillStyle = '#f5d5a1'; ctx.textAlign = 'left'; ctx.font = '700 12px monospace'; ctx.fillText(`TURBO LEAGUE  /  ${this.goals[0]} : ${this.goals[1]}`, 24, HEIGHT - 20);
+    drawArenaWatermark(ctx, `TURBO LEAGUE  /  ${this.goals[0]} : ${this.goals[1]}`, HEIGHT - 20, 24);
   }
 }

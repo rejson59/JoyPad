@@ -21,6 +21,9 @@ import { nextTournamentRound, type MatchMode } from './matchModes';
 import { useMenuMusic } from '../lib/useMenuMusic';
 import { useT, type Language } from '../platform/i18n';
 import { COLORS, type DisplayMode, type GameRound, type Racer, type RenderQuality, type RoundConfig, type RoundHud, type RoundResult } from './runtime';
+// Jeden HUD dla wszystkich gier: oprawa rundy żyje w `console/RoundChrome`,
+// więc arcade i Stalowy Front wyglądają jak ta sama konsola (runda 21).
+import { RoundArena, RoundChip, RoundCountdown, RoundDeck, RoundFrame, RoundIconButton, RoundLoading, RoundObjective, RoundOverlay, RoundPlayerCard, RoundPowerUp, RoundStartFlash, RoundTimer, RoundTitle, RoundTopBar } from '../console/RoundChrome';
 
 type ArcadeId = Exclude<GameId, 'tanks' | 'blockcraft'>;
 type Stage = 'menu' | 'game' | 'over';
@@ -59,8 +62,6 @@ const SETUP: Record<ArcadeId, { primary: number; secondary: number; bots: boolea
   league: { primary: 1, secondary: 2, bots: true },
   pizza: { primary: 1, secondary: 0, bots: false },
 };
-
-const formatTime = (n: number) => `${Math.floor(n / 60)}:${String(Math.floor(n % 60)).padStart(2, '0')}`;
 
 function readLocalRecord(id: ArcadeId): number {
   try { return Number(localStorage.getItem(`joypad-record-${id}`) || 0) || 0; } catch { return 0; }
@@ -347,7 +348,6 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   // przechwytującej i sama wygasza zdarzenie, więc własny nasłuch tylko by dublował
   // ruch (i kasował fokus postawiony przez nawigację).
   const mute = () => { gameAudio.init(); gameAudio.setMuted(!muted); setMuted(!muted); };
-  const cssVars = { '--game-accent': info.accent, '--game-soft': info.accentSoft } as React.CSSProperties;
   const modeLabels = language === 'en' ? { classic: 'QUICK MATCH', tournament: 'TOURNAMENT', '2v2': '2V2 / TEAMS' } : { classic: 'ZWYKŁA RUNDA', tournament: 'TURNIEJ', '2v2': '2V2 / DRUŻYNY' };
   const displayLabels = language === 'en' ? { shared: 'SHARED', split: 'SPLIT-SCREEN' } : { shared: 'WSPÓLNY', split: 'PODZIELONY EKRAN' };
   const qualityLabels = language === 'en' ? { performance: 'PERFORMANCE', balanced: 'BALANCED', quality: 'QUALITY' } : { performance: 'PŁYNNOŚĆ', balanced: 'BALANS', quality: 'DETAL' };
@@ -368,26 +368,32 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
 
   return (
     <>
-    <div className={`arcade-page arcade-${id} flex h-screen min-h-[360px] flex-col overflow-hidden text-white`} style={cssVars}>
-      <div className="arcade-hudbar z-20 flex shrink-0 items-center justify-between gap-2 border-b border-white/10 bg-[#0b0e12]/95 px-3 py-2 sm:px-5"><div className="flex min-w-0 items-center gap-2 sm:gap-4"><div className="arcade-title truncate text-sm font-bold sm:text-lg" style={{ color: info.accent }}>{info.title}</div><span className="hidden rounded-full border border-white/10 px-2 py-1 text-[10px] font-bold text-slate-300 sm:block">{hud?.status || t('game.statusLoading')}</span></div>
-        <div className="flex items-center gap-1.5 font-mono2 text-sm font-bold sm:gap-2 sm:text-lg"><Timer size={16} style={{ color: info.accent }} /> {formatTime(hud?.timeLeft ?? 0)}</div>
-        <div className="flex items-center gap-1"><span className="hidden rounded-full border border-white/10 px-2 py-1 text-[10px] font-bold text-slate-500 sm:block">{modeTag} · {qualityLabels[quality]}</span><button onClick={mute} title={muted ? t('game.soundOn') : t('game.mute')} className="arcade-icon">{muted ? <VolumeX size={17} /> : <Volume2 size={17} />}</button><button onClick={() => setShowPads(true)} title={t('game.pads')} className="arcade-icon"><Smartphone size={17} /></button><button onClick={() => round.current?.togglePause()} title={t('game.pause')} className="arcade-icon"><Pause size={17} /></button><button onClick={() => setStage('menu')} title={t('game.endRound')} className="arcade-icon text-amber-300"><Home size={17} /></button><button onClick={leave} title={t('game.back')} className="arcade-icon text-orange-300"><Gamepad2 size={17} /></button></div>
-      </div>
-      <div className="relative min-h-0 flex-1 bg-[#06090c]"><canvas ref={canvas} className="absolute inset-0 h-full w-full" aria-label={language === 'en' ? `${info.title} game arena` : `Arena gry ${info.title}`} />
-        <div className="arcade-hudnote lg-enter pointer-events-none absolute left-3 top-3 z-10 rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-[11px] font-bold backdrop-blur sm:left-5 sm:top-4 sm:text-sm" style={{ color: info.accent }}>{hud?.objective || rules.win}</div>
-        {hud?.powerUp && <div className={`arcade-hudnote pointer-events-none absolute right-3 top-3 z-10 w-[min(205px,52vw)] rounded-xl border bg-black/75 px-3 py-2.5 shadow-2xl backdrop-blur sm:right-5 sm:top-4 ${hud.powerUp.rolling ? 'animate-pulse' : ''}`} style={{ borderColor: `${hud.powerUp.color}66`, boxShadow: `0 10px 30px ${hud.powerUp.color}20` }}>
-          <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[.16em] text-white/55"><Zap size={13} style={{ color: hud.powerUp.color }} /> {t('game.actionBonus')}</div>
-          <div className="mt-1 flex items-center justify-between gap-2"><b className="truncate text-sm font-black" style={{ color: hud.powerUp.color }}>{hud.powerUp.label}</b>{hud.powerUp.count > 1 && <span className="shrink-0 rounded-full px-1.5 py-0.5 font-mono2 text-[11px] font-bold text-black" style={{ background: hud.powerUp.color }}>×{hud.powerUp.count}</span>}</div>
-          <div className="mt-1 text-[10px] leading-tight text-white/60">{hud.powerUp.hint}</div>
-        </div>}
-        {hud?.countdown !== undefined && hud.countdown > 0 && <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/30"><span className="joy-kicker text-white/70">{t('game.ready')}</span><span key={Math.ceil(hud.countdown)} className="count-pop arcade-title text-8xl font-black drop-shadow-lg sm:text-9xl" style={{ color: info.accent, textShadow: `0 0 70px ${info.accent}99` }}>{Math.ceil(hud.countdown)}</span></div>}
-        {startFlash && <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"><span className="start-flash arcade-title text-7xl font-black sm:text-9xl" style={{ color: info.accent, textShadow: `0 0 90px ${info.accent}` }}>START</span></div>}
+    <RoundFrame accent={info.accent} soft={info.accentSoft}>
+      <RoundTopBar
+        center={<RoundTimer seconds={hud?.timeLeft ?? 0} icon={<Timer size={16} />} />}
+        actions={<>
+          <RoundChip tone="quiet" optional>{modeTag} · {qualityLabels[quality]}</RoundChip>
+          <RoundIconButton label={muted ? t('game.soundOn') : t('game.mute')} onClick={mute}>{muted ? <VolumeX size={17} /> : <Volume2 size={17} />}</RoundIconButton>
+          <RoundIconButton label={t('game.pads')} onClick={() => setShowPads(true)}><Smartphone size={17} /></RoundIconButton>
+          <RoundIconButton label={t('game.pause')} onClick={() => round.current?.togglePause()}><Pause size={17} /></RoundIconButton>
+          <RoundIconButton label={t('game.endRound')} onClick={() => setStage('menu')} tone="accent"><Home size={17} /></RoundIconButton>
+          <RoundIconButton label={t('game.back')} onClick={leave} tone="danger"><Gamepad2 size={17} /></RoundIconButton>
+        </>}>
+        <RoundTitle>{info.title}</RoundTitle>
+        <RoundChip optional>{hud?.status || t('game.statusLoading')}</RoundChip>
+      </RoundTopBar>
+      <RoundArena>
+        <canvas ref={canvas} className="absolute inset-0 h-full w-full" aria-label={language === 'en' ? `${info.title} game arena` : `Arena gry ${info.title}`} />
+        <RoundObjective>{hud?.objective || rules.win}</RoundObjective>
+        {hud?.powerUp && <RoundPowerUp kicker={<><Zap size={13} style={{ color: hud.powerUp.color }} /> {t('game.actionBonus')}</>} label={hud.powerUp.label} count={hud.powerUp.count} color={hud.powerUp.color} hint={hud.powerUp.hint} rolling={hud.powerUp.rolling} />}
+        {hud?.countdown !== undefined && hud.countdown > 0 && <RoundCountdown value={hud.countdown} kicker={t('game.ready')} />}
+        {startFlash && <RoundStartFlash />}
         {hud?.paused && <PauseSheet game={info.title} onResume={() => { if (!isLeaving()) round.current?.togglePause(); }} onExit={leave} />}
-        {!hud && <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 text-sm text-slate-300"><PlamekOrbit size={44} /> {t('game.loading')}</div>}
-        {showPads && <div className="absolute inset-0 z-40 flex items-center justify-center overflow-auto bg-black/80 p-4 backdrop-blur" onClick={() => setShowPads(false)}><div className="w-full max-w-2xl" onClick={e => e.stopPropagation()}><PadHostPanel players={PLAYER_DEFS} onClose={() => setShowPads(false)} context="arcade" /></div></div>}
-      </div>
-      <div className="arcade-huddeck lg-enter z-10 flex min-h-[76px] shrink-0 gap-2 overflow-x-auto border-t border-white/10 bg-[#0b0e12] p-2 sm:justify-center sm:p-3">{hud?.players.map(p => <div key={p.slot} className="arcade-hudcard min-w-[142px] flex-1 rounded-xl border border-white/10 bg-white/[.035] px-3 py-2 sm:max-w-[250px]"><div className="flex items-center justify-between gap-2"><span className="truncate text-xs font-bold" style={{ color: p.color }}>{p.name}{p.isBot && <span className="ml-1 text-[9px] text-slate-500">BOT</span>}</span><b className="font-mono2 text-base" style={{ color: p.color }}>{p.score}</b></div><div className="mt-1 truncate text-[11px] text-slate-400">{p.detail}</div>{p.value !== undefined && <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, p.value / (p.maxValue || 100) * 100))}%`, background: p.color }} /></div>}</div>)}</div>
-    </div>
+        {!hud && <RoundLoading><PlamekOrbit size={44} /> {t('game.loading')}</RoundLoading>}
+        {showPads && <RoundOverlay onClose={() => setShowPads(false)}><PadHostPanel players={PLAYER_DEFS} onClose={() => setShowPads(false)} context="arcade" /></RoundOverlay>}
+      </RoundArena>
+      <RoundDeck>{hud?.players.map(p => <RoundPlayerCard key={p.slot} name={p.name} color={p.color} score={p.score} detail={p.detail} value={p.value} maxValue={p.maxValue} isBot={p.isBot} />)}</RoundDeck>
+    </RoundFrame>
     <ScreenCurtain state={curtain.state} />
     </>
   );

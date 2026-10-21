@@ -1,5 +1,6 @@
 // @ts-nocheck
 import * as THREE from 'three';
+import { HUD, hudFont } from '../hudKit';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
@@ -989,7 +990,7 @@ export class Game {
     const c = this.octx, W = this.cw, H = this.ch; c.clearRect(0, 0, W, H);
     if (this.mode !== 'battle' || this.paused || this.ended) return;
     const p = this.player; const alive = p && !p.dead;
-    c.lineWidth = 1.5; c.font = '600 11px ui-monospace, monospace'; c.textAlign = 'center';
+    c.lineWidth = 1.5; c.font = hudFont(600, 11, 'mono'); c.textAlign = 'center';
     // ships markers
     for (const s of this.ships) {
       if (s.dead || s === p) continue;
@@ -1015,7 +1016,7 @@ export class Game {
           if (p.lockT > 0) {
             c.strokeStyle = p.lockT >= 1 ? 'rgba(255,40,40,1)' : 'rgba(255,200,60,0.9)';
             c.beginPath(); c.arc(pr.x, pr.y, q * 1.6, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p.lockT); c.stroke();
-            if (p.lockT >= 1) { c.fillStyle = 'rgba(255,40,40,1)'; c.fillText(this.language === 'en' ? 'LOCKED' : 'NAMIERZONO', pr.x, pr.y - q * 1.6 - 8); }
+            if (p.lockT >= 1) { c.fillStyle = HUD.danger; c.fillText(this.language === 'en' ? 'LOCKED' : 'NAMIERZONO', pr.x, pr.y - q * 1.6 - 8); }
           }
         }
       } else {

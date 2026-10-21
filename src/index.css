@@ -164,11 +164,6 @@ html { scrollbar-width: thin; scrollbar-color: var(--os-border-hard) transparent
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #34d399; box-shadow: 0 0 10px rgba(52,211,153,.8); }
 
 /* Każda gra ma odrębną paletę, ale ten sam spokojny język nawigacji. */
-.arcade-page { background: #0a0e0f; }
-.arcade-race { background: radial-gradient(ellipse at 20% 0%,#3a1c0d,#090e12 63%); }
-.arcade-orbit { background: radial-gradient(ellipse at 80% 5%,#24200f,#070b0d 68%); }
-.arcade-snake { background: radial-gradient(ellipse at 15% 0%,#263319,#091211 65%); }
-.arcade-league { background: radial-gradient(ellipse at 78% 0%,#352116,#090d10 68%); }
 .arcade-texture { background-image: linear-gradient(rgba(255,218,170,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,218,170,.025) 1px,transparent 1px); background-size: 50px 50px; }
 .arcade-hero { box-shadow: 0 26px 65px rgba(0,0,0,.42); }
 .arcade-panel { border: 1px solid rgba(255,255,255,.12); background: rgba(18,22,21,.72); box-shadow: inset 0 1px 0 rgba(255,255,255,.04); }

@@ -4,6 +4,7 @@ import { Check, Gamepad2, X } from 'lucide-react';
 import { padHost } from '../net/padHost';
 import { usePadHost } from '../pad/PadHostPanel';
 import { useT } from '../platform/i18n';
+import { hudFont } from '../arcade/hudKit';
 
 /**
  * LAB KONTROLERA na dużym ekranie — pokój zabaw w duchu Astro's Playroom.
@@ -198,7 +199,7 @@ function SensorLab({ onClose }: { onClose: () => void }) {
         ctx.globalAlpha = p.t;
         ctx.lineWidth = 3;
         ctx.beginPath(); ctx.arc(p.x, p.y, (1 - p.t) * 130 + 10, 0, 7); ctx.stroke();
-        ctx.font = '800 13px ui-sans-serif, system-ui, sans-serif';
+        ctx.font = hudFont(800, 13);
         ctx.textAlign = 'center';
         ctx.fillText(p.label, p.x, p.y - (1 - p.t) * 40 - 12);
         ctx.globalAlpha = 1; ctx.lineWidth = 1;

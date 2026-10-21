@@ -37,8 +37,10 @@ Zgodnie z procedurą nic z paczek nie było uruchamiane przed przeglądem:
   fałszywy renderer i DOM, deterministyczny zegar i PRNG). Sprawdza niezmienniki — brak NaN, `onFinish`
   dokładnie raz, brak wycieków nasłuchów po `destroy()` — ale **nie** wygląd klatek ani wydajność GPU;
   to wymaga prawdziwej przeglądarki.
-- Brak nagrań podglądu: `GamePreview` zna tylko `tanks/race/orbit`, a dla reszty pokazuje okładkę. Nagranie ma
-  pokazywać prawdziwy silnik, a nie atrapę, więc zostanie dodane po nagraniu w przeglądarce.
+- Nagrania podglądu: każda **grywalna** gra ma swój urywek botów (`PREVIEW_GAMES` w `GamePreview.tsx`),
+  nagrany z prawdziwego silnika przez `scripts/previews/capture.mjs` — lokalnie albo w CI (workflow
+  `Previews` nagrywa jeden silnik na job i commituje klipy do gałęzi, z której wystartował). Zapowiedzi
+  `wip` (BlockCraft) zostają przy okładce; `selftest:console` porównuje listę nagrań z katalogiem.
 
 ## WEBZA — „Nocna Dostawa” (`pizza`)
 
@@ -130,7 +132,7 @@ nad dachem, o stałym rozmiarze na ekranie).
 pozostali zwycięzcy dostają haptykę „lose” (host wysyła `win` tylko `winnerSlot`). Minimalna przyszła zmiana kontraktu:
 `RoundResult.winnerSlots?: number[]` — nie wprowadzona, bo to zmiana platformy.
 
-**Ograniczenia:** brak split-screen (wspólna kamera), brak nagrania podglądu (okładka), wydajność GPU nie była mierzona
+**Ograniczenia:** brak split-screen (wspólna kamera), wydajność GPU nie była mierzona
 (stadion generuje proceduralne tekstury przy starcie rundy — na słabym sprzęcie użyj profilu „płynność”).
 
 **Cofnięcie:** usuń `src/arcade/league-next/`, `scripts/league-selftest.ts` (+ `selftest:league` w `package.json` i wpis w override ESLint),

@@ -27,6 +27,9 @@ import { menuMusic } from './game/menuMusic';
 import { padHost } from './net/padHost';
 import type { RemoteCommand, RemoteEvent } from './net/protocol';
 import { PadHostPanel, usePadHost } from './pad/PadHostPanel';
+// Stalowy Front gra na tej samej oprawie co reszta biblioteki: jeden HUD dla wszystkich
+// gier (`console/RoundChrome` + `gamehud.css`), tożsamość gry niesie akcent z katalogu.
+import { RoundArena, RoundBuffs, RoundCardScore, RoundChip, RoundFeed, RoundFrame, RoundHelpRow, RoundIconButton, RoundInfoCard, RoundInfoRow, RoundKeyCap as KeyCap, RoundKeyGroup, RoundKeys, RoundMini, RoundOverlay, RoundOverlayGrid, RoundPhoneTag, RoundPlayerCard, RoundSide, RoundTimer, RoundTitle, RoundTopBar } from './console/RoundChrome';
 import { Smartphone } from 'lucide-react';
 
 type Screen = 'menu' | 'setup' | 'game' | 'over';
@@ -34,69 +37,34 @@ type Screen = 'menu' | 'setup' | 'game' | 'over';
 /** Czas rundy w sekundach (stała — niezmienny limit w konfiguracji gry). */
 const TIME_LIMIT_S = 300;
 
-function KeyCap({ children, color = '#27272a' }: { children: React.ReactNode; color?: string }) {
-  return (
-    <span
-      className="keycap inline-flex min-w-[26px] items-center justify-center rounded-md border border-white/15 px-1.5 py-1 text-[11px] font-bold text-white"
-      style={{ background: `linear-gradient(180deg, ${color}, #131316)` }}
-    >
-      {children}
-    </span>
-  );
-}
-
 function PlayerCard({ t, mode, killLimit, phone, language }: { t: HudTank; mode: GameMode; killLimit: number; phone?: string | null; language: 'pl' | 'en' }) {
   const en = language === 'en';
   const hpPct = (t.hp / t.maxHp) * 100;
-  return (
-    <div
-      className={`relative overflow-hidden rounded-xl border bg-black/60 backdrop-blur-sm transition-all ${t.alive ? 'border-white/15' : 'border-red-500/50 opacity-70'}`}
-      style={{ boxShadow: t.alive ? `0 0 18px ${t.color}33` : undefined }}
-    >
-      <div className="h-1 w-full" style={{ background: t.color }} />
-      <div className="p-2.5">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5">
-            {t.isBot ? <Bot className="h-3.5 w-3.5 text-zinc-400" /> : phone ? <Smartphone className="h-3.5 w-3.5 text-green-400" /> : <Gamepad2 className="h-3.5 w-3.5 text-zinc-400" />}
-            <span className="text-xs font-bold tracking-wide" style={{ color: t.color }}>{t.name}</span>
-          </div>
-          <div className="flex items-center gap-2 text-[11px] font-bold text-zinc-300">
-            <span className="flex items-center gap-0.5"><Skull className="h-3 w-3" />{t.kills}</span>
-            {mode === 'survival' ? (
-              <span className="flex items-center gap-0.5"><Heart className="h-3 w-3 text-red-400" />{t.lives}</span>
-            ) : (
-              <span className="text-zinc-500">/ {killLimit}</span>
-            )}
-          </div>
-        </div>
-        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-zinc-800">
-          <div
-            className="h-full rounded-full transition-all duration-200"
-            style={{
-              width: `${hpPct}%`,
-              background: hpPct > 50 ? 'linear-gradient(90deg,#16a34a,#4ade80)' : hpPct > 25 ? 'linear-gradient(90deg,#d97706,#fbbf24)' : 'linear-gradient(90deg,#b91c1c,#ef4444)',
-            }}
-          />
-        </div>
-        <div className="mt-1 flex items-center justify-between">
-          <span className="font-mono2 text-[10px] text-zinc-400">{t.alive ? `${t.hp} HP` : t.respawn > 0 ? `${en ? 'RESPAWN' : 'ODRODZENIE'} ${t.respawn.toFixed(1)}s` : (en ? 'ELIMINATED' : 'ELIMINACJA')}</span>
-          <div className="flex gap-1">
-            {t.rapid && <span title={en ? 'Rapid fire' : 'Szybkostrzelność'}><Zap className="h-3 w-3 text-amber-400" /></span>}
-            {t.big && <span title={en ? 'Heavy shell' : 'Ciężki pocisk'}><Crosshair className="h-3 w-3 text-red-400" /></span>}
-            {t.speed && <span title={en ? 'Turbo' : 'Turbo'}><Wind className="h-3 w-3 text-sky-400" /></span>}
-            {t.shield > 0 && <span title={en ? 'Shield' : 'Tarcza'}><Shield className="h-3 w-3 text-cyan-300" /></span>}
-          </div>
-        </div>
-        {mode === 'deathmatch' && (
-          <div className="mt-1 flex gap-0.5">
-            {Array.from({ length: killLimit }).map((_, i) => (
-              <div key={i} className="h-1 flex-1 rounded-full" style={{ background: i < t.kills ? t.color : '#27272a' }} />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  // Pasek HP mówi kolorem systemu: cały (sukces), oberwany (ostrzeżenie), krytyczny (zagrożenie).
+  const meterColor = hpPct > 50 ? 'linear-gradient(90deg,#4c8f66,#9ccfae)' : hpPct > 25 ? 'linear-gradient(90deg,#b9822f,#edbd78)' : 'linear-gradient(90deg,#a04a40,#ed8175)';
+  return <RoundPlayerCard
+    strip
+    dimmed={!t.alive}
+    name={t.name}
+    color={t.color}
+    icon={t.isBot ? <Bot size={13} /> : phone ? <Smartphone size={13} /> : <Gamepad2 size={13} />}
+    score={t.kills}
+    scoreLabel={<RoundCardScore icon={<Skull size={12} />} value={t.kills} extra={mode === 'survival' ? <><Heart size={12} />{t.lives}</> : <small>/ {killLimit}</small>} />}
+    value={t.hp}
+    maxValue={t.maxHp}
+    meterColor={meterColor}
+    meta={phone ? <RoundPhoneTag icon={<Smartphone size={11} />}>{phone}</RoundPhoneTag> : undefined}
+    pips={mode === 'deathmatch' ? { total: killLimit, filled: t.kills } : undefined}
+    footer={<>
+      <span>{t.alive ? `${t.hp} HP` : t.respawn > 0 ? `${en ? 'RESPAWN' : 'ODRODZENIE'} ${t.respawn.toFixed(1)}s` : (en ? 'ELIMINATED' : 'ELIMINACJA')}</span>
+      <RoundBuffs>
+        {t.rapid && <span title={en ? 'Rapid fire' : 'Szybkostrzelność'}><Zap size={12} /></span>}
+        {t.big && <span title={en ? 'Heavy shell' : 'Ciężki pocisk'}><Crosshair size={12} /></span>}
+        {t.speed && <span title={en ? 'Turbo' : 'Turbo'}><Wind size={12} /></span>}
+        {t.shield > 0 && <span title={en ? 'Shield' : 'Tarcza'}><Shield size={12} /></span>}
+      </RoundBuffs>
+    </>}
+  />;
 }
 
 export default function TankApp({ onExit, remote }: { onExit: () => void; remote: RemoteEvent | null }) {
@@ -338,7 +306,6 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
     gameAudio.setMuted(m);
   };
 
-  const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
   const enabledCount = players.filter(p => p.enabled).length;
   const canStart = enabledCount >= 2;
@@ -422,7 +389,7 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
                     </div>
                     <div className="grid grid-cols-[52px_1fr] items-center gap-1">
                       <span className="text-zinc-500">{en ? 'Fire' : 'Ogień'}</span>
-                      <div><KeyCap color="#7c2d12">{p.controlLabels.fire}</KeyCap></div>
+                      <div><KeyCap fire>{p.controlLabels.fire}</KeyCap></div>
                     </div>
                   </div>
                 </div>
@@ -549,154 +516,87 @@ export default function TankApp({ onExit, remote }: { onExit: () => void; remote
   }
 
   /* ============ GAME ============ */
+  // Ekran rundy składa się z tych samych klocków co pozostałe gry (`RoundChrome`),
+  // więc czołgi nie są już „osobną aplikacją”: pasek, karty, nakładki i pasek klawiszy
+  // mają powierzchnie, typografię i kolory JoyPada, a gra dokłada tylko swój akcent,
+  // informacje o stanie czołgu (HP, fragi, bonusy) i rasę CRT na samej arenie.
+  const tanks = hud?.tanks ?? [];
+  const half = Math.ceil(tanks.length / 2);
   return (
     <>
-    <div className="flex h-screen flex-col overflow-hidden bg-black text-white">
-      {/* top bar */}
-      <div className="z-20 flex items-center justify-between gap-2 border-b border-amber-500/20 bg-gradient-to-b from-zinc-900 to-zinc-950 px-3 py-2">
-        <div className="flex items-center gap-3">
-          <span className="font-display hidden text-sm tracking-wider text-amber-400 sm:block">{info.title.toUpperCase()}</span>
-          <span className="rounded bg-white/10 px-2 py-0.5 text-[11px] font-bold text-zinc-300">{localizedMap(mapId, language).name}</span>
-          <span className="hidden items-center gap-1 rounded bg-white/10 px-2 py-0.5 text-[11px] font-bold text-zinc-300 sm:flex">{mode === 'deathmatch' ? <><Crosshair className="h-3 w-3 text-amber-400" />{killLimit} {en ? 'KILLS' : 'FRAGÓW'}</> : <><Heart className="h-3 w-3 text-red-400" />{lives} {en ? 'LIVES' : 'ŻYĆ'}</>}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className={`flex items-center gap-1.5 rounded-lg border px-3 py-1 font-mono2 text-lg font-extrabold ${(hud?.timeLeft ?? 99) < 30 ? 'timer-urgent border-red-500/60 bg-red-500/15 text-red-300' : 'border-white/15 bg-black/50 text-amber-300'}`}>
-            <Timer className="h-4 w-4" />{fmtTime(hud?.timeLeft ?? TIME_LIMIT_S)}
-          </div>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <button onClick={() => setShowPad(v => !v)} title={en ? 'Phone controllers' : 'Telefon jako kontroler'} className={`relative rounded-lg border p-2 transition-colors ${showPad ? 'border-amber-400 bg-amber-500/20 text-amber-300' : 'border-white/15 bg-white/5 text-zinc-300 hover:bg-white/10'}`}>
-            <Smartphone className="h-4 w-4" />
-            {padState.pads.length > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-green-500 px-1 text-[9px] font-bold text-black">{padState.pads.length}</span>}
-          </button>
-          <button onClick={() => setShowHelp(h => !h)} title={en ? 'Controls' : 'Sterowanie'} className={`rounded-lg border p-2 transition-colors ${showHelp ? 'border-amber-400 bg-amber-500/20 text-amber-300' : 'border-white/15 bg-white/5 text-zinc-300 hover:bg-white/10'}`}>
-            <Keyboard className="h-4 w-4" />
-          </button>
-          <button onClick={toggleMute} title={muted ? (en ? 'Turn sound on' : 'Włącz dźwięk') : (en ? 'Mute' : 'Wycisz')} className="rounded-lg border border-white/15 bg-white/5 p-2 text-zinc-300 hover:bg-white/10">
-            {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-          </button>
-          <button onClick={() => gameRef.current?.togglePause()} title={en ? 'Pause (P)' : 'Pauza (P)'} className="rounded-lg border border-white/15 bg-white/5 p-2 text-zinc-300 hover:bg-white/10">
-            {hud?.paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-          </button>
-          <button onClick={() => { gameAudio.uiClick(); goScreen('setup'); }} title={en ? 'End battle and return to setup' : 'Zakończ bitwę i wróć do ustawień'} className="rounded-lg border border-red-500/40 bg-red-500/10 p-2 text-red-300 hover:bg-red-500/20">
-            <Home className="h-4 w-4" />
-          </button>
-          <button onClick={leave} title={en ? 'Back to JoyPad' : 'Wróć do JoyPad'} className="rounded-lg border border-orange-400/40 bg-orange-500/10 p-2 text-orange-200 hover:bg-orange-500/20"><Gamepad2 className="h-4 w-4" /></button>
-        </div>
-      </div>
+    <RoundFrame accent={info.accent} soft={info.accentSoft}>
+      <RoundTopBar
+        center={<RoundTimer seconds={hud?.timeLeft ?? TIME_LIMIT_S} urgent={(hud?.timeLeft ?? 99) < 30} icon={<Timer size={15} />} />}
+        actions={<>
+          <RoundIconButton label={en ? 'Phone controllers' : 'Telefon jako kontroler'} onClick={() => setShowPad(v => !v)} active={showPad} badge={padState.pads.length || undefined}><Smartphone size={17} /></RoundIconButton>
+          <RoundIconButton label={en ? 'Controls' : 'Sterowanie'} onClick={() => setShowHelp(h => !h)} active={showHelp}><Keyboard size={17} /></RoundIconButton>
+          <RoundIconButton label={muted ? (en ? 'Turn sound on' : 'Włącz dźwięk') : (en ? 'Mute' : 'Wycisz')} onClick={toggleMute}>{muted ? <VolumeX size={17} /> : <Volume2 size={17} />}</RoundIconButton>
+          <RoundIconButton label={en ? 'Pause (P)' : 'Pauza (P)'} onClick={() => gameRef.current?.togglePause()}>{hud?.paused ? <Play size={17} /> : <Pause size={17} />}</RoundIconButton>
+          <RoundIconButton label={en ? 'End battle and return to setup' : 'Zakończ bitwę i wróć do ustawień'} onClick={() => { gameAudio.uiClick(); goScreen('setup'); }} tone="danger"><Home size={17} /></RoundIconButton>
+          <RoundIconButton label={en ? 'Back to JoyPad' : 'Wróć do JoyPad'} onClick={leave} tone="accent"><Gamepad2 size={17} /></RoundIconButton>
+        </>}>
+        <RoundTitle>{info.title}</RoundTitle>
+        <RoundChip optional>{localizedMap(mapId, language).name}</RoundChip>
+        <RoundChip tone={mode === 'survival' ? 'danger' : 'accent'} optional icon={mode === 'survival' ? <Heart size={12} /> : <Crosshair size={12} />}>{mode === 'deathmatch' ? `${killLimit} ${en ? 'KILLS' : 'FRAGÓW'}` : `${lives} ${en ? 'LIVES' : 'ŻYĆ'}`}</RoundChip>
+      </RoundTopBar>
 
-      {/* main */}
       <div className="relative flex min-h-0 flex-1">
-        {/* left HUD */}
-        <div className="z-10 hidden w-52 shrink-0 flex-col gap-2 overflow-y-auto border-r border-white/10 bg-zinc-950/90 p-2 md:flex">
-          {hud?.tanks.slice(0, Math.ceil((hud?.tanks.length ?? 0) / 2)).map(t => <PlayerCard key={t.id} t={t} mode={mode} killLimit={killLimit} phone={padBySlot(t.id)?.nick} language={language} />)}
-          <div className="mt-auto rounded-xl border border-white/10 bg-black/50 p-2.5 text-[10px] leading-relaxed text-zinc-500">
-            <div className="mb-1 flex items-center gap-1 font-bold tracking-widest text-zinc-400"><Lightbulb className="h-3 w-3 text-amber-400" /> {en ? 'TACTICS' : 'TAKTYKA'}</div>
-            {en ? <>• Ricochet shots off walls to hit enemies around corners.<br />• Collect <span className="text-green-400">power-ups</span> — a shield can save you.<br />• Reverse + turn for a quick dodge.</> : <>• Strzelaj w ściany, by rykoszetem trafić wroga za rogiem.<br />• Zbieraj <span className="text-green-400">power-upy</span> — tarcza ratuje życie.<br />• Cofanie + skręt = szybki unik.</>}
-          </div>
-        </div>
+        <RoundSide side="left">
+          {tanks.slice(0, half).map(t => <PlayerCard key={t.id} t={t} mode={mode} killLimit={killLimit} phone={padBySlot(t.id)?.nick} language={language} />)}
+          <RoundInfoCard title={en ? 'TACTICS' : 'TAKTYKA'} icon={<Lightbulb size={12} />}>
+            {en ? <>Ricochet shots off walls to hit enemies around corners. Collect <b>power-ups</b> — a shield can save you. Reverse + turn for a quick dodge.</> : <>Strzelaj w ściany, by rykoszetem trafić wroga za rogiem. Zbieraj <b>power-upy</b> — tarcza ratuje życie. Cofanie + skręt = szybki unik.</>}
+          </RoundInfoCard>
+        </RoundSide>
 
-        {/* canvas */}
-        <div className="scanlines crt-vignette relative min-w-0 flex-1 bg-black">
-          <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" style={{ width: '100%', height: '100%' }} />
+        <RoundArena crt>
+          <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" style={{ width: '100%', height: '100%' }} aria-label={en ? 'Steel Front battlefield' : 'Pole bitwy Stalowego Frontu'} />
+          <RoundFeed items={(hud?.killFeed ?? []).map(k => ({ id: k.id, icon: <Skull size={12} />, killer: k.killerName === '—' ? '💥' : k.killerName, separator: <Crosshair size={12} />, victim: k.victimName }))} />
+          <RoundMini players={tanks.map(t => ({ id: t.id, name: t.name, color: t.color, score: <><Skull size={9} /> {t.kills}</>, value: t.hp, maxValue: t.maxHp }))} />
 
-          {/* kill feed */}
-          <div className="pointer-events-none absolute right-3 top-3 z-10 flex w-64 flex-col gap-1">
-            {(hud?.killFeed ?? []).map(k => (
-              <div key={k.id} className="feed-in flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/70 px-2.5 py-1.5 text-[11px] font-bold backdrop-blur-sm">
-                <Skull className="h-3 w-3 shrink-0 text-red-400" />
-                <span className="truncate text-zinc-200">{k.killerName === '—' ? '💥' : k.killerName}</span>
-                <Crosshair className="h-3 w-3 shrink-0 text-amber-400" />
-                <span className="truncate text-zinc-400">{k.victimName}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* mobile HUD (small screens: compact bars) */}
-          <div className="absolute left-2 top-2 z-10 flex gap-1.5 md:hidden">
-            {(hud?.tanks ?? []).map(t => (
-              <div key={t.id} className="w-16 overflow-hidden rounded-lg border border-white/15 bg-black/70 p-1">
-                <div className="truncate text-[9px] font-bold" style={{ color: t.color }}>{t.name}</div>
-                <div className="mt-0.5 h-1.5 rounded-full bg-zinc-800">
-                  <div className="h-full rounded-full" style={{ width: `${(t.hp / t.maxHp) * 100}%`, background: t.color }} />
-                </div>
-                <div className="font-mono2 text-[9px] text-zinc-400">☠{t.kills}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* pause overlay */}
           {hud?.paused && <PauseSheet game={info.title} onResume={() => { if (!isLeaving()) gameRef.current?.togglePause(); }} onExit={leave} />}
 
-          {/* pad overlay */}
-          {showPad && (
-            <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm" onClick={() => setShowPad(false)}>
-              <div className="w-full max-w-2xl" onClick={e => e.stopPropagation()}>
-                <PadHostPanel players={players} onClose={() => setShowPad(false)} />
-              </div>
-            </div>
-          )}
+          {showPad && <RoundOverlay onClose={() => setShowPad(false)}><PadHostPanel players={players} onClose={() => setShowPad(false)} /></RoundOverlay>}
 
-          {/* help overlay */}
           {showHelp && (
-            <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm" onClick={() => setShowHelp(false)}>
-              <div className="metal-panel grid max-w-3xl grid-cols-1 gap-3 rounded-2xl p-5 sm:grid-cols-2" onClick={e => e.stopPropagation()}>
+            <RoundOverlay wide onClose={() => setShowHelp(false)}>
+              <RoundOverlayGrid>
                 {players.filter(p => p.enabled && !p.isBot).map(p => (
-                  <div key={p.id} className="rounded-xl border border-white/10 bg-black/40 p-3">
-                    <div className="mb-2 flex items-center gap-2 text-sm font-bold" style={{ color: p.color }}>
-                      {p.name}
-                      {padBySlot(p.id) && <span className="flex items-center gap-1 rounded bg-green-500/15 px-1.5 py-0.5 text-[10px] text-green-300"><Smartphone className="h-3 w-3" />{padBySlot(p.id)!.nick}</span>}
-                    </div>
-                    <div className="space-y-1.5 text-xs text-zinc-300">
-                      <div className="flex items-center justify-between"><span>{en ? 'Forward / Reverse' : 'Przód / Tył'}</span><span className="flex gap-1"><KeyCap>{p.controlLabels.forward}</KeyCap><KeyCap>{p.controlLabels.back}</KeyCap></span></div>
-                      <div className="flex items-center justify-between"><span>{en ? 'Turn left / right' : 'Obrót w lewo / prawo'}</span><span className="flex gap-1"><KeyCap>{p.controlLabels.left}</KeyCap><KeyCap>{p.controlLabels.right}</KeyCap></span></div>
-                      <div className="flex items-center justify-between"><span className="font-bold text-red-300">{en ? 'FIRE' : 'OGIEŃ'}</span><KeyCap color="#7c2d12">{p.controlLabels.fire}</KeyCap></div>
-                    </div>
-                  </div>
+                  <RoundInfoCard key={p.id} title={<>{p.name}{padBySlot(p.id) && <RoundPhoneTag icon={<Smartphone size={11} />}>{padBySlot(p.id)!.nick}</RoundPhoneTag>}</>} color={p.color}>
+                    <RoundHelpRow label={en ? 'Forward / Reverse' : 'Przód / Tył'}><KeyCap>{p.controlLabels.forward}</KeyCap><KeyCap>{p.controlLabels.back}</KeyCap></RoundHelpRow>
+                    <RoundHelpRow label={en ? 'Turn left / right' : 'Obrót w lewo / prawo'}><KeyCap>{p.controlLabels.left}</KeyCap><KeyCap>{p.controlLabels.right}</KeyCap></RoundHelpRow>
+                    <RoundHelpRow label={en ? 'FIRE' : 'OGIEŃ'} labelColor="var(--os-danger)" keys={false}><KeyCap fire>{p.controlLabels.fire}</KeyCap></RoundHelpRow>
+                  </RoundInfoCard>
                 ))}
-                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200 sm:col-span-2">
-                  <b>{en ? 'Pause:' : 'Pauza:'}</b> <KeyCap>P</KeyCap> {en ? 'or' : 'lub'} <KeyCap>ESC</KeyCap> — {en ? 'The turret follows your hull when not aiming. Shells ricochet once. Collect green power-up crates!' : 'Wieżyczka podąża za kadłubem. Pociski rykoszetują raz od ścian. Zbieraj zielone skrzynki z bonusami!'}
-                </div>
-              </div>
-            </div>
+                <RoundInfoCard title={<><Pause size={12} /> {en ? 'PAUSE' : 'PAUZA'}</>} accent span bodyRow>
+                  <span><KeyCap>P</KeyCap> {en ? 'or' : 'lub'} <KeyCap>ESC</KeyCap> — {en ? 'The turret follows your hull when not aiming. Shells ricochet once. Collect green power-up crates!' : 'Wieżyczka podąża za kadłubem. Pociski rykoszetują raz od ścian. Zbieraj zielone skrzynki z bonusami!'}</span>
+                </RoundInfoCard>
+              </RoundOverlayGrid>
+            </RoundOverlay>
           )}
-        </div>
+        </RoundArena>
 
-        {/* right HUD */}
-        <div className="z-10 hidden w-52 shrink-0 flex-col gap-2 overflow-y-auto border-l border-white/10 bg-zinc-950/90 p-2 md:flex">
-          {hud?.tanks.slice(Math.ceil((hud?.tanks.length ?? 0) / 2)).map(t => <PlayerCard key={t.id} t={t} mode={mode} killLimit={killLimit} phone={padBySlot(t.id)?.nick} language={language} />)}
-          <div className="mt-auto space-y-1.5">
-            <div className="rounded-xl border border-white/10 bg-black/50 p-2.5 text-[10px] leading-relaxed text-zinc-500">
-              <div className="mb-1 flex items-center gap-1 font-bold tracking-widest text-zinc-400"><Package className="h-3 w-3 text-green-400" /> {en ? 'POWER-UPS' : 'BONUSY'}</div>
-              <div className="flex items-center gap-1.5"><span className="font-mono2 font-bold text-green-400">+</span> {en ? 'Repair +50 HP' : 'Naprawa +50 HP'}</div>
-              <div className="flex items-center gap-1.5"><span className="font-mono2 font-bold text-green-400">◈</span> {en ? 'Shield 10 s' : 'Tarcza 10 s'}</div>
-              <div className="flex items-center gap-1.5"><span className="font-mono2 font-bold text-green-400">≋</span> {en ? 'Rapid fire' : 'Szybkostrzelność'}</div>
-              <div className="flex items-center gap-1.5"><span className="font-mono2 font-bold text-green-400">●</span> {en ? 'Heavy shell' : 'Ciężki pocisk'}</div>
-              <div className="flex items-center gap-1.5"><span className="font-mono2 font-bold text-green-400">»</span> {en ? 'Turbo 12 s' : 'Turbo 12 s'}</div>
-            </div>
-          </div>
-        </div>
+        <RoundSide side="right">
+          {tanks.slice(half).map(t => <PlayerCard key={t.id} t={t} mode={mode} killLimit={killLimit} phone={padBySlot(t.id)?.nick} language={language} />)}
+          <RoundInfoCard title={en ? 'POWER-UPS' : 'BONUSY'} icon={<Package size={12} />}>
+            <RoundInfoRow mark="+">{en ? 'Repair +50 HP' : 'Naprawa +50 HP'}</RoundInfoRow>
+            <RoundInfoRow mark="◈">{en ? 'Shield 10 s' : 'Tarcza 10 s'}</RoundInfoRow>
+            <RoundInfoRow mark="≋">{en ? 'Rapid fire' : 'Szybkostrzelność'}</RoundInfoRow>
+            <RoundInfoRow mark="●">{en ? 'Heavy shell' : 'Ciężki pocisk'}</RoundInfoRow>
+            <RoundInfoRow mark="»">{en ? 'Turbo 12 s' : 'Turbo 12 s'}</RoundInfoRow>
+          </RoundInfoCard>
+        </RoundSide>
       </div>
 
-      {/* bottom controls bar */}
-      <div className="z-20 hidden items-center justify-center gap-4 border-t border-white/10 bg-zinc-950 px-3 py-1.5 lg:flex">
+      <RoundKeys hint={`P = ${en ? 'pause' : 'pauza'}`}>
         {players.filter(p => p.enabled && !p.isBot).map(p => (
-          <div key={p.id} className="flex items-center gap-1.5 text-[11px]">
-            <span className="h-2.5 w-2.5 rounded-full" style={{ background: p.color }} />
-            <span className="font-bold" style={{ color: p.color }}>{p.name}</span>
-            {padBySlot(p.id) ? (
-              <span className="flex items-center gap-1 rounded bg-green-500/15 px-1.5 py-0.5 text-[10px] font-bold text-green-300"><Smartphone className="h-3 w-3" />{padBySlot(p.id)!.nick}</span>
-            ) : (
-              <>
-                <KeyCap>{p.controlLabels.forward}</KeyCap><KeyCap>{p.controlLabels.back}</KeyCap><KeyCap>{p.controlLabels.left}</KeyCap><KeyCap>{p.controlLabels.right}</KeyCap>
-                <KeyCap color="#7c2d12">{p.controlLabels.fire}</KeyCap>
-              </>
-            )}
-          </div>
+          <RoundKeyGroup key={p.id} color={p.color} name={p.name}>
+            {padBySlot(p.id)
+              ? <RoundPhoneTag icon={<Smartphone size={11} />}>{padBySlot(p.id)!.nick}</RoundPhoneTag>
+              : <><KeyCap>{p.controlLabels.forward}</KeyCap><KeyCap>{p.controlLabels.back}</KeyCap><KeyCap>{p.controlLabels.left}</KeyCap><KeyCap>{p.controlLabels.right}</KeyCap><KeyCap fire>{p.controlLabels.fire}</KeyCap></>}
+          </RoundKeyGroup>
         ))}
-        <span className="text-[11px] text-zinc-600">P = {en ? 'pause' : 'pauza'}</span>
-      </div>
-    </div>
+      </RoundKeys>
+    </RoundFrame>
     <ScreenCurtain state={curtain.state} />
     </>
   );

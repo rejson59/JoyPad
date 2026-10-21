@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { isLeaving, wishToLeave } from '../lib/exitWish';
 import { Play, ArrowUpRight, ArrowLeft, Radio, Pause } from 'lucide-react';
 import { GAMES } from '../arcade/catalog';
@@ -29,7 +29,7 @@ export function PauseSheet({ game, onResume, onExit }: { game: string; onResume:
       if (confirm) { setConfirm(false); return; }
       onResume();
     }}>
-    <div className="cine-pause-content">
+    <div className="cine-pause-content" style={{ '--game-accent': info?.accent ?? 'var(--os-accent)', '--game-soft': info?.accentSoft ?? 'var(--os-accent-deep)' } as CSSProperties}>
       <div className="cine-pause-symbol" aria-hidden="true"><Pause size={26} /><span /></div>
       <div className="cine-pause-label"><span /> {en ? 'GAME PAUSED' : 'ROZGRYWKA WSTRZYMANA'}</div>
       <h3>{game}</h3><p>{en ? <>The world can wait a moment.<br />Come back when you are ready.</> : <>Świat może chwilę poczekać.<br />Wracaj, kiedy będziesz gotowy.</>}</p>

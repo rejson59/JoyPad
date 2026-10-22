@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import type { PadLink } from '../src/net/links';
 import type { PadInput, PadMessage } from '../src/net/protocol';
+import { keySetFor } from '../src/arcade/runtime';
 import { RaceRound } from '../src/arcade/games/Race';
 import { OrbitRound } from '../src/arcade/games/Orbit';
 import { SnakeRound } from '../src/arcade/games/Snake';
@@ -438,3 +439,19 @@ console.log('NEON PARTICLES SELFTEST: OK (per-emitter opacity, unchanged default
   }
   console.log(`GAME HUD SELFTEST: OK (13 luster palety, hudFont w ${fs.readdirSync('src', { recursive: true }).filter(f => /\.(ts|tsx)$/.test(String(f))).length - scenery.size} plikach bez wyjątków, wspólny znak wodny 4 aren, jeden chrome rundy, ${accents.size} odrębnych akcentów ≥7:1)`);
 }
+/* --- Sterowanie klawiaturą: obietnica z katalogu („Strzałki lub joystick”) --- */
+{
+  const solo = keySetFor(0, true)!;
+  const paired = keySetFor(0, false)!;
+  const second = keySetFor(1, false)!;
+  assert.ok(solo.right.includes('ArrowRight') && solo.up.includes('ArrowUp'),
+    'w rundzie solo strzałki sterują graczem 1 — katalog obiecuje „Strzałki lub joystick”');
+  assert.ok(solo.action.includes('Enter') && solo.action.includes('Space'), 'solo: sprint działa i z Enter, i ze Spacji');
+  assert.ok(!paired.right.includes('ArrowRight'), 'przy człowieku w slocie 1 strzałki zostają JEGO — inaczej obu graczy skręca razem');
+  assert.ok(second.right.includes('ArrowRight') && !second.right.includes('KeyD'), 'drugi gracz bez zmian: strzałki, nie WASD');
+  assert.equal(keySetFor(4, true), undefined, 'piąty slot nie istnieje — cztery klawiatury to sufit jednego komputera');
+  const runtimeSource = (await import('node:fs')).readFileSync('src/arcade/runtime.ts', 'utf8');
+  assert.ok(runtimeSource.includes('keySetFor(slot, !this.secondHuman)') && runtimeSource.includes('debugInput(slot: number)'),
+    'runda czyta zestawy przez `keySetFor` i udostępnia `debugInput` testom CI');
+}
+

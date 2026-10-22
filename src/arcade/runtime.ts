@@ -85,6 +85,32 @@ export interface RoundConfig {
 }
 
 export interface InputState { x: number; y: number; aimX: number; aimY: number; action: boolean }
+export interface KeySet { up: string[]; down: string[]; left: string[]; right: string[]; action: string[] }
+/** Klawiatury czterech graczy przy jednym komputerze (slot = miejsce w rundzie). */
+export const KEY_SETS: KeySet[] = [
+  { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], action: ['KeyQ', 'Space'] },
+  { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], action: ['Enter', 'Numpad0'] },
+  { up: ['KeyT'], down: ['KeyG'], left: ['KeyF'], right: ['KeyH'], action: ['KeyR'] },
+  { up: ['KeyI'], down: ['KeyK'], left: ['KeyJ'], right: ['KeyL'], action: ['KeyU'] },
+];
+/**
+ * Katalog obiecuje przy grach płótna „Strzałki lub joystick", ale strzałki są zestawem
+ * DRUGIEGO slotu — w jednoosobowej rundzie człowiek siedzi w slocie 0 (WASD) i strzałki
+ * milczały (zgłoszenie: „nie działa sterowanie w wężach"). Gdy drugi slot nie ma
+ * człowieka, pierwszy zestaw słucha też strzałek; przy dwóch graczach z klawiatury
+ * podział zostaje klasyczny, więc nic się nie podwaja.
+ */
+export function keySetFor(slot: number, soloHuman: boolean): KeySet | undefined {
+  const base = KEY_SETS[slot];
+  if (!base) return undefined;
+  if (slot !== 0 || !soloHuman) return base;
+  const arrows = KEY_SETS[1];
+  return {
+    up: [...base.up, ...arrows.up], down: [...base.down, ...arrows.down],
+    left: [...base.left, ...arrows.left], right: [...base.right, ...arrows.right],
+    action: [...base.action, ...arrows.action],
+  };
+}
 export const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
 export const distance = (ax: number, ay: number, bx: number, by: number) => Math.hypot(ax - bx, ay - by);
 export const rand = (min: number, max: number) => min + Math.random() * (max - min);
@@ -113,6 +139,8 @@ export abstract class CanvasRound implements GameRound {
   protected ctx: CanvasRenderingContext2D;
   protected config: RoundConfig;
   protected keys = new Set<string>();
+  /** Czy drugi slot ma człowieka (wtedy strzałki zostają jego, nie gracza 1). */
+  private secondHuman = false;
   protected clock = 0;
   protected timeLeft: number;
   protected countdown = 3;
@@ -127,6 +155,7 @@ export abstract class CanvasRound implements GameRound {
   private canvas: HTMLCanvasElement;
 
   constructor(canvas: HTMLCanvasElement, config: RoundConfig, duration: number) {
+    this.secondHuman = config.players.some(player => player.slot === 1 && !player.isBot);
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
     this.config = config;
@@ -286,15 +315,10 @@ export abstract class CanvasRound implements GameRound {
 
   /** Komputer może sterować slotami równolegle z telefonami. W grach arcade joystick jest kierunkowy. */
   protected input(slot: number): InputState {
-    const codes = [
-      { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', action: ['KeyQ', 'Space'] },
-      { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', action: ['Enter', 'Numpad0'] },
-      { up: 'KeyT', down: 'KeyG', left: 'KeyF', right: 'KeyH', action: ['KeyR'] },
-      { up: 'KeyI', down: 'KeyK', left: 'KeyJ', right: 'KeyL', action: ['KeyU'] },
-    ][slot];
+    const codes = keySetFor(slot, !this.secondHuman);
     if (!codes) return { x: 0, y: 0, aimX: 0, aimY: 0, action: false };
-    const x = Number(this.keys.has(codes.right)) - Number(this.keys.has(codes.left));
-    const y = Number(this.keys.has(codes.down)) - Number(this.keys.has(codes.up));
+    const x = Number(codes.right.some(code => this.keys.has(code))) - Number(codes.left.some(code => this.keys.has(code)));
+    const y = Number(codes.down.some(code => this.keys.has(code))) - Number(codes.up.some(code => this.keys.has(code)));
     const pad = this.config.padInputs[slot];
     const px = pad?.steer === 'tank' ? pad.turn : pad?.dirX ?? pad?.turn ?? 0;
     const py = pad?.steer === 'tank' ? -pad.fwd : pad?.dirY ?? -(pad?.fwd ?? 0);
@@ -306,6 +330,9 @@ export abstract class CanvasRound implements GameRound {
       action: !!pad?.fire || codes.action.some(code => this.keys.has(code)),
     };
   }
+
+  /** Wejście gracza widziane przez rundę — testy CI sprawdzają nim sterowanie. */
+  debugInput(slot: number): InputState { return this.input(slot); }
 
   protected abstract update(dt: number): void;
   protected abstract render(ctx: CanvasRenderingContext2D): void;

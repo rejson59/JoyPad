@@ -665,6 +665,16 @@ assert.ok(arcadeViewSource.includes('joypadRenderReport') && arcadeViewSource.in
 const smokeSource = readFileSync('scripts/preview-smoke.mjs', 'utf8');
 assert.ok(/!window\.document\.querySelector\('\.boot-mark'\)/.test(smokeSource),
   'harness preview czeka na drzewo Reacta, a nie na zastępczy znak startowy');
+// Telefon nie jest pomniejszonym komputerem: profil handheld ma własny układ
+// (zawijany pasek, jedna kolumna, cele ≥44 px, bez skrótów klawiszowych), bo bez
+// tego przyciski wypadały poza ramkę fit-frame i znikały razem z nadmiarem.
+const viewportCss = readFileSync('src/console/viewport.css', 'utf8');
+const handheldRules = (viewportCss.match(/html\[data-profile="handheld"\][^{]*\{/g) || []).length;
+assert.ok(handheldRules >= 24, `profil handheld ma własny układ biblioteki i menu (reguł: ${handheldRules})`);
+assert.ok(viewportCss.includes('html[data-profile="handheld"] .ui-hints { display:none; }'),
+  'telefon nie pokazuje skrótów klawiszowych — nie ma klawiatury');
+assert.ok((viewportCss.match(/html\[data-profile="handheld"\][^{]*\{[^}]*min-height:(4[4-9]|[5-9]\d)px/g) || []).length >= 4,
+  'cele dotyku na telefonie mają co najmniej 44 px');
 const stickSource = readFileSync('src/pad/Joystick.tsx', 'utf8');
 assert.ok(/safe-area-inset-\$\{side\}/.test(stickSource) && /calc\(\$\{zoneWidthPct\}% - env/.test(stickSource),
   'strefa gałki zaczyna się za wycięciem i jest o nie węższa — gałka liczy pozycję z pomiaru strefy');

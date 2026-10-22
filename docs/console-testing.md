@@ -91,6 +91,13 @@ odłącz pada w połowie ruchu (kursor ma stanąć, nie jechać) i podłącz go 
 - Układ desktop 1440×1000, mobile 390×844; brak poziomego przepełnienia biblioteki.
 - Telefon: portret i poziom 844×390, lokalne naciśnięcie/zwolnienie akcji.
 - Start Neonowego Pędu w trybie Canvas fallback, wspólna pauza, potwierdzenie zakończenia, powrót do biblioteki; wejście i wyjście Stalowego Frontu. Pełnej wydajności WebGL nie można ocenić na programowym GPU sandboxa.
+- Telefon (profil `handheld`) ma własny układ w `viewport.css`: zawijany pasek górny, jedna
+  kolumna sceny i decku gry, półka 2×, cele dotyku ≥44 px, stopka bez skrótów klawiszowych
+  i z oddechem na pływającą podpowiedź kontrolera. `tests/phone.spec.ts` pilnuje w CI, że nic
+  nie wypada poza okno (ramka `fit-frame` tnie nadmiar, więc ucięcie = niewidzialny przycisk).
+- Gry płótna w rundzie solo słuchają strzałek poza WASD (`keySetFor(0, solo)` w `runtime.ts`),
+  bo katalog obiecuje „Strzałki lub joystick"; przy człowieku w slocie 1 podział zostaje
+  klasyczny. `tests/phone.spec.ts` sprawdza to stanem `debugInput(0)` po starcie Wężowego Wiru.
 - Zrzut do fallbacku nigdy nie jest cichy: chip „TRYB 2D · powód" w oprawie rundy i `window.joypadRenderReport`
   mówią, czemu gra nie wystartowała w 3D (`brak WebGL2`, `brak fragmentu 3D (odśwież)`, błąd silnika).
   Silniki 3D oddają kontekst WebGL w `dispose()` (`forceContextLoss`), a sonda pyta jednorazowe płótno

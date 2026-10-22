@@ -349,6 +349,8 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
     };
     void createRound(id, canvas.current, config).then(engine => {
       setRenderReport(readRenderReport());
+      // CI (Playwright na serwerze dev) sprawdza sterowanie stanem wejścia, nie pikselami.
+      if (import.meta.env.DEV) (window as unknown as { joypadRound?: GameRound }).joypadRound = engine;
       if (cancelled) { engine.destroy(); return; }
       round.current = engine;
       engine.start();

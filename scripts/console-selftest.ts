@@ -644,6 +644,24 @@ assert.ok(whatsNewNotes.includes('export const UPDATES = [') && whatsNewSource.i
   'treść notatek żyje w module danych, a widok ją importuje — jedno źródło prawdy dla testu i UI');
 assert.ok(!/from '(\.\.\/)?console\/Sheet'|from 'react'/.test(whatsNewNotes),
   'moduł notatek nie ciągnie Reacta ani `Sheet` — test importuje go w Node bez drzewa komponentów');
+// Runda 23: „stara wersja 3D" (widok z góry) brała się z dwóch przecieków kontekstów:
+// sonda WebGL2 przypinała kontekst do płótna gospodarza (fallback 2D dostawał potem
+// `getContext('2d') === null`), a sceny 3D nie oddawały swoich — limit przeglądarki (~16)
+// po kilku rundach odpowiadał „nie" i gra zrzucała się cicho. Teraz wszystko jawne.
+for (const [name, path] of [['Neonowy Pęd', 'src/arcade/neon/NeonRushScene.ts'], ['STAR CLASH', 'src/arcade/starclash/Game.ts'],
+  ['Turbo League', 'src/arcade/league-next/LeagueGame.ts'], ['WEBZA', 'src/arcade/pizza/Game.ts']] as const) {
+  const engine = readFileSync(path, 'utf8');
+  assert.ok(engine.includes('renderer.dispose()') && engine.includes('forceContextLoss()'),
+    `silnik 3D ${name} oddaje kontekst WebGL w dispose() — bez tego limit kontekstów zjada kolejne rundy`);
+}
+const arcadeViewSource = readFileSync('src/arcade/ArcadeGameView.tsx', 'utf8');
+assert.ok(arcadeViewSource.includes("document.createElement('canvas')") && arcadeViewSource.includes('WEBGL_lose_context'),
+  'sonda WebGL2 pyta jednorazowe płótno i od razu oddaje kontekst');
+assert.ok(!arcadeViewSource.includes('canvas.getContext('),
+  'płótno gospodarza nie jest sondowane — fallback 2D musi dostać czysty kontekst');
+assert.ok(arcadeViewSource.includes('joypadRenderReport') && arcadeViewSource.includes('TRYB 2D')
+  && arcadeViewSource.includes('readRenderReport()'),
+  'zrzut do 2D nigdy nie jest cichy: chip z powodem w oprawie rundy i `window.joypadRenderReport`');
 const smokeSource = readFileSync('scripts/preview-smoke.mjs', 'utf8');
 assert.ok(/!window\.document\.querySelector\('\.boot-mark'\)/.test(smokeSource),
   'harness preview czeka na drzewo Reacta, a nie na zastępczy znak startowy');

@@ -453,6 +453,10 @@ export class NeonRushScene {
     });
     this.composer.dispose();
     this.renderer.dispose();
+    // `dispose()` zwalnia zasoby GPU, ale NIE kontekst: bez `forceContextLoss` każda
+    // runda zostawia go w limicie przeglądarki (~16), aż sonda WebGL2 zaczyna odpowiadać
+    // „nie" i Pęd cicho zrzuca się do widoku z góry („stara wersja 3D" ze zgłoszenia).
+    this.renderer.forceContextLoss();
     this.renderer.domElement.remove();
   }
 

@@ -91,6 +91,10 @@ odłącz pada w połowie ruchu (kursor ma stanąć, nie jechać) i podłącz go 
 - Układ desktop 1440×1000, mobile 390×844; brak poziomego przepełnienia biblioteki.
 - Telefon: portret i poziom 844×390, lokalne naciśnięcie/zwolnienie akcji.
 - Start Neonowego Pędu w trybie Canvas fallback, wspólna pauza, potwierdzenie zakończenia, powrót do biblioteki; wejście i wyjście Stalowego Frontu. Pełnej wydajności WebGL nie można ocenić na programowym GPU sandboxa.
+- Zrzut do fallbacku nigdy nie jest cichy: chip „TRYB 2D · powód" w oprawie rundy i `window.joypadRenderReport`
+  mówią, czemu gra nie wystartowała w 3D (`brak WebGL2`, `brak fragmentu 3D (odśwież)`, błąd silnika).
+  Silniki 3D oddają kontekst WebGL w `dispose()` (`forceContextLoss`), a sonda pyta jednorazowe płótno
+  i od razu je gubi — limit ~16 kontekstów przeglądarki nie zjada już kolejnych rund w długiej sesji.
 - Zapisywanie rozmiaru, zamiana stron, zmiana orientacji, ograniczony ruch.
 - Testowane za pomocą wstrzykniętego stanu hosta: wspólny lab, odliczanie i pauza, blokada akcji podczas pauzy. Nie jest to test rzeczywistej sieci ani silnika wibracji.
 

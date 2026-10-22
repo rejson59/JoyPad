@@ -1623,5 +1623,6 @@ export class LeagueGame {
     this.scene.environment?.dispose();
     this.scene.clear();
     this.renderer.dispose();
+    this.renderer.forceContextLoss(); // kontekst wraca do puli przeglądarki od razu
   }
 }

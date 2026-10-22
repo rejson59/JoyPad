@@ -8,7 +8,7 @@ import { ConnectionsScreen } from '../components/ConnectionsScreen';
 import { PauseSheet } from '../console/PauseSheet';
 import { clearLeaveWish, isLeaving, wishToLeave } from '../lib/exitWish';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Gamepad2, Home, Pause, Smartphone, Timer, Volume2, VolumeX, Zap } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, ChevronRight, Gamepad2, Home, Pause, Smartphone, Timer, Volume2, VolumeX, Zap } from 'lucide-react';
 import { gameAudio } from '../game/audio';
 import { menuMusic } from '../game/menuMusic';
 import { PLAYER_DEFS } from '../game/types';
@@ -71,8 +71,33 @@ function readPreference<T extends string>(key: string, fallback: T, values: read
   try { const value = localStorage.getItem(key) as T | null; return value && values.includes(value) ? value : fallback; } catch { return fallback; }
 }
 
-function hasWebGL2(canvas: HTMLCanvasElement) {
-  try { return Boolean(canvas.getContext('webgl2')); } catch { return false; }
+/** Dlaczego gra renderuje się tym, czym się renderuje — widoczne w UI i w konsoli. */
+export type RenderReport = { game: ArcadeId; webgl2: boolean; engine: 'webgl2' | 'canvas'; reason: string };
+let lastRenderReport: RenderReport | null = null;
+export function readRenderReport(): RenderReport | null { return lastRenderReport; }
+function noteRender(report: RenderReport) {
+  lastRenderReport = report;
+  // Diagnoza bez zgadywania: jedno pole w konsoli mówi, czemu Pęd jedzie z góry.
+  (window as unknown as { joypadRenderReport?: RenderReport }).joypadRenderReport = report;
+}
+function errorText(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return /dynamically imported module|Failed to fetch/i.test(message) ? 'brak fragmentu 3D (odśwież)' : message.slice(0, 80);
+}
+
+function probeWebGL2(): boolean {
+  // Sonda na JEDNORAZOWYM płótnie, z natychmiastowym oddaniem kontekstu. Pytanie płótna
+  // gospodarza przypinało do niego kontekst webgl2 i fallback 2D dostawał potem
+  // `getContext('2d') === null` (płótno ma jeden kontekst), a porzucone konteksty scen 3D
+  // zjadały limit przeglądarki (~16) — po kilku rundach sonda odpowiadała „nie" i gra
+  // cicho zrzucała się do widoku z góry, czyli „starej wersji 3D" ze zgłoszenia.
+  try {
+    const probe = document.createElement('canvas');
+    const gl = probe.getContext('webgl2');
+    if (!gl) return false;
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
+    return true;
+  } catch { return false; }
 }
 
 async function createRound(id: ArcadeId, canvas: HTMLCanvasElement, config: RoundConfig): Promise<GameRound> {
@@ -81,34 +106,55 @@ async function createRound(id: ArcadeId, canvas: HTMLCanvasElement, config: Roun
     case 'race': {
       // Neonowy Pęd korzysta z rozpakowanego miasta i kartów Three.js na obsługiwanych GPU.
       // The existing Canvas race remains the explicit low-capability fallback.
-      if (hasWebGL2(canvas)) {
-        try { return new (await import('./neon/NeonCircuitRound')).NeonCircuitRound(canvas, config); }
-        catch (error) { console.warn('Neonowy Pęd WebGL niedostępny — używam fallbacku Canvas', error); }
-      }
+      const webgl2 = probeWebGL2();
+      if (webgl2) {
+        try {
+          const round = new (await import('./neon/NeonCircuitRound')).NeonCircuitRound(canvas, config);
+          noteRender({ game: id, webgl2, engine: 'webgl2', reason: '' });
+          return round;
+        } catch (error) {
+          console.warn('Neonowy Pęd: silnik 3D nie wystartował — fallback Canvas', error);
+          noteRender({ game: id, webgl2, engine: 'canvas', reason: errorText(error) });
+        }
+      } else noteRender({ game: id, webgl2: false, engine: 'canvas', reason: config.language === 'en' ? 'no WebGL2' : 'brak WebGL2' });
       return new (await import('./games/Race')).RaceRound(canvas, config);
     }
     case 'orbit': {
       // Orbitalna Fala = STAR CLASH 3D z orbitalna-fala.zip. Bez WebGL2 zostaje klasyczny Orbit 2D.
-      if (hasWebGL2(canvas)) {
-        try { return new (await import('./starclash/StarClashRound')).StarClashRound(canvas, config); }
-        catch (error) { console.warn('STAR CLASH WebGL niedostępny — używam fallbacku Canvas', error); }
-      }
+      const webgl2 = probeWebGL2();
+      if (webgl2) {
+        try {
+          const round = new (await import('./starclash/StarClashRound')).StarClashRound(canvas, config);
+          noteRender({ game: id, webgl2, engine: 'webgl2', reason: '' });
+          return round;
+        } catch (error) {
+          console.warn('STAR CLASH: silnik 3D nie wystartował — fallback Canvas', error);
+          noteRender({ game: id, webgl2, engine: 'canvas', reason: errorText(error) });
+        }
+      } else noteRender({ game: id, webgl2: false, engine: 'canvas', reason: config.language === 'en' ? 'no WebGL2' : 'brak WebGL2' });
       return new (await import('./games/Orbit')).OrbitRound(canvas, config);
     }
     case 'snake':
-      // Wężowy Wir pozostaje celowo lekki: zawsze renderuje się w Canvas 2D.
+      // Wężowy Wir pozostaje celowo lekki: zawsze renderuje się w Canvas 2D — bez powodu
+      // w raporcie, bo to wybór projektu, nie degradacja (chip pokazuje tylko degradacje).
+      noteRender({ game: id, webgl2: false, engine: 'canvas', reason: '' });
       return new (await import('./games/Snake')).SnakeRound(canvas, config);
     case 'league': {
       // Turbo League = silnik z nitro-league.zip (src/arcade/league-next) renderujący na płótnie platformy.
       // Prosty prototyp Canvas 2D zostaje wyłącznie tam, gdzie WebGL2 w ogóle nie istnieje — po nieudanym
       // starcie WebGL płótno ma już kontekst 3D i nie da się na nim założyć 2D, więc wtedy zgłaszamy błąd.
-      if (hasWebGL2(canvas)) return new (await import('./league-next/LeagueRound')).LeagueNextRound(canvas, config);
+      if (probeWebGL2()) {
+        noteRender({ game: id, webgl2: true, engine: 'webgl2', reason: '' });
+        return new (await import('./league-next/LeagueRound')).LeagueNextRound(canvas, config);
+      }
+      noteRender({ game: id, webgl2: false, engine: 'canvas', reason: config.language === 'en' ? 'no WebGL2' : 'brak WebGL2' });
       return new (await import('./games/League')).LeagueRound(canvas, config);
     }
     case 'pizza': {
       // WEBZA to czyste Three.js — bez WebGL2 nie ma wersji zastępczej, więc zgłaszamy to wprost
       // (widok wraca do menu zamiast zawisnąć na pustym płótnie).
-      if (!hasWebGL2(canvas)) throw new Error('WEBZA wymaga WebGL2');
+      if (!probeWebGL2()) throw new Error('WEBZA wymaga WebGL2');
+      noteRender({ game: id, webgl2: true, engine: 'webgl2', reason: '' });
       return new (await import('./pizza/PizzaRound')).PizzaRound(canvas, config);
     }
   }
@@ -164,6 +210,7 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   const [participants, setParticipants] = useState<Racer[]>([]);
   const [roundKey, setRoundKey] = useState(0);
   const [showPads, setShowPads] = useState(false);
+  const [renderReport, setRenderReport] = useState<RenderReport | null>(null);
   const [muted, setMuted] = useState(gameAudio.muted);
   const [menuMusicOn, toggleMenuMusic] = useMenuMusic();
   const curtain = useCurtain();
@@ -301,6 +348,7 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
       onFinish: (next: RoundResult) => { if (!cancelled) { finishRecording(recording); setResult(next); setStage('over'); } },
     };
     void createRound(id, canvas.current, config).then(engine => {
+      setRenderReport(readRenderReport());
       if (cancelled) { engine.destroy(); return; }
       round.current = engine;
       engine.start();
@@ -372,6 +420,7 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
       <RoundTopBar
         center={<RoundTimer seconds={hud?.timeLeft ?? 0} icon={<Timer size={16} />} />}
         actions={<>
+          {renderReport?.engine === 'canvas' && renderReport.reason && <RoundChip tone="danger" optional icon={<AlertTriangle size={12} />}>{language === 'en' ? `2D MODE · ${renderReport.reason}` : `TRYB 2D · ${renderReport.reason}`}</RoundChip>}
           <RoundChip tone="quiet" optional>{modeTag} · {qualityLabels[quality]}</RoundChip>
           <RoundIconButton label={muted ? t('game.soundOn') : t('game.mute')} onClick={mute}>{muted ? <VolumeX size={17} /> : <Volume2 size={17} />}</RoundIconButton>
           <RoundIconButton label={t('game.pads')} onClick={() => setShowPads(true)}><Smartphone size={17} /></RoundIconButton>

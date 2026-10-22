@@ -508,7 +508,7 @@ export class Game {
     this._on = [];
     if (document.pointerLockElement) document.exitPointerLock();
     try { this.sfx && this.sfx.ctx && this.sfx.ctx.close(); } catch { /* ignore */ }
-    try { this.renderer.dispose(); this.renderer.domElement.remove(); this.overlay.remove(); } catch { /* ignore */ }
+    try { this.renderer.dispose(); this.renderer.forceContextLoss(); this.renderer.domElement.remove(); this.overlay.remove(); } catch { /* ignore */ }
   }
 
   resume() {

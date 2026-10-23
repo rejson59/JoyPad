@@ -161,12 +161,39 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          echo "== git status =="; git status --porcelain=v1 -- public/previews | head -20
           git add public/previews
           if git diff --cached --quiet; then
             echo "Brak nowych nagrań — nic do zapisania."
             exit 0
           fi
           GAMES="$(ls -1 public/previews/*.mp4 | xargs -n1 basename | sed 's/\.mp4$//' | paste -sd, -)"
-          git commit -m "Nagrania botów: ${GAMES} (Full HD, bez dźwięku)"
-          git pull --rebase origin "${GITHUB_REF_NAME}"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          fail() {
+            # Logi jobów bywają niedostępne z zewnątrz, więc diagnostyka ląduje
+            # w podsumowaniu kroku — da się je przeczytać przez API check-run.
+            {
+              echo "### Commit klipów nie wyszedł ($1)"
+              echo '```'
+              git status --porcelain=v1 | head -40
+              git log --oneline -3
+              git remote -v
+              echo "$2"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            printf '%s\n' "$2"
+          }
+          if ! OUT="$(git commit -m "Nagrania botów: ${GAMES} (Full HD, bez dźwięku)" 2>&1)"; then
+            fail "git commit" "$OUT"; exit 1
+          fi
+          printf '%s\n' "$OUT"
+          for attempt in 1 2 3; do
+            OUT="$(git pull --rebase --autostash origin "${GITHUB_REF_NAME}" 2>&1)" || {
+              fail "git pull --rebase (próba $attempt)" "$OUT"
+              git rebase --abort 2>/dev/null || true
+              sleep 10; continue; }
+            OUT2="$(git push origin "HEAD:${GITHUB_REF_NAME}" 2>&1)" && {
+              printf '%s\n%s\n' "$OUT" "$OUT2"; exit 0; }
+            fail "git push (próba $attempt)" "$OUT2"
+            sleep 10
+          done
+          exit 1

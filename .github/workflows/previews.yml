@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       games:
-        description: 'Silniki do nagrania (po przecinku): tanks,race,orbit,snake,league,pizza'
+        description: 'Silniki do nagrania (po przecinku); puste = wszystkie brakujące z PREVIEW_GAMES'
         required: false
         default: 'snake,league,pizza'
       seconds:
@@ -53,7 +53,13 @@ jobs:
       - id: plan
         run: |
           REQUESTED="${{ inputs.games }}"
-          REQUESTED="${REQUESTED:-snake,league,pizza}"
+          # Push (zmiana potoku przechwytywania) nie niesie wejść: wtedy listą jest
+          # `PREVIEW_GAMES` z `GamePreview.tsx` — dokładnie tak, jak obiecuje komentarz
+          # na górze pliku. Ręczny dispatch nadal nagrywa to, co wpisze operator.
+          if [ -z "$REQUESTED" ]; then
+            REQUESTED="$(grep -o "PREVIEW_GAMES = \[[^]]*\]" src/console/GamePreview.tsx | tr -d "[]" | sed "s/PREVIEW_GAMES = //" | tr -d "' " )"
+            echo "Push bez wejść — lista z PREVIEW_GAMES: $REQUESTED"
+          fi
           SECONDS_PER_CLIP="${{ inputs.seconds }}"
           FPS="${{ inputs.fps }}"
           echo "seconds=${SECONDS_PER_CLIP:-8}" >> "$GITHUB_OUTPUT"

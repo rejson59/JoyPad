@@ -141,7 +141,7 @@ export function recordRound(signal: RoundSignal, storage: AchievementStorage | u
     'triple-crown': distinctWins >= 3,
     marathon: card.rounds >= 10,
     'full-couch': signal.humans >= 4,
-    explorer: card.playedGames.length >= 6,
+    explorer: card.playedGames.length >= 7,
     untouchable: humanWon && signal.game === 'snake' && deaths === 0,
     collector: roundPickups >= 25,
     'shield-saver': shields >= 1,
@@ -176,7 +176,7 @@ export function progressFor(id: AchievementId, state: AchievementsState): { valu
     case 'hat-trick': return { value: Math.min(card.wins, 3), goal: 3 };
     case 'triple-crown': return { value: Math.min(Object.values(card.winsByGame).filter(value => (value ?? 0) > 0).length, 3), goal: 3 };
     case 'marathon': return { value: Math.min(card.rounds, 10), goal: 10 };
-    case 'explorer': return { value: Math.min(card.playedGames.length, 6), goal: 6 };
+    case 'explorer': return { value: Math.min(card.playedGames.length, 7), goal: 7 };
     case 'collector': return { value: Math.min(card.bestPickups, 25), goal: 25 };
     default: return null;
   }

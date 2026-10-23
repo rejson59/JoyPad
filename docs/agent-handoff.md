@@ -123,6 +123,8 @@ Czyli: integracja = pisanie adaptera od zera + decyzje produktowe, nie przepakow
    ją z `catalog.ts` (grywalny tytuł bez nagrania odpada, `wip` nie żąda nic), wymaga par mp4/webm, pilnuje
    wymiarów Full HD masterów i budżetu (plik <12 MB, folder <60 MB).
 7. **Zakres odblokowania.** Tylko `league` (`wip: false`); `blockcraft` pozostaje teaserem.
+   *(Runda 25: `blockcraft` odblokowany — silnik 2.29 z repo `rejson59/mconline`, patrz
+   `docs/imported-games.md` §BlockCraft; teaserów brak, biblioteka ma siedem światów.)*
 
 ## 6. Gotowy plan integracji (kolejność działań)
 
@@ -698,8 +700,10 @@ byłaby zmianą w ciemno; wszystko, co tu jest, da się sprawdzić bramkami.
 | Wersja **1.9.0** | `src/platform/whatsNewState.ts`, `package.json`, `src/platform/WhatsNew.tsx` | to nie poprawka w obrębie wydania: nowa oprawa rundy, akcenty gier i komplet nagrań zasługują na własny numer i własną listę w „Co nowego?” |
 
 **Dowiezione w CI:** klipy `snake`, `league`, `pizza` nagrał workflow `previews.yml`
-(commit `541f80a`, `publish` bramkuje je przez `selftest:console` przed zapisaniem), więc
-`awaitingRecording` w sekcji PREVIEW jest **pusta** i brama pilnuje kompletu sześciu tytułów
-przy każdej zmianie: pary mp4+webm, natywne 1920×1080, plik <12 MB, folder <60 MB
-(obecnie 33 MB). `PREVIEW_REVISION` podbity na `4`, żeby przeglądarki pobrały nowe klipy.
-Gdyby nagranie kiedyś celowo czekało na CI, wpis wraca na tę listę w tej samej rundzie.
+(commit `541f80a`, `publish` bramkuje je przez `selftest:console` przed zapisaniem).
+Brama PREVIEW pilnuje kompletu tytułów przy każdej zmianie: pary mp4+webm, natywne
+1920×1080, plik <12 MB, folder <60 MB (obecnie 33 MB). `PREVIEW_REVISION` = `4`.
+Runda 25 dodała siódmy tytuł (`blockcraft`) i — dokładnie przewidzianym tu mechanizmem —
+wpis wrócił na listę oczekujących: `awaitingRecording` trzyma `blockcraft`, dopóki
+`previews.yml` nie nagra i nie opublikuje jego klipu (gałąź scenariusza już jest
+w `capture.mjs`); wtedy lista wraca do pustej i brama znów żąda kompletu siedmiu.

@@ -26,7 +26,7 @@ import { COLORS, type DisplayMode, type GameRound, type Racer, type RenderQualit
 import { RoundArena, RoundChip, RoundCountdown, RoundDeck, RoundFrame, RoundIconButton, RoundLoading, RoundObjective, RoundOverlay, RoundPlayerCard, RoundPowerUp, RoundStartFlash, RoundTimer, RoundTitle, RoundTopBar } from '../console/RoundChrome';
 import { announceUnlocked, recordRound, type RoundSignal } from '../platform/achievements';
 
-type ArcadeId = Exclude<GameId, 'tanks' | 'blockcraft'>;
+type ArcadeId = Exclude<GameId, 'tanks'>;
 type Stage = 'menu' | 'game' | 'over';
 type GameRules = { primaryLabel: string; primary: string[]; secondaryLabel: string; secondary: string[]; hint: string; action: string; win: string };
 const RULES: Record<ArcadeId, Record<Language, GameRules>> = {
@@ -46,6 +46,10 @@ const RULES: Record<ArcadeId, Record<Language, GameRules>> = {
     pl: { primaryLabel: 'LIMIT GOLI', primary: ['3 gole', '5 goli', '7 goli'], secondaryLabel: 'BOTY', secondary: ['Bez botów', '1 bot', '2 boty', '3 boty'], hint: 'Joystick wskazuje kierunek jazdy — auto samo skręca i przyspiesza, puszczona gałka hamuje. Przytrzymaj AKCJĘ, by użyć boosta; żółte pola uzupełniają paliwo. Niebiescy atakują w prawo, pomarańczowi w lewo.', action: 'BOOST', win: 'Pierwsza drużyna do limitu goli wygrywa; remis po 3 minutach rozstrzyga złoty gol.' },
     en: { primaryLabel: 'GOAL LIMIT', primary: ['3 goals', '5 goals', '7 goals'], secondaryLabel: 'BOTS', secondary: ['No bots', '1 bot', '2 bots', '3 bots'], hint: 'The stick points where you want to drive — the car turns and accelerates by itself, and letting go brakes. Hold ACTION to boost; yellow pads refill it. Blue attacks to the right, orange to the left.', action: 'BOOST', win: 'First team to the goal limit wins; a tie after 3 minutes is settled by a golden goal.' },
   },
+  blockcraft: {
+    pl: { primaryLabel: 'CZAS ZMIANY', primary: ['3 minuty', '5 minut', '8 minut'], secondaryLabel: 'TRYB', secondary: ['Kreatywny', 'Przetrwanie'], hint: 'WASD i mysz prowadzą gracza, E otwiera ekwipunek z rzemiosłem, pad steruje ruchem, a AKCJA stawia trzymany blok. Koniec zmiany zamyka rundę statystykami — świat zostaje na urządzeniu.', action: 'BUDUJ', win: 'Świat się nie kończy: zmianę zamyka czas, a dorobek liczy się w blokach.' },
+    en: { primaryLabel: 'SHIFT LENGTH', primary: ['3 minutes', '5 minutes', '8 minutes'], secondaryLabel: 'MODE', secondary: ['Creative', 'Survival'], hint: 'WASD and the mouse drive the player, E opens the crafting inventory, the pad steers and ACTION places the held block. The shift end closes the round with stats — the world stays on this device.', action: 'BUILD', win: 'The world does not end: the shift closes on time and your work counts in blocks.' },
+  },
   pizza: {
     pl: { primaryLabel: 'DŁUGOŚĆ ZMIANY', primary: ['Krótka · 1:00', 'Zmiana · 2:00', 'Maraton · 3:00'], secondaryLabel: 'TRYB', secondary: ['Współpraca', 'Rywalizacja'], hint: 'Joystick: bieg. Przytrzymaj AKCJĘ — kurier wystrzeli sieć; puść w dole łuku, by nabrać rozpędu. Pizzę rzuca sam, gdy masz klienta przed sobą. Pusty plecak uzupełnisz przy furgonetce.', action: 'SIEĆ', win: 'Dowieźcie jak najwięcej pizz przed końcem zmiany.' },
     en: { primaryLabel: 'SHIFT LENGTH', primary: ['Short · 1:00', 'Shift · 2:00', 'Marathon · 3:00'], secondaryLabel: 'MODE', secondary: ['Co-op', 'Versus'], hint: 'Stick: run. Hold ACTION — your courier shoots a web; let go at the bottom of the arc to gain speed. The pizza throws itself when a customer is ahead of you. Refill an empty bag at the van.', action: 'WEB', win: 'Deliver as many pizzas as you can before the shift ends.' },
@@ -62,6 +66,7 @@ const SETUP: Record<ArcadeId, { primary: number; secondary: number; bots: boolea
   snake: { primary: 1, secondary: 1, bots: true },
   league: { primary: 1, secondary: 2, bots: true },
   pizza: { primary: 1, secondary: 0, bots: false },
+  blockcraft: { primary: 1, secondary: 0, bots: false },
 };
 
 function readLocalRecord(id: ArcadeId): number {
@@ -150,6 +155,13 @@ async function createRound(id: ArcadeId, canvas: HTMLCanvasElement, config: Roun
       }
       noteRender({ game: id, webgl2: false, engine: 'canvas', reason: config.language === 'en' ? 'no WebGL2' : 'brak WebGL2' });
       return new (await import('./games/League')).LeagueRound(canvas, config);
+    }
+    case 'blockcraft': {
+      // BlockCraft to silnik Three.js z repo mconline — bez WebGL2 nie ma wersji
+      // zastępczej, więc mówimy to wprost (widok wraca do menu, nie wisi na płótnie).
+      if (!probeWebGL2()) throw new Error('BlockCraft wymaga WebGL2');
+      noteRender({ game: id, webgl2: true, engine: 'webgl2', reason: '' });
+      return new (await import('./blockcraft/BlockCraftRound')).BlockCraftRound(canvas, config);
     }
     case 'pizza': {
       // WEBZA to czyste Three.js — bez WebGL2 nie ma wersji zastępczej, więc zgłaszamy to wprost

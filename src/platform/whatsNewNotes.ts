@@ -1,4 +1,4 @@
-import { AlertTriangle, Cpu, Droplets, FlaskConical, Keyboard, LayoutDashboard, Smartphone, Sparkles, Trophy, Video } from 'lucide-react';
+import { AlertTriangle, Box, Cpu, Droplets, FlaskConical, Keyboard, LayoutDashboard, Smartphone, Sparkles, Trophy, Video } from 'lucide-react';
 
 /**
  * Treść notatek wersji — dane bez widoku, żeby test przeglądarkowy mógł je czytać
@@ -8,6 +8,11 @@ import { AlertTriangle, Cpu, Droplets, FlaskConical, Keyboard, LayoutDashboard, 
  * ciągnie za sobą drzewa komponentów.
  */
 export const UPDATES = [
+  {
+    title: { pl: 'BlockCraft grywalny: siódmy świat biblioteki.', en: 'BlockCraft playable: the seventh library world.' },
+    detail: { pl: 'Zapowiedź z półki staje się grą: voxelowy silnik 2.29 z repo `mconline` (MIT) wchodzi do konsoli mostem rundy — otwarty świat z biomami, rzemiosłem, mobami i redstoneem, zmiana czasowa z HUD-em z tokenów, a świat zostaje na urządzeniu. Nagranie bota dowiezie CI.', en: 'The shelf announcement becomes a game: the 2.29 voxel engine from the `mconline` repo (MIT) enters the console through a round bridge — an open world with biomes, crafting, mobs and redstone, a timed shift with token HUD, and the world stays on device. CI will deliver the bot recording.' },
+    icon: Box, color: '#7cd67f',
+  },
   {
     title: { pl: 'Karta pilota i osiągnięcia.', en: 'Pilot card & achievements.' },
     detail: { pl: 'Dwanaście trofeów wyprowadzonych wyłącznie z sygnałów rundy (wynik oraz zdarzenia: impuls, eliminacja, tarcza, respawn), karta pilota z licznikiem rund, zwycięstw, światów i rekordem impulsów. Trofea wiszą też na kafelkach gier, a odblokowanie świętuje toastem.', en: 'Twelve trophies derived purely from round signals (the result plus pickup, elimination, shield and respawn events), a pilot card counting rounds, wins, worlds and a pickup record. Trophies also hang on game tiles, and unlocking one is celebrated with a toast.' },
@@ -54,8 +59,8 @@ export const UPDATES = [
     icon: LayoutDashboard, color: '#c9f25e',
   },
   {
-    title: { pl: 'Wydanie 2.0: rundy 20–24 jednym pakietem.', en: 'Release 2.0: rounds 20–24 in one package.' },
-    detail: { pl: 'Wszystko powyżej składa się na pierwsze duże wydanie po 1.9: konsola pamięta Twoje granie, telefon jest pełnoprawnym ekranem, a 3D trzyma się swojego miejsca.', en: 'Everything above adds up to the first big release since 1.9: the console remembers your play, the phone is a first-class screen, and 3D stays in its seat.' },
+    title: { pl: 'Wydanie 2.1: biblioteka domknięta.', en: 'Release 2.1: the library is complete.' },
+    detail: { pl: 'BlockCraft domyka półkę siedmiu światów, a wszystko od rundy 20 (karta pilota, telefon, jawne 3D, nagrania 6/6+) składa się w pierwsze wydanie po 1.9.', en: 'BlockCraft completes the seven-world shelf, and everything since round 20 (pilot card, phone layout, honest 3D, 6/6+ recordings) adds up to the first release since 1.9.' },
     icon: Sparkles, color: '#ffb77f',
   },
 ] as const;

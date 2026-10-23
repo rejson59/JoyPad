@@ -215,7 +215,9 @@ assert.ok(previewGames.every(id => previewCatalog.some(game => game.id === id)),
  * każdy grywalny tytuł z `PREVIEW_GAMES` musi mieć parę mp4+webm w natywnym Full HD.
  * Wpis trafia tu tylko wtedy, gdy nagranie celowo czeka na CI w tej samej rundzie.
  */
-const awaitingRecording = new Set<string>([]);
+// BlockCraft czeka na swój pierwszy klip: workflow `previews.yml` nagra go w CI
+// i `publish` zapisze parę mp4+webm do `public/previews` — wtedy lista wraca do pustej.
+const awaitingRecording = new Set<string>(['blockcraft']);
 let previewBytes = 0;
 const pending: string[] = [];
 for (const id of previewGames) {
@@ -1298,6 +1300,10 @@ assert.ok(arcadeViewSource2.includes('recordRound(') && arcadeViewSource2.includ
 const i18nSource = readFileSync('src/platform/i18n.ts', 'utf8');
 assert.ok(i18nSource.includes("'library.achievements'") && i18nSource.includes("'achievements.title'"),
   'osiągnięcia mają klucze PL i EN w słowniku');
-assert.ok(readFileSync('src/platform/whatsNewState.ts', 'utf8').includes("'2.0.0'"), 'wydanie 2.0.0 w jednym źródle prawdy');
+// Numer wydania żyje w dwóch miejscach i muszą się zgadzać: `package.json` oraz
+// `whatsNewState.ts` (jedno źródło prawdy dla „Co nowego?”) — bez literału wersji,
+// żeby bramka nie wymagała ręcznej edycji przy każdym bumpie.
+const pkgVersion = JSON.parse(readFileSync('package.json', 'utf8')).version as string;
+assert.ok(readFileSync('src/platform/whatsNewState.ts', 'utf8').includes(`'${pkgVersion}'`), `wydanie ${pkgVersion} w jednym źródle prawdy`);
 console.log('PILOT CARD SELFTEST: OK (12 trofeów z sygnałów rundy, karta pilota, postęp pasków, okno i kafelki biblioteki)');
 

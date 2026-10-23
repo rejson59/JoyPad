@@ -73,6 +73,23 @@ try {
     // The engine clamps dt to 1/30 s, so two half-steps keep the excerpt in real time.
     step=()=>{for(let k=0;k<2;k++){g.last=performance.now()-1000/(fps*2);g.loop(performance.now());}return canvas;};
     for(let n=0;n<90;n++)step();
+   } else if(id==='blockcraft') {
+    const {Game}=await import('/src/arcade/blockcraft/game/engine.ts');
+    const g=new Game(root,{seed:7,mode:'creative',renderDistance:3,worldType:'flat',worldName:'JoyPad'},{onHud(){},onUI(){}});
+    // Scenariusz: spacer po płaskim świecie z serią stawianych bloków co sekundę i
+    // łagodnymi skrętami — silnik sam prowadzi symulację, my wołamy jego pętlę
+    // krok po kroku (rAF jest w capture wyłączony), jak przy pozostałych grach.
+    g.keys.add('KeyW');
+    let frame=0;
+    step=()=>{
+      if(frame%90===0){g.keys.delete('KeyW');g.keys.add('KeyD');}
+      if(frame%90===30){g.keys.delete('KeyD');g.keys.add('KeyW');}
+      g.mouseRight=frame%60<12;
+      frame++;
+      g.loop(performance.now());
+      return g.renderer.domElement;
+    };
+    for(let n=0;n<90;n++)step();
    } else {
     const {Game}=await import('/src/arcade/starclash/Game.ts');const g=new Game(root,{lowFx:false});g.padMode=true;
     g.startBattleSquad([{cls:'fighter',up:null,name:'BOT'}],{enemies:6,allyBots:3,difficulty:1});

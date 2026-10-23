@@ -109,10 +109,10 @@ export const GAMES: GameInfo[] = [
     }),
   },
   {
-    id: 'blockcraft', number: '07', title: 'BlockCraft', eyebrow: 'ZAPOWIEDŹ', genre: 'Sandbox / budowanie', wip: true,
-    description: 'Przygotowujemy sandbox z budowaniem z bloków: swobodną eksplorację, zbieranie surowców i wspólne tworzenie własnego świata. To zapowiedź — gra nie jest jeszcze dostępna.',
-    teaser: 'Blokowy świat • Budowanie • Co-op', cover: 'images/blockcraft-cover.webp', accent: '#7cd67f', accentSoft: '#285d38',
-    controls: 'Sterowanie i zasady gry są jeszcze w przygotowaniu', players: 'Szczegóły wkrótce',
+    id: 'blockcraft', number: '07', title: 'BlockCraft', eyebrow: 'OTWARTY ŚWIAT', genre: 'Sandbox / budowanie',
+    description: 'Nieskończony voxelowy świat z biomami, wioskami, redstoneem i Netherem: kop, buduj, handluj i gotuj w samotnej zmianie czasowej. Silnik BlockCraft 2.29 z repo `mconline` — świat zostaje na urządzeniu.',
+    teaser: 'Blokowy świat • Budowanie • Redstone', cover: 'images/blockcraft-cover.webp', accent: '#7cd67f', accentSoft: '#285d38',
+    controls: 'WASD: ruch · mysz: rozglądanie i kopanie · AKCJA (pad): stawiaj blok · E: ekwipunek', players: '1 gracz · świat zostaje na urządzeniu',
     features: ['Sandbox z bloków', 'Własne budowle', 'Zapowiedź'], renderTag: '3D LITE',
     english: english({
       title: 'BlockCraft', eyebrow: 'COMING SOON', genre: 'Sandbox / building',

@@ -704,6 +704,9 @@ byłaby zmianą w ciemno; wszystko, co tu jest, da się sprawdzić bramkami.
 Brama PREVIEW pilnuje kompletu tytułów przy każdej zmianie: pary mp4+webm, natywne
 1920×1080, plik <12 MB, folder <60 MB (obecnie 33 MB). `PREVIEW_REVISION` = `4`.
 Runda 25 dodała siódmy tytuł (`blockcraft`) i — dokładnie przewidzianym tu mechanizmem —
-wpis wrócił na listę oczekujących: `awaitingRecording` trzyma `blockcraft`, dopóki
-`previews.yml` nie nagra i nie opublikuje jego klipu (gałąź scenariusza już jest
-w `capture.mjs`); wtedy lista wraca do pustej i brama znów żąda kompletu siedmiu.
+wpis trafił na listę oczekujących, dopóki `previews.yml` nie nagrał i nie opublikował
+klipu (commit `a411b7d`, ~3,3 MB para mp4+webm). `awaitingRecording` jest znów **pusta**
+i brama pilnuje kompletu **siedmiu** tytułów (folder ~36 MB z 60 MB budżetu). Przy okazji
+wyszły dwie usterki potoku: `plan` na push miał stałą listę trzech tytułów zamiast czytać
+`PREVIEW_GAMES` (`ff16b71`), a krok commitujący klipy dostał diagnostykę do podsumowania
+kroku i trzy próby pusha (`d404d07`) — logi jobów bywają z zewnątrz nieczytelne.

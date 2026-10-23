@@ -215,9 +215,9 @@ assert.ok(previewGames.every(id => previewCatalog.some(game => game.id === id)),
  * każdy grywalny tytuł z `PREVIEW_GAMES` musi mieć parę mp4+webm w natywnym Full HD.
  * Wpis trafia tu tylko wtedy, gdy nagranie celowo czeka na CI w tej samej rundzie.
  */
-// BlockCraft czeka na swój pierwszy klip: workflow `previews.yml` nagra go w CI
-// i `publish` zapisze parę mp4+webm do `public/previews` — wtedy lista wraca do pustej.
-const awaitingRecording = new Set<string>(['blockcraft']);
+// BlockCraft dostał swój klip z CI (workflow `previews.yml`, commit `a411b7d`),
+// więc lista oczekujących znów jest pusta i brama żąda kompletu siedmiu tytułów.
+const awaitingRecording = new Set<string>([]);
 let previewBytes = 0;
 const pending: string[] = [];
 for (const id of previewGames) {

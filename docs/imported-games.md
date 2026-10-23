@@ -168,8 +168,8 @@ i dawne teksty; przywróć `webgl/League3D.ts` z historii gita, jeśli ma wróci
   `src/arcade/blockcraft/game/**` w `eslint.config.js`.
 - **Nagranie.** Gałąź `blockcraft` w `capture.mjs`: płaski świat kreatywny, silnik
   sterowany bezpośrednio (`g.loop(...)` — capture wyłącza rAF), scenariusz spaceru z
-  serią stawianych bloków; klip dowiezie `previews.yml` (do tego czasu `awaitingRecording`
-  w bramce PREVIEW trzyma `blockcraft`).
+  serią stawianych bloków; klip (parę mp4+webm, ~3,3 MB) nagrał `previews.yml`
+  i opublikował commit `a411b7d` — `awaitingRecording` w bramce PREVIEW znów pusta.
 - **Bramki.** `probeWebGL2()` — bez WebGL2 runda zgłasza błąd zamiast wisieć na pustym
   płótnie (jak WEBZA/STAR CLASH); `worldName: 'JoyPad'`; zapis silnika zostaje w
   localStorage urządzenia (`blockcraft-save-v1`) i nie miesza się ze stanem konsoli.

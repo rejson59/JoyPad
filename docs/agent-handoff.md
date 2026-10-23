@@ -35,6 +35,9 @@ Warstwy, które trzeba rozróżniać przy każdej zmianie:
 - `src/arcade/runtime.ts` — kontrakt rundy + `CanvasRound` (wspólna pętla, DPR, pauza, klawiatura 4 slotów).
 - `src/arcade/catalog.ts` — biblioteka i **jedyne źródło prawdy o dostępności** (`wip: true` = kafelek podglądu, brak startu).
 - `src/arcade/ArcadeGameView.tsx` — cykl `menu → game → over`, `RULES`, `createRound()` (leniwe importy silników + fallback WebGL2→Canvas2D), wysyłka HUD-u na pady, nagrywanie Moments, komendy pilota.
+- `src/platform/achievements.ts` — karta pilota i osiągnięcia (storage `joypad.achievements.v1`,
+  zdarzenie `joypad-achievement`, toast przez `notify`); okno `src/console/AchievementsSheet.tsx`,
+  trofea na kafelkach i przycisk w stopce `ConsoleLibrary`.
 - `src/arcade/<engine>/` — silniki: `games/{Tanks→src/App.tsx, Race, Orbit, Snake, League}.ts`, `neon/*`, `webgl/runtime3d.ts`, `starclash/*`.
 - `src/console/` — powłoka konsoli (biblioteka, preferencje `joypad.console`, paleta `palette.css`, panele, wyniki).
 - `src/platform/` — warstwa JoyPad OS: `momentRecorder.ts` (telemetria), `replayRecorder.ts` (MediaRecorder), `useRecordedMoments`, pokoje/role, Player Pass, i18n PL/EN, powiadomienia, `WhatsNew`.

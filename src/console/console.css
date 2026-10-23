@@ -351,3 +351,33 @@ html[data-motion="reduced"]::view-transition-group(*),html[data-motion="reduced"
 .chunk-gate { min-height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; text-align:center; background:var(--os-bg); color:var(--os-secondary); font-family:var(--font-joy); padding:32px; }
 .chunk-gate p { font-size:12px; letter-spacing:2.2px; text-transform:uppercase; }
 .chunk-gate .lg-pill { display:inline-flex; align-items:center; gap:9px; }
+
+/* ==========================================================================
+   KARTA PILOTA I TROFEA (runda 24)
+   Okno osiągnięć: nagłówek z liczbami sesji i siatka trofeów. Odblokowane
+   karty dostają rant akcentu, zablokowane siedzą przyciemnione z paskiem
+   postępu — postęp jest zawsze prawdziwy (liczniki z `platform/achievements`).
+   -------------------------------------------------------------------------- */
+.trophy-sheet { display:flex; flex-direction:column; gap:14px; }
+.trophy-pilot { display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; padding:14px 16px; border-radius:18px; border:1px solid var(--lg-edge); background:var(--lg-fill); }
+.trophy-pilot p { margin-top:6px; font-size:12px; color:var(--os-muted); max-width:46ch; }
+.trophy-pilot-stats { display:grid; grid-template-columns:repeat(4,minmax(64px,1fr)); gap:10px; }
+.trophy-pilot-stats div { display:flex; flex-direction:column; align-items:center; gap:2px; padding:8px 6px; border-radius:12px; background:var(--os-panel); }
+.trophy-pilot-stats b { font:700 18px/1.1 var(--font-mono); color:var(--os-accent-bright); }
+.trophy-pilot-stats span { font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--os-muted); }
+.trophy-counter { font:600 12px/1 var(--font-mono); color:var(--os-muted); letter-spacing:.14em; }
+.trophy-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:10px; }
+.trophy-card { display:flex; gap:10px; padding:12px; border-radius:14px; border:1px solid var(--lg-edge); background:var(--os-panel); opacity:.72; }
+.trophy-card.is-unlocked { opacity:1; border-color:var(--os-accent); box-shadow:0 8px 26px -18px var(--os-accent); }
+.trophy-icon { display:grid; place-items:center; width:34px; height:34px; border-radius:10px; background:var(--os-bg); color:var(--os-muted); flex:none; }
+.trophy-card.is-unlocked .trophy-icon { color:var(--os-accent-bright); }
+.trophy-card b { font-size:13px; }
+.trophy-card p { margin-top:3px; font-size:11.5px; line-height:1.5; color:var(--os-muted); }
+.trophy-card small { display:block; margin-top:6px; font:600 10px/1 var(--font-mono); letter-spacing:.1em; color:var(--os-muted); text-transform:uppercase; }
+.trophy-card.is-unlocked small { color:var(--os-success); }
+.trophy-meter { position:relative; display:flex; align-items:center; margin-top:10px; height:6px; border-radius:999px; background:var(--os-bg); }
+.trophy-meter i { position:absolute; inset:0 auto 0 0; border-radius:999px; background:var(--os-accent); }
+.trophy-meter em { position:absolute; right:0; top:-14px; font:600 10px/1 var(--font-mono); color:var(--os-muted); font-style:normal; }
+.os-tile-trophy { position:absolute; top:8px; left:8px; z-index:2; display:flex; align-items:center; gap:4px; padding:3px 7px; border-radius:999px; background:rgba(6,6,8,.72); color:var(--os-accent-bright); font:700 10px/1 var(--font-mono); backdrop-filter:blur(6px); }
+html[data-profile="handheld"] .trophy-pilot-stats { grid-template-columns:repeat(2,minmax(0,1fr)); }
+html[data-profile="handheld"] .trophy-grid { grid-template-columns:minmax(0,1fr); }

@@ -1,4 +1,4 @@
-import { Car, Gamepad2, LayoutDashboard, Palette, Pizza, Sparkles, Tv, Type, Video } from 'lucide-react';
+import { AlertTriangle, Cpu, Droplets, FlaskConical, Keyboard, LayoutDashboard, Smartphone, Sparkles, Trophy, Video } from 'lucide-react';
 
 /**
  * Treść notatek wersji — dane bez widoku, żeby test przeglądarkowy mógł je czytać
@@ -9,53 +9,53 @@ import { Car, Gamepad2, LayoutDashboard, Palette, Pizza, Sparkles, Tv, Type, Vid
  */
 export const UPDATES = [
   {
-    title: { pl: 'Jedna oprawa rundy dla wszystkich gier.', en: 'One round shell for every game.' },
-    detail: { pl: 'Stalowy Front gra na tym samym HUD-zie co reszta biblioteki: jeden pasek górny, karty graczy, nakładki, pasek klawiszy i okienka pauzy. Gry różnią się światem, nie interfejsem.', en: 'Steel Front now plays on the same HUD as the rest of the library: one top bar, player cards, overlays, key strip and pause window. Games differ by world, not by interface.' },
-    icon: LayoutDashboard, color: '#ff9a52',
+    title: { pl: 'Karta pilota i osiągnięcia.', en: 'Pilot card & achievements.' },
+    detail: { pl: 'Dwanaście trofeów wyprowadzonych wyłącznie z sygnałów rundy (wynik oraz zdarzenia: impuls, eliminacja, tarcza, respawn), karta pilota z licznikiem rund, zwycięstw, światów i rekordem impulsów. Trofea wiszą też na kafelkach gier, a odblokowanie świętuje toastem.', en: 'Twelve trophies derived purely from round signals (the result plus pickup, elimination, shield and respawn events), a pilot card counting rounds, wins, worlds and a pickup record. Trophies also hang on game tiles, and unlocking one is celebrated with a toast.' },
+    icon: Trophy, color: '#ff9a52',
   },
   {
-    title: { pl: 'Każda gra ma swój kolor.', en: 'Every game has its own colour.' },
-    detail: { pl: 'Pęd jest neonowo różowy, Orbitalna Fala fioletowa, Turbo League cyanowa, Nocna Dostawa kwasowo zieliona. Akcent barwi tło areny, klawisze START i WRÓĆ oraz poświatę okładki w bibliotece.', en: 'Neon Rush is neon pink, Orbital Wave violet, Turbo League cyan, Night Delivery acid green. The accent tints the arena background, the START and RESUME keys and the cover glow in the library.' },
-    icon: Palette, color: '#baa6fa',
+    title: { pl: 'Telefon dostał własny układ konsoli.', en: 'The phone got its own console layout.' },
+    detail: { pl: 'Profil handheld przestał być pomniejszonym komputerem: zawijany pasek górny, jedna kolumna, półka 2×, cele dotyku 44 px i stopka bez skrótów klawiszowych. Playwright w CI emuluje iPhone’a i pilnuje, że żaden przycisk nie wypada poza okno.', en: 'The handheld profile stopped being a shrunk computer: wrapping top bar, single column, 2× shelf, 44 px touch targets and a footer without key hints. Playwright in CI emulates an iPhone and makes sure no button falls outside the window.' },
+    icon: Smartphone, color: '#ff7ad9',
   },
   {
-    title: { pl: 'Nagrania botów w każdej grywalnej grze.', en: 'Bot recordings in every playable game.' },
-    detail: { pl: 'Wężowy Wir, Turbo League i Nocna Dostawa dołączają do czołgów, wyścigu i kosmosu: sześć urywków 1920×1080 bez dźwięku, granych przez własne boty silników, nagrywanych w CI i odtwarzanych w tle biblioteki.', en: 'Snake Vortex, Turbo League and Night Delivery join tanks, racing and space: six silent 1920×1080 excerpts played by the engines’ own bots, recorded in CI and looping behind the library.' },
-    icon: Video, color: '#4fd2ff',
+    title: { pl: 'Strzałki sterują też rundą solo.', en: 'Arrows steer solo rounds too.' },
+    detail: { pl: 'Katalog obiecuje „Strzałki lub joystick”, ale strzałki były zestawem drugiego slotu. Gdy drugi slot nie ma człowieka, gracz 1 słucha i WASD, i strzałek; przy dwóch graczach z klawiatury podział zostaje klasyczny.', en: 'The catalogue promises “arrows or stick”, yet arrows belonged to the second slot. With no human in slot two, player one listens to both WASD and arrows; with two keyboard players the classic split stays.' },
+    icon: Keyboard, color: '#d8a262',
   },
   {
-    title: { pl: 'Napisy w grze rysowane z systemu.', en: 'In-game text drawn from the system.' },
-    detail: { pl: 'Imiona nad jednostkami, liczniki i znaki wodne aren korzystają z tych samych krojów i kolorów co konsola (Outfit, Space Grotesk, JetBrains Mono). Test porównuje paletę płótna z `palette.css`, więc nie rozjedzie się sama.', en: 'Names over units, counters and arena watermarks use the same faces and colours as the console (Outfit, Space Grotesk, JetBrains Mono). A test compares the canvas palette with `palette.css`, so it cannot drift apart.' },
-    icon: Type, color: '#c9f25e',
+    title: { pl: '3D nie znika po kilku rundach.', en: '3D no longer vanishes after a few rounds.' },
+    detail: { pl: 'Silniki 3D nie oddawały kontekstów WebGL, więc limit przeglądarki (~16) po kilku rundach zrzucał gry do widoku z góry. Teraz każdy silnik zwraca kontekst w `dispose()`, a sonda pyta jednorazowe płótno.', en: '3D engines never returned their WebGL contexts, so the browser limit (~16) silently dropped games to the top-down view after a few rounds. Every engine now releases its context in `dispose()` and the probe asks a throwaway canvas.' },
+    icon: Cpu, color: '#4fd2ff',
   },
   {
-    title: { pl: 'Turbo League gra naprawdę.', en: 'Turbo League is really playable.' },
-    detail: { pl: 'Piłka samochodowa 3D na stadionie: pełna fizyka, boost z żółtych pól, odbicia od band i powtórki goli. Mecze od 1v1 do 2v2, do 3/5/7 goli, złoty gol w dogrywce.', en: '3D car soccer on a stadium: full physics, boost from the yellow pads, wall rebounds and goal replays. Matches from 1v1 up to 2v2, first to 3/5/7 goals, golden goal in extra time.' },
-    icon: Car, color: '#ff9a52',
+    title: { pl: 'Fallback 2D mówi, dlaczego.', en: 'The 2D fallback says why.' },
+    detail: { pl: 'Zrzut do widoku z góry przestał być cichy: chip „TRYB 2D · powód” w oprawie rundy i `window.joypadRenderReport` rozróżniają brak WebGL2, błąd importu fragmentu i błąd silnika.', en: 'Dropping to the top-down view is no longer silent: a “2D MODE · reason” chip in the round shell and `window.joypadRenderReport` tell missing WebGL2, a chunk import failure and an engine error apart.' },
+    icon: AlertTriangle, color: '#edbd78',
   },
   {
-    title: { pl: 'WEBZA — Nocna Dostawa.', en: 'WEBZA — Night Delivery.' },
-    detail: { pl: 'Kurierzy pizzy huśtają się na sieci między dachami i trafiają w światło zamówień. Grajcie razem po ocenę zespołu albo rywalizujcie o MVP zmiany.', en: 'Pizza couriers swing on a web between rooftops and hit the light of every order. Play together for a team rating or compete for shift MVP.' },
-    icon: Pizza, color: '#edbd78',
+    title: { pl: 'Nagrania botów: komplet 6/6 z bramką.', en: 'Bot recordings: the full 6/6 set, gated.' },
+    detail: { pl: 'CI nagrało brakujące trzy światy i wcommitowało je do repo; brama PREVIEW pilnuje teraz kompletu par mp4+webm w Full HD przy każdej zmianie, a `PREVIEW_REVISION` wymienia klipy w przeglądarkach.', en: 'CI recorded the three missing worlds and committed them; the PREVIEW gate now enforces the full set of Full HD mp4+webm pairs on every change, and `PREVIEW_REVISION` swaps the clips in browsers.' },
+    icon: Video, color: '#baa6fa',
   },
   {
-    title: { pl: 'Pad steruje całą konsolą.', en: 'The pad drives the whole console.' },
-    detail: { pl: 'Klawiatura, pad USB i pilot z telefonu przechodzą przez każdy klikalny element: bibliotekę, okienka, centrum pokoju i ustawienia. A zatwierdza, B cofa, X/Y to skróty podpisane na dole ekranu.', en: 'Keyboard, USB pad and the phone remote reach every clickable element: the library, sheets, room centre and settings. A confirms, B goes back, X/Y are the shortcuts signed at the bottom of the screen.' },
-    icon: Gamepad2, color: '#baa6fa',
+    title: { pl: 'Plamek oddycha w spoczynku.', en: 'Plamek breathes at rest.' },
+    detail: { pl: 'Maskotka nie zastyga: kałuża farby pęcznieje, kropla zwisi i wraca, a odblask jedzie po rancie — spoczynkowa farba wygląda mokro, choć bramki trzymają suchy sufit czytelności.', en: 'The mascot no longer sets: the paint pool swells, a droplet hangs and returns, and a gleam travels the rim — resting paint reads wet while gates keep the dry readability ceiling.' },
+    icon: Droplets, color: '#ff9a52',
   },
   {
-    title: { pl: 'Profile ekranu: TV, komputer, tablet, telefon.', en: 'Screen profiles: TV, computer, tablet, phone.' },
-    detail: { pl: 'Duży ekran nie wymaga przewijania, tablet dostaje większe cele dotyku, a administrator rozkłada pełny ekran telewizora ze swojego pada.', en: 'The big screen needs no scrolling, tablets get larger touch targets and the admin can expand TV fullscreen straight from their pad.' },
-    icon: Tv, color: '#5eead4',
+    title: { pl: 'Testy telefonu i sterowania w CI.', en: 'Phone & controls tests in CI.' },
+    detail: { pl: 'Nowy `tests/phone.spec.ts` sprawdza układ handheld i sterowanie węża stanem wejścia rundy (`debugInput`), więc zgłoszenia „nie działa na telefonie” mają twardy dowód odwrotny.', en: 'A new `tests/phone.spec.ts` verifies the handheld layout and Snake steering through the round’s input state (`debugInput`), so “it breaks on phone” reports now have hard counter-evidence.' },
+    icon: FlaskConical, color: '#7cd67f',
   },
   {
-    title: { pl: 'Plamek pokazuje, gdzie jesteś.', en: 'Plamek shows where you are.' },
-    detail: { pl: 'Plama farby z buźką zastępuje ramkę fokusa: ścieka z otoczki, przelatuje na następny element i rozlewa się wokół niego. Przy ograniczonym ruchu zostaje sam poślizg.', en: 'A paint blob with a face replaces the focus ring: it drips off the outline, flies to the next element and spills around it. With reduced motion only the slide remains.' },
-    icon: Sparkles, color: '#e4a766',
+    title: { pl: 'Półka bez sierot, jedno tło systemu.', en: 'Orphan-free shelf, one system background.' },
+    detail: { pl: 'Biblioteka liczy kolumny tak, by nigdy nie został rząd-sierota, marginesy iOS są prawdziwe, a tło i scrollbary czytają tokeny systemu zamiast własnych kolorów gier.', en: 'The library counts columns so no orphan row remains, iOS margins are real, and the background plus scrollbars read system tokens instead of per-game colours.' },
+    icon: LayoutDashboard, color: '#c9f25e',
   },
   {
-    title: { pl: 'BlockCraft — zapowiedź.', en: 'BlockCraft — an announcement.' },
-    detail: { pl: 'Przygotowujemy sandbox z budowaniem z bloków. To tylko zapowiedź — gra nie jest jeszcze dostępna.', en: 'A block-building sandbox is planned. This is only an announcement — the game is not playable yet.' },
-    icon: Sparkles, color: '#7cd67f',
+    title: { pl: 'Wydanie 2.0: rundy 20–24 jednym pakietem.', en: 'Release 2.0: rounds 20–24 in one package.' },
+    detail: { pl: 'Wszystko powyżej składa się na pierwsze duże wydanie po 1.9: konsola pamięta Twoje granie, telefon jest pełnoprawnym ekranem, a 3D trzyma się swojego miejsca.', en: 'Everything above adds up to the first big release since 1.9: the console remembers your play, the phone is a first-class screen, and 3D stays in its seat.' },
+    icon: Sparkles, color: '#ffb77f',
   },
 ] as const;

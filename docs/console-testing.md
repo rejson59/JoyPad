@@ -91,6 +91,12 @@ odłącz pada w połowie ruchu (kursor ma stanąć, nie jechać) i podłącz go 
 - Układ desktop 1440×1000, mobile 390×844; brak poziomego przepełnienia biblioteki.
 - Telefon: portret i poziom 844×390, lokalne naciśnięcie/zwolnienie akcji.
 - Start Neonowego Pędu w trybie Canvas fallback, wspólna pauza, potwierdzenie zakończenia, powrót do biblioteki; wejście i wyjście Stalowego Frontu. Pełnej wydajności WebGL nie można ocenić na programowym GPU sandboxa.
+- Karta pilota i osiągnięcia (`src/platform/achievements.ts`, storage `joypad.achievements.v1`):
+  dwanaście trofeów wyprowadzonych z sygnałów rundy (wynik + zdarzenia `onFx`), okno „Osiągnięcia"
+  w stopce biblioteki, trofea na kafelkach gier i toast przy odblokowaniu. Rdzeń jest czysty
+  (storage wstrzykiwany, bez Reacta), więc PILOT CARD SELFTEST ćwiczy go w Node: trofea wpadają
+  raz, liczniki karty rosną, paski postępu mają prawdziwe cele, a `announceUnlocked` bierze
+  konstruktor zdarzenia z docelowego okna (realm jsdom w teście dymnym).
 - Telefon (profil `handheld`) ma własny układ w `viewport.css`: zawijany pasek górny, jedna
   kolumna sceny i decku gry, półka 2×, cele dotyku ≥44 px, stopka bez skrótów klawiszowych
   i z oddechem na pływającą podpowiedź kontrolera. `tests/phone.spec.ts` pilnuje w CI, że nic

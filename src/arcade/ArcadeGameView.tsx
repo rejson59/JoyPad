@@ -24,6 +24,7 @@ import { COLORS, type DisplayMode, type GameRound, type Racer, type RenderQualit
 // Jeden HUD dla wszystkich gier: oprawa rundy żyje w `console/RoundChrome`,
 // więc arcade i Stalowy Front wyglądają jak ta sama konsola (runda 21).
 import { RoundArena, RoundChip, RoundCountdown, RoundDeck, RoundFrame, RoundIconButton, RoundLoading, RoundObjective, RoundOverlay, RoundPlayerCard, RoundPowerUp, RoundStartFlash, RoundTimer, RoundTitle, RoundTopBar } from '../console/RoundChrome';
+import { announceUnlocked, recordRound, type RoundSignal } from '../platform/achievements';
 
 type ArcadeId = Exclude<GameId, 'tanks' | 'blockcraft'>;
 type Stage = 'menu' | 'game' | 'over';
@@ -211,6 +212,8 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   const [roundKey, setRoundKey] = useState(0);
   const [showPads, setShowPads] = useState(false);
   const [renderReport, setRenderReport] = useState<RenderReport | null>(null);
+  /** Zdarzenia `onFx` ludzi w bieżącej rundzie — sygnał dla osiągnięć. */
+  const fxCounts = useRef<Record<number, Record<string, number>>>({});
   const [muted, setMuted] = useState(gameAudio.muted);
   const [menuMusicOn, toggleMenuMusic] = useMenuMusic();
   const curtain = useCurtain();
@@ -323,6 +326,7 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
     const { participants, primary, secondary, displayMode, quality, language } = roundSetupRef.current;
     const recording = beginRecording(language);
     const recorder = recording.events;
+    fxCounts.current = {}; // nowa runda = czyste liczniki zdarzeń dla osiągnięć
     recorder.observe({ timeLeft: 0, countdown: 3, paused: false, players: participants.map(p => ({ ...p, score: 0 })) });
     const config = {
       onFrame: recording.video.frame,
@@ -344,8 +348,25 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
           maxValue: p.maxValue,
         });
       },
-      onFx: (slot: number, fx: Parameters<typeof padHost.sendFx>[1]) => { recorder.fx(slot, fx); padHost.sendFx(slot, fx); },
-      onFinish: (next: RoundResult) => { if (!cancelled) { finishRecording(recording); setResult(next); setStage('over'); } },
+      onFx: (slot: number, fx: Parameters<typeof padHost.sendFx>[1]) => {
+        const bucket = fxCounts.current[slot] ?? (fxCounts.current[slot] = {});
+        bucket[fx] = (bucket[fx] ?? 0) + 1;
+        recorder.fx(slot, fx); padHost.sendFx(slot, fx);
+      },
+      onFinish: (next: RoundResult) => {
+        if (!cancelled) {
+          finishRecording(recording); setResult(next); setStage('over');
+          // Karta pilota: runda dokłada liczby i sprawdza trofea tym samym
+          // wynikiem i zdarzeniami, które runda i tak już wysłała.
+          const signal: RoundSignal = {
+            game: id, winnerSlot: next.winnerSlot,
+            humans: config.players.filter(player => !player.isBot).length,
+            fx: fxCounts.current,
+            scores: next.players.map(player => ({ slot: player.slot, isBot: Boolean(player.isBot), score: player.score })),
+          };
+          void announceUnlocked(recordRound(signal), language);
+        }
+      },
     };
     void createRound(id, canvas.current, config).then(engine => {
       setRenderReport(readRenderReport());

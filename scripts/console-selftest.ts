@@ -1248,3 +1248,56 @@ console.log('VIEWPORT SELFTEST: OK (profile TV/komputer/tablet/telefon, układ j
     'progi są malejące — pierwszy pasujący wygrywa');
 }
 console.log('RAIL SELFTEST: OK (kolumny półki bez rzędów-sierot: 2–24 gry na czterech szerokościach ekranu)');
+/* --- Runda 24: karta pilota i osiągnięcia ----------------------------------
+   Rdzeń ćwiczymy w Node na wstrzykniętym storage (mapa zamiast localStorage):
+   trofea wpadają raz, liczniki karty rosną, a postęp pasków jest prawdziwy.
+   Kontrakty źródła pilnują, żeby okno, kafelki i runda nie rozeszły się z rdzeniem. */
+const achievements = await import('../src/platform/achievements');
+{
+  const mem = new Map<string, string>();
+  const store = { getItem: (key: string) => mem.get(key) ?? null, setItem: (key: string, value: string) => { mem.set(key, value); } };
+  const signal = (over: Partial<achievements.RoundSignal> = {}): achievements.RoundSignal => ({
+    game: 'snake', winnerSlot: 0, humans: 1, fx: { 0: {} },
+    scores: [{ slot: 0, isBot: false, score: 12 }, { slot: 1, isBot: true, score: 7 }],
+    ...over,
+  });
+  let fresh = achievements.recordRound(signal(), store);
+  assert.ok(fresh.includes('first-win') && fresh.includes('untouchable'), 'pierwsze zwycięstwo i nienaruszalność wpadają od razu');
+  assert.ok(!fresh.includes('photo-finish'), 'przewaga pięciu punktów to nie fotofinisz');
+  fresh = achievements.recordRound(signal(), store);
+  assert.ok(!fresh.includes('first-win'), 'trofeum nie wpada drugi raz');
+  achievements.recordRound(signal({ game: 'race', scores: [{ slot: 0, isBot: false, score: 4 }, { slot: 1, isBot: true, score: 3 }] }), store);
+  assert.ok(achievements.readState(store).unlocked['photo-finish'], 'fotofinisz: przewaga dokładnie jednego punktu');
+  for (let i = 0; i < 8; i++) achievements.recordRound(signal({ game: (['race', 'orbit', 'tanks'] as const)[i % 3] }), store);
+  const midState = achievements.readState(store);
+  assert.ok(midState.unlocked.marathon && midState.unlocked['hat-trick'] && midState.unlocked['triple-crown'], 'maraton, hat-trick i korona rosną z liczników karty');
+  assert.deepEqual(achievements.progressFor('marathon', midState), { value: 10, goal: 10 }, 'pasek maratonu domyka się na celu');
+  assert.ok(!midState.unlocked['full-couch'], 'bez czterech ludzi nie ma pełnej kanapy');
+  achievements.recordRound(signal({
+    humans: 4,
+    scores: [{ slot: 0, isBot: false, score: 9 }, { slot: 1, isBot: false, score: 8 }, { slot: 2, isBot: true, score: 2 }, { slot: 3, isBot: true, score: 1 }],
+  }), store);
+  assert.ok(achievements.readState(store).unlocked['full-couch'], 'pełna kanapa po rundzie we czwórkę');
+  assert.ok(achievements.noteLanguageSwitched(store)[0] === 'polyglot' && achievements.noteLanguageSwitched(store).length === 0, 'poliglota wpada raz, nie co przełączenie');
+  assert.ok(!achievements.recordRound(signal({ fx: { 0: { dead: 1 } } }), store).includes('comeback'), 'eliminacja bez zwycięstwa to nie powrót');
+  achievements.recordRound(signal({ fx: { 0: { pickup: 25, shield: 1 } } }), store);
+  achievements.recordRound(signal({ fx: { 0: { dead: 1, respawn: 1 } } }), store);
+  assert.ok(achievements.readState(store).unlocked.comeback, 'powrót: zwycięstwo po własnym respawnie');
+  assert.equal(achievements.countUnlockedByGame(achievements.readState(store)).snake, 4, 'cztery trofea węża wiszą na jego kafelku');
+}
+assert.ok(achievements.ACHIEVEMENTS.length === 12, 'dwanaście osiągnięć w definicjach');
+for (const def of achievements.ACHIEVEMENTS) {
+  assert.ok(def.pl.name && def.pl.desc && def.en.name && def.en.desc, `osiągnięcie ${def.id} mówi po polsku i po angielsku`);
+}
+const librarySource = readFileSync('src/console/ConsoleLibrary.tsx', 'utf8');
+assert.ok(librarySource.includes("'trophies'") && librarySource.includes('AchievementsSheet') && librarySource.includes('os-tile-trophy'),
+  'biblioteka ma okno trofeów i trofea na kafelkach');
+const arcadeViewSource2 = readFileSync('src/arcade/ArcadeGameView.tsx', 'utf8');
+assert.ok(arcadeViewSource2.includes('recordRound(') && arcadeViewSource2.includes('announceUnlocked('),
+  'runda zapisuje się w karcie pilota i ogłasza trofea toastem');
+const i18nSource = readFileSync('src/platform/i18n.ts', 'utf8');
+assert.ok(i18nSource.includes("'library.achievements'") && i18nSource.includes("'achievements.title'"),
+  'osiągnięcia mają klucze PL i EN w słowniku');
+assert.ok(readFileSync('src/platform/whatsNewState.ts', 'utf8').includes("'2.0.0'"), 'wydanie 2.0.0 w jednym źródle prawdy');
+console.log('PILOT CARD SELFTEST: OK (12 trofeów z sygnałów rundy, karta pilota, postęp pasków, okno i kafelki biblioteki)');
+

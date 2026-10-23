@@ -11,7 +11,9 @@ import { hasHistory, lastGame } from './history';
 import { useViewport } from './useViewport';
 import { scrollToSafe } from './scrollSafe';
 import { useEffect, useState, type CSSProperties } from 'react';
-import { Archive, ArrowRight, Clapperboard, Eye, Gamepad2, Plus, RefreshCw, Settings2, Smartphone, TabletSmartphone, Volume2, VolumeX, Wifi, Zap } from 'lucide-react';
+import { Archive, ArrowRight, Clapperboard, Eye, Gamepad2, Plus, RefreshCw, Settings2, Smartphone, TabletSmartphone, Trophy, Volume2, VolumeX, Wifi, Zap } from 'lucide-react';
+import { AchievementsSheet } from './AchievementsSheet';
+import { ACHIEVEMENT_EVENT, announceUnlocked, countUnlockedByGame, noteLanguageSwitched } from '../platform/achievements';
 import { GAMES, localizeGame, type GameId } from '../arcade/catalog';
 import { usePadHost } from '../pad/PadHostPanel';
 import { PLAYER_DEFS } from '../game/types';
@@ -44,7 +46,8 @@ export function ConsoleLibrary({ focus, onFocus, onOpen, onConnections, onLab, o
   const { language, t } = useT();
   const sourceGame = GAMES[focus];
   const game = localizeGame(sourceGame, language);
-  const [panel, setPanel] = useState<'settings' | 'soon' | 'help' | 'room' | 'gallery' | 'news' | null>(() => shouldShowWhatsNew() ? 'news' : null);
+  const [panel, setPanel] = useState<'settings' | 'soon' | 'help' | 'room' | 'gallery' | 'news' | 'trophies' | null>(() => shouldShowWhatsNew() ? 'news' : null);
+  const [trophies, setTrophies] = useState(() => countUnlockedByGame());
   const [music, toggleMusic] = useMenuMusic();
   const [qr, setQr] = useState('');
   const [qrNonce, setQrNonce] = useState(0);
@@ -113,11 +116,24 @@ export function ConsoleLibrary({ focus, onFocus, onOpen, onConnections, onLab, o
     const rail = tile?.parentElement;
     if (tile && rail) scrollToSafe({ el: rail, left: tile.offsetLeft - (rail.clientWidth - tile.offsetWidth) / 2 });
   }, [focus, viewport.width]);
-  const panelTitle = panel === 'room' ? (language === 'en' ? 'Room controls' : 'Centrum pokoju.')
+  const panelTitle = panel === 'trophies' ? t('achievements.title')
+    : panel === 'room' ? (language === 'en' ? 'Room controls' : 'Centrum pokoju.')
     : panel === 'settings' ? (language === 'en' ? 'Make it yours.' : 'Po swojemu.')
       : panel === 'soon' ? t('library.soonTitle')
         : panel === 'gallery' ? `${t('common.gallery')}.` : t('library.helpTitle');
   const closeWhatsNew = () => { markWhatsNewSeen(); setPanel(null); };
+  // Trofea odświeżają kafelki i okno po każdym odblokowaniu (zdarzenie rundy).
+  useEffect(() => {
+    const refresh = () => setTrophies(countUnlockedByGame());
+    window.addEventListener(ACHIEVEMENT_EVENT, refresh);
+    return () => window.removeEventListener(ACHIEVEMENT_EVENT, refresh);
+  }, []);
+  // Poliglota: przełączenie języka konsoli to też osiągnięcie.
+  useEffect(() => {
+    const onLanguage = () => { void announceUnlocked(noteLanguageSwitched(), language); };
+    window.addEventListener('joypad-language', onLanguage);
+    return () => window.removeEventListener('joypad-language', onLanguage);
+  }, [language]);
 
   return <div className="os-library-root" style={{ '--game-accent': game.accent } as CSSProperties}>
     {/* Skalowana jest WYŁĄCZNIE treść biblioteki. Okna systemowe (`Sheet`, „Co nowego?”)
@@ -184,17 +200,18 @@ export function ConsoleLibrary({ focus, onFocus, onOpen, onConnections, onLab, o
         const g = localizeGame(GAMES[i], language);
         return <button key={g.id} data-game-index={i} className={`os-game-tile ${i === focus ? 'is-selected' : ''}`} aria-pressed={i === focus} onFocus={() => onFocus(i)} onClick={() => { if (i === focus) onOpen(g.id); else onFocus(i); }}>
           <img src={`${import.meta.env.BASE_URL}${g.cover}`} alt="" width="640" height="360" loading="lazy" decoding="async" />
+          {(trophies[g.id] ?? 0) > 0 && <span className="os-tile-trophy"><Trophy size={11} />{trophies[g.id]}</span>}
           <div><span>{g.genre}</span><h3>{g.title}</h3></div><span className="os-tile-arrow"><ArrowRight size={19} /></span>
         </button>;
       })}</div>
     </section>
-    <footer className="os-footer"><div><UiHints />{panel === null && <span className="os-muted">{t('library.remoteHint')}</span>}</div><div className="flex items-center gap-4"><button onClick={() => setPanel('news')}>{t('library.whatsNew')}</button><button onClick={() => { systemSound('confirm'); openCinema('manual'); }}>{t('library.tutorial')}</button><button onClick={() => setPanel('help')}>{t('library.howToStart')}</button><span className="os-footer-brand">{t('library.version')}</span></div></footer>
+    <footer className="os-footer"><div><UiHints />{panel === null && <span className="os-muted">{t('library.remoteHint')}</span>}</div><div className="flex items-center gap-4"><button onClick={() => setPanel('trophies')}><Trophy size={15} /> {t('library.achievements')}</button><button onClick={() => setPanel('news')}>{t('library.whatsNew')}</button><button onClick={() => { systemSound('confirm'); openCinema('manual'); }}>{t('library.tutorial')}</button><button onClick={() => setPanel('help')}>{t('library.howToStart')}</button><span className="os-footer-brand">{t('library.version')}</span></div></footer>
     </div>
     </FitScreen>
     {/* Okna systemowe stoją POZA skalowaną treścią: `position: fixed` wewnątrz
         transformowanego rodzica nie przykleja się do okna (patrz FitScreen). */}
-    {panel && panel !== 'news' && <Sheet title={panelTitle} wide={panel === 'gallery'} onClose={() => { systemSound('back'); setPanel(null); }}>
-      {panel === 'room' ? <RoomControls session={padHost.session()} onAction={action => padHost.manageRoom(action)} /> : panel === 'settings' ? <><ConsoleSettings /><button className="os-secondary" onClick={() => toggleMusic(!music)}>{music ? t('library.musicDisable') : t('library.musicEnable')} {t('library.libraryMusic')}</button></> : panel === 'soon' ? <><p className="os-note">{t('library.soonNote')}</p><div className="os-upcoming">{GAMES.filter(g => g.wip).map(g => { const localized = localizeGame(g, language); return <div key={g.id}><img src={`${import.meta.env.BASE_URL}${g.cover}`} alt="" loading="lazy" decoding="async" /><div><h3>{localized.title}</h3><span>{localized.genre} · {t('library.inDevelopment')}</span><p>{localized.description}</p></div></div>; })}</div></> : panel === 'gallery' ? <MomentsGallery /> : <><ol className="os-help"><li><b>{t('library.helpScreenTitle')}</b><p>{t('library.helpScreen')}</p></li><li><b>{t('library.helpPhoneTitle')}</b><p>{t('library.helpPhone')}</p></li><li><b>{t('library.helpGameTitle')}</b><p>{t('library.helpGame')}</p></li></ol><button type="button" className="os-secondary lg-pill" onClick={() => { systemSound('confirm'); setPanel(null); openCinema('manual'); }}><Clapperboard size={16} /> {t('library.tutorialWatch')}</button></>}
+    {panel && panel !== 'news' && <Sheet title={panelTitle} wide={panel === 'gallery' || panel === 'trophies'} onClose={() => { systemSound('back'); setPanel(null); }}>
+      {panel === 'room' ? <RoomControls session={padHost.session()} onAction={action => padHost.manageRoom(action)} /> : panel === 'settings' ? <><ConsoleSettings /><button className="os-secondary" onClick={() => toggleMusic(!music)}>{music ? t('library.musicDisable') : t('library.musicEnable')} {t('library.libraryMusic')}</button></> : panel === 'soon' ? <><p className="os-note">{t('library.soonNote')}</p><div className="os-upcoming">{GAMES.filter(g => g.wip).map(g => { const localized = localizeGame(g, language); return <div key={g.id}><img src={`${import.meta.env.BASE_URL}${g.cover}`} alt="" loading="lazy" decoding="async" /><div><h3>{localized.title}</h3><span>{localized.genre} · {t('library.inDevelopment')}</span><p>{localized.description}</p></div></div>; })}</div></> : panel === 'gallery' ? <MomentsGallery /> : panel === 'trophies' ? <AchievementsSheet /> : <><ol className="os-help"><li><b>{t('library.helpScreenTitle')}</b><p>{t('library.helpScreen')}</p></li><li><b>{t('library.helpPhoneTitle')}</b><p>{t('library.helpPhone')}</p></li><li><b>{t('library.helpGameTitle')}</b><p>{t('library.helpGame')}</p></li></ol><button type="button" className="os-secondary lg-pill" onClick={() => { systemSound('confirm'); setPanel(null); openCinema('manual'); }}><Clapperboard size={16} /> {t('library.tutorialWatch')}</button></>}
     </Sheet>}
     <a className="os-hint-phone" href="#pad"><Smartphone size={18} /> {t('library.phoneHint')}</a>
     <WhatsNew open={panel === 'news'} onClose={closeWhatsNew} />

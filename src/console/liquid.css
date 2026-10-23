@@ -218,6 +218,21 @@ dialog.cine-sheet { width: min(680px, calc(100vw - var(--lg-gap) * 2)); height: 
   box-shadow: 0 4px 0 var(--os-accent-deep), 0 16px 34px #00000059, inset 0 1px #ffffff80;
   transition: transform var(--lg-t2) var(--liquid-spring), box-shadow var(--lg-t2) var(--liquid-glide), filter var(--lg-t1) linear;
 }
+/* START / REWANŻ / WRACAMY DO GRY w kolorze świata, do którego wchodzisz. To jedyny
+   przycisk, który przejmuje akcent gry — biblioteka i okienka systemowe zostają przy
+   Emberze, więc system ma jeden kolor, a gry własną temperaturę. */
+.cine-game .cine-start, .cine-results .cine-start, .cine-pause-content .cine-resume {
+  background-color: var(--game-accent, var(--os-accent));
+  background-image: linear-gradient(115deg, #ffffff40, #ffffff00 42%),
+    linear-gradient(115deg, color-mix(in srgb, var(--game-accent, var(--os-accent)) 76%, #ffffff), var(--game-accent, var(--os-accent)) 72%, var(--game-soft, var(--os-accent-deep)));
+  box-shadow: 0 4px 0 var(--game-soft, var(--os-accent-deep)), 0 16px 34px #00000059, inset 0 1px #ffffff80;
+}
+.cine-game .cine-start small, .cine-results .cine-start small, .cine-pause-content .cine-resume small {
+  color: color-mix(in srgb, var(--game-soft, var(--os-accent-deep)) 82%, #000000);
+}
+.cine-game .cine-start:active, .cine-results .cine-start:active, .cine-pause-content .cine-resume:active {
+  box-shadow: 0 1px 0 var(--game-soft, var(--os-accent-deep)), 0 5px 12px #0000004d, inset 0 1px #ffffff5c;
+}
 .os-play:hover, .cine-start:hover, .cine-resume:hover { filter: brightness(1.06) saturate(1.05); transform: translateY(-2px); }
 .os-play:active, .cine-start:active, .cine-resume:active { transform: translateY(3px) scale(.995); box-shadow: 0 1px 0 var(--os-accent-deep), 0 5px 12px #0000004d, inset 0 1px #ffffff5c; }
 .cine-start-arrow, .cine-action-icon { border-radius: 999px; border: 1px solid #00000026; background: #ffffff33; width: 36px; height: 36px; }
@@ -427,7 +442,15 @@ dialog.cine-sheet { width: min(680px, calc(100vw - var(--lg-gap) * 2)); height: 
   box-shadow: 0 12px 30px -12px #000000b8, inset 0 1px #ffffff33;
 }
 .arcade-icon { border-radius: 999px; min-width: 38px; height: 38px; width: 38px; }
-.arcade-page { background-image: radial-gradient(ellipse 90% 60% at 50% -8%, #ffffff0a, transparent 60%); }
+/* Tło rundy jest z tej samej rodziny co biblioteka, ale świeci akcentem gry:
+   halo u góry i głęboki tint u dołu przechodzą przez szkło paska i pokładu, więc
+   każda gra ma własną temperaturę bez jednego własnego arkusza stylów. */
+.arcade-page {
+  background-image:
+    radial-gradient(ellipse 120% 78% at 50% -14%, color-mix(in srgb, var(--game-accent, var(--os-accent)) 17%, transparent), transparent 62%),
+    radial-gradient(ellipse 92% 62% at 50% 110%, color-mix(in srgb, var(--game-soft, var(--os-accent-deep)) 44%, transparent), transparent 66%),
+    radial-gradient(ellipse 90% 60% at 50% -8%, #ffffff0a, transparent 60%);
+}
 .arcade-hudbar b, .arcade-hudcard b, .arcade-hudnote { text-shadow: 0 1px 10px #000000a6; }
 
 /* --- Pasek systemowy biblioteki: grupa piguł w szklanej oprawie ---------- */
@@ -532,6 +555,11 @@ dialog.cine-sheet { width: min(680px, calc(100vw - var(--lg-gap) * 2)); height: 
    podwajałoby liczenie regionu. */
 .plamek-sheen { fill: #fff6ea; opacity: .3; filter: blur(1.6px); transform-box: fill-box; transform-origin: center; }
 .plamek.is-settle .plamek-sheen { animation: plamek-sheen 520ms var(--liquid-glide); }
+/* Odblask na RANCIE kałuży: mokra jest krawędź farby, nie środek przycisku. Ta sama
+   biel co połysk bulwy, tylko cichsza i rozciągnięta wzdłuż obwodu — pozycję, rozmiar
+   i obrót liczy co klatkę `draw()` z `rimPoint`, więc plama jedzie z oddechem farby.
+   Siedzi poza maską goo (jak połysk): próg alfa zjadłby tak delikatne krycie. */
+.plamek-gleam { fill: #fff6ea; opacity: 0; filter: blur(1.2px); transform-box: fill-box; transform-origin: center; }
 @keyframes plamek-sheen {
   0% { opacity: .5; transform: translate(-9px, 4px) scale(.8); }
   100% { opacity: .22; transform: none; }

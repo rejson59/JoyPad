@@ -520,7 +520,7 @@ function PadContent() {
       {joinFx && <PadJoinSplash color={st.color} slot={st.slot} key={joinFx.key} />}
 
       {/* top bar — tylko kolor, nick i ikony; wyniki są na ekranie głównym */}
-      <div className="absolute left-0 right-0 top-0 z-30 flex items-center justify-between gap-2 px-3 py-2" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>
+      <div className="absolute left-0 right-0 top-0 z-30 flex items-center justify-between gap-2 px-3 py-2" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))', paddingLeft: 'max(12px, env(safe-area-inset-left, 0px))', paddingRight: 'max(12px, env(safe-area-inset-right, 0px))' }}>
         <div className="flex min-w-0 items-center gap-2">
           <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: color, boxShadow: `0 0 10px ${color}` }} />
           <span className="max-w-[38vw] truncate text-sm font-bold tracking-wide" style={{ color }}>{st.nick || st.name}</span>
@@ -628,7 +628,7 @@ function PadContent() {
             ) : (
               <div
                 className={`absolute bottom-0 z-20 flex flex-col items-center gap-2 px-6 ${aimSide === 'right' ? 'right-0' : 'left-0'}`}
-                style={{ paddingBottom: `max(${18 + prefs.controlHeight}px, env(safe-area-inset-bottom))` }}
+                style={{ paddingBottom: `max(${18 + prefs.controlHeight}px, env(safe-area-inset-bottom))`, [aimSide]: `max(24px, env(safe-area-inset-${aimSide}, 0px))` } as React.CSSProperties}
               >
                 <button {...fireHandlers} disabled={showSettings || !hud?.alive || Boolean(hud?.paused)} className="pad-action flex items-center justify-center rounded-full border-4 border-red-900 font-display tracking-widest text-white active:scale-95" style={fireStyle(bigFire, '24px')}>
                   {t('pad.fire')}

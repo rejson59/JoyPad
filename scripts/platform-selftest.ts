@@ -221,8 +221,11 @@ try {
   assert.equal(isPadMessage({ t: 'suggest', game: 'race' }), true);
   assert.equal(isPadMessage({ t: 'suggest', game: null }), true);
   adminPad.send({ t: 'suggest', game: '99' as never });
-  adminPad.send({ t: 'suggest', game: 'blockcraft' }); // jedyna gra, która nadal jest tylko zapowiedzią (`wip`)
-  assert.equal(host2.session().roster[0].suggestedGame, 'race', 'nieznany tytuł ani zapowiedź nie zmieniają głosu');
+  assert.equal(host2.session().roster[0].suggestedGame, 'race', 'nieznany tytuł nie zmienia głosu');
+  // Runda 25: blockcraft przestał być zapowiedzią, więc jak każdy grywalny tytuł
+  // daje się zasugerować — sprawdzamy to zamiast dawnego „wip nie przechodzi”.
+  adminPad.send({ t: 'suggest', game: 'blockcraft' });
+  assert.equal(host2.session().roster[0].suggestedGame, 'blockcraft', 'grywalny tytuł zmienia głos');
   assert.equal(isHostMessage({ t: 'suggestAck', verdict: 'cooldown', retryInMs: 8_000 }), true);
   assert.equal(isHostMessage({ t: 'suggestAck', verdict: 'cooldown' }), false, 'odmowa bez czasu nie przechodzi');
 

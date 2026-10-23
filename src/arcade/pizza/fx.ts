@@ -14,6 +14,7 @@ import {
   SRGBColorSpace,
   Vector3,
 } from "three";
+import { hudFont } from "../hudKit";
 
 const _a = new Vector3();
 const _b = new Vector3();
@@ -310,7 +311,7 @@ export function makeLabel(text: string, color: string) {
   roundRect(g, 28, 10, 200, 44, 16);
   g.fill();
   g.fillStyle = color;
-  g.font = "800 28px Outfit, sans-serif";
+  g.font = hudFont(800, 28);
   g.textAlign = "center";
   g.textBaseline = "middle";
   g.fillText(text, 128, 34);
@@ -341,14 +342,14 @@ export function makeFloaterSprite(text: string, sub: string, color: string) {
   g.clearRect(0, 0, 512, 256);
   g.textAlign = "center";
   g.lineJoin = "round";
-  g.font = "800 86px Outfit, sans-serif";
+  g.font = hudFont(800, 86);
   g.lineWidth = 12;
   g.strokeStyle = "rgba(0,0,0,0.7)";
   g.strokeText(text, 256, 112);
   g.fillStyle = color;
   g.fillText(text, 256, 112);
   if (sub) {
-    g.font = "700 36px Outfit, sans-serif";
+    g.font = hudFont(700, 36);
     g.strokeStyle = "rgba(0,0,0,0.65)";
     g.lineWidth = 8;
     g.strokeText(sub, 256, 176);

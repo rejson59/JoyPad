@@ -157,7 +157,10 @@ let step = 'import bundla';
 try {
   await import(pathToFileURL(path.join(SANDBOX, entry)).href);
   step = 'pierwszy render';
-  const rendered = await until(() => window.document.querySelector('#root')?.childElementCount, 8000);
+  // W `#root` wisi z HTML-a zastępczy znak startowy (`.boot-mark`), więc samo „ma
+  // dzieci” nic nie znaczy — czekamy, aż React podmieni go własnym drzewem.
+  const rendered = await until(() => !window.document.querySelector('.boot-mark')
+    && (window.document.querySelector('#root')?.childElementCount ?? 0) > 0, 8000);
   log('bundle montuje drzewo interfejsu', Boolean(rendered));
 
   step = 'splash';
@@ -182,7 +185,7 @@ try {
     log('Esc wraca do biblioteki', stopped, stopped ? '' : `treść: ${text().slice(0, 90)}`);
   }
 
-  const tree = window.document.querySelector('#root')?.childElementCount ?? 0;
+  const tree = window.document.querySelector('.boot-mark') ? 0 : (window.document.querySelector('#root')?.childElementCount ?? 0);
   log('interfejs nadal żyje po filmie', tree > 0, `elementów w #root: ${tree}`);
 } catch (error) {
   log(`krok „${step}” bez wyjątku`, false, error?.stack?.split('\n').slice(0, 3).join(' | ') ?? String(error));

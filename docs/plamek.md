@@ -504,3 +504,55 @@ czytnik i tak dostaje prawdziwy fokus DOM.
   inaczej maskotka zagłuszy gry).
 * **Warianty imienia w interfejsie**: „Plamek" tylko po polsku, „Splash" po angielsku
   (obecnie jeden klucz `plamek.name` z dopiskiem w obu językach).
+
+## 9. Farba nie wysycha w spoczynku (runda 22)
+
+**Zgłoszenie:** „Plamek nie wydaje się już realistyczny, tylko jak zwykła otoczka z buźką".
+
+**Diagnoza — trzy zastygnięcia naraz, wszystkie po rozlaniu:**
+
+| Co gasło | Dlaczego | Skutek na ekranie |
+|---|---|---|
+| Kropla | `dripTail` zwracał `null` dla `wrap === 1`, a w spoczynku `wrapFor('hug') === 1` | pod przyciskiem nie wisiał ani piksel farby |
+| Pętla klatki | `busy === false`, `tension ≈ 0`, `head.sharp ≈ 50` → brak kolejnego `requestAnimationFrame` | farba zamierała w jednej pozie: `wob`, `spin` i połysk stały w miejscu |
+| Mokrość | `gooStrength(0, 'hug') = .3` (podłoga), czyli σ rozmycia 0.66 | próg alfa 18/−6 zostawiał geometryczną krawędź taśmy — czytała się jak `border` |
+
+Mokrości podnieść nie wolno: `gooStrength(0,'hug') ≤ .4` i `gooStrength(1,'pour',false,1) ≥ .3`
+są przypięte bramkami, a przy większym rozmyciu próg alfa zjadał cienką górną krawędź taśmy
+(`ANISO.top = .55`) na małych przyciskach — stąd brało się zgłoszenie „mało wyraźny" z rundy 8.
+**Realizm wraca więc ruchem farby, nie rozmyciem.**
+
+**Co żyje w spoczynku** (`PLAMEK_IDLE` w modelu, `breathing` w widoku):
+
+* **Oddech kałuży** — `idlePool(now)` (~9 s) robi dwie rzeczy naraz: dół taśmy dorasta
+  (`ANISO.bottom` 1.4 → max 1.62, czyli `poolAmp .22`), a CAŁA taśma grubieje o `poolSwell`
+  (7 %, wchodzi w `spread`). Na kaflu 320×168: farba 9.50 → 10.17 px, kałuża 13.30 → 17.36 px.
+  Pęcznienie pilnuje bramka: spuchnięta taśma nadal mieści się w ~1/6 krótszego boku
+  (chip 96×26: 2.99 → 3.20 px przy limicie 4.68), więc napis zostaje wolny.
+* **Wisząca kropla** — `dripTail(host, wrap, thickness, shake, drip)` dostał piąty argument z
+  `idleDrip(now)` (~6.5 s): kropla zwisi, wydłuża się i wraca do kałuży. Jest mniejsza w obu
+  osiach od kropli z rozlewu (`dripScale = .82`), więc z kałuży wyrasta, a nie z nią konkuruje;
+  na kaflu 320×168 rośnie od 9.5 px do ~25 px wysokości i nigdy nie znika do zera
+  (`dripFloor .46`), bo znikająca kropla czyta się jak miganie.
+* **Odblask na rancie** — `.plamek-gleam` jedzie po obwodzie (`rimPoint(host, .885 + .035 * pool)`,
+  górny lewy rąbek) i obraca się do stycznej: mokra jest krawędź farby, nie środek przycisku.
+  Krycie `.17 → .37`, czyli prawie tyle, co połysk bulwy (`.3`) — to drugi, cichszy punkt światła.
+  Siedzi poza maską goo, tak jak połysk: próg alfa zjadłby tak delikatne krycie.
+* **Połysk bulwy** — przesuwa się o ~1.5 px i zmienia rozmiar o kilka procent z tym samym oddechem,
+  więc światło pływa po farbie, zamiast zastygnąć w jednym punkcie (zastygłe = naklejka).
+
+**Cena i granice:**
+
+* Oddech rysuje się ~12 fps (`PLAMEK_IDLE.frameMs = 80`), a po zaśnięciu kulki ~5 fps
+  (`napFrameMs = 190`): pętla w bezruchu **zwalnia, nie gaśnie**. W ukrytej karcie rAF i tak staje,
+  więc tło jest darmowe; integracja stanu leci każdym tickiem, throttling dotyczy tylko rysowania.
+* Ograniczony ruch: `breathing === false` — nie ma oddechu, kropli ani odblasku, zostaje suchy,
+  statyczny kształt (maska goo jest wtedy wyłączona, tak jak dotąd).
+* Wszystko jest funkcją `now`, bez `Math.random` (zakaz w widoku pilnowany bramką): oddech jest
+  deterministyczny, więc nie drga między klatkami i nie rozjeżdża się z mignięciem buźki.
+* Bramki: sekcja „fizyka cieczy Plamka" w `scripts/console-selftest.ts` — ciągłość i zakres
+  `idleWave`/`idlePool`/`idleDrip`, sen płytszy i wolniejszy, kropla spoczynkowa krótsza i węższa
+  od tej z rozlewu, klamra pęcznienia na trzech rozmiarach przycisku,
+  `dripTail(box, 1, t) === null` bez oddechu (stara ścieżka bez zmian) — oraz
+  kontrakty źródła: kadencja z modelu, `breathing` tylko w `hug` i tylko przy pełnym ruchu,
+  odblask liczony z `rimPoint`, brak własnej animacji CSS na `.plamek-gleam`.

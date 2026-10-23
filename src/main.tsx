@@ -6,6 +6,9 @@ import "./console/palette.css";
 import "./console/console.css";
 import "./console/cinema.css";
 import "./platform/platform.css";
+/* Wspólna oprawa rundy (HUD wszystkich gier) — przed szkłem, żeby powierzchnie
+   z `liquid.css` miały ostatnie słowo, a gry nie budowały własnych kolorów. */
+import "./console/gamehud.css";
 /* Warstwa „liquid glass" musi być ostatnia: celowo nadpisuje powierzchnie systemowe. */
 import "./console/liquid.css";
 /* Profile urządzeń (TV / komputer / tablet / telefon) nadpisują rozmiary i układ —
@@ -48,7 +51,7 @@ function Root() {
   }, []);
   if (pad) {
     return (
-      <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-[#0a0a0b] text-zinc-400">{loadLanguage() === 'en' ? 'Loading controller…' : 'Ładowanie pada…'}</div>}>
+      <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-[var(--os-bg)] text-zinc-400">{loadLanguage() === 'en' ? 'Loading controller…' : 'Ładowanie pada…'}</div>}>
         <PadApp />
       </Suspense>
     );

@@ -340,6 +340,7 @@ export class Game {
       for (const texture of [...Object.values(rest), ...Object.values(signs)]) texture.dispose();
     }
     this.renderer.dispose();
+    this.renderer.forceContextLoss(); // kontekst wraca do puli przeglądarki od razu
   }
 
   setMode(mode: Mode) {

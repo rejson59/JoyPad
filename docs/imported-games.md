@@ -1,4 +1,8 @@
-# Gry wciągnięte z paczek ZIP
+# Gry wciągnięte z paczek ZIP i repozytoriów
+
+Paczki ZIP (`nitro-league.zip`, `orbitalna-fala.zip`) i publiczne repo użytkownika
+(`rejson59/mconline` → BlockCraft) wchodzą do konsoli tą samą drogą: silnik kopiujemy
+niemal bez zmian, a JoyPad dostaje wyłącznie most rundy i bramki.
 
 Ten dokument opisuje, co zrobiono z archiwami leżącymi w `main` (runda 19), jak wyglądała procedura
 (zgodna z §2 `docs/game-building-prompts.md`) i **jak każdą z gier cofnąć**. ZIP-y i katalog roboczy
@@ -37,8 +41,10 @@ Zgodnie z procedurą nic z paczek nie było uruchamiane przed przeglądem:
   fałszywy renderer i DOM, deterministyczny zegar i PRNG). Sprawdza niezmienniki — brak NaN, `onFinish`
   dokładnie raz, brak wycieków nasłuchów po `destroy()` — ale **nie** wygląd klatek ani wydajność GPU;
   to wymaga prawdziwej przeglądarki.
-- Brak nagrań podglądu: `GamePreview` zna tylko `tanks/race/orbit`, a dla reszty pokazuje okładkę. Nagranie ma
-  pokazywać prawdziwy silnik, a nie atrapę, więc zostanie dodane po nagraniu w przeglądarce.
+- Nagrania podglądu: każda **grywalna** gra ma swój urywek botów (`PREVIEW_GAMES` w `GamePreview.tsx`),
+  nagrany z prawdziwego silnika przez `scripts/previews/capture.mjs` — lokalnie albo w CI (workflow
+  `Previews` nagrywa jeden silnik na job i commituje klipy do gałęzi, z której wystartował). Zapowiedzi
+  `wip` (BlockCraft) zostają przy okładce; `selftest:console` porównuje listę nagrań z katalogiem.
 
 ## WEBZA — „Nocna Dostawa” (`pizza`)
 
@@ -130,9 +136,40 @@ nad dachem, o stałym rozmiarze na ekranie).
 pozostali zwycięzcy dostają haptykę „lose” (host wysyła `win` tylko `winnerSlot`). Minimalna przyszła zmiana kontraktu:
 `RoundResult.winnerSlots?: number[]` — nie wprowadzona, bo to zmiana platformy.
 
-**Ograniczenia:** brak split-screen (wspólna kamera), brak nagrania podglądu (okładka), wydajność GPU nie była mierzona
+**Ograniczenia:** brak split-screen (wspólna kamera), wydajność GPU nie była mierzona
 (stadion generuje proceduralne tekstury przy starcie rundy — na słabym sprzęcie użyj profilu „płynność”).
 
 **Cofnięcie:** usuń `src/arcade/league-next/`, `scripts/league-selftest.ts` (+ `selftest:league` w `package.json` i wpis w override ESLint),
 w `ArcadeGameView.tsx` przywróć `case 'league'` (prototyp `games/League`), `RULES.league` i `SETUP.league`; w `catalog.ts` przywróć `wip: true`
 i dawne teksty; przywróć `webgl/League3D.ts` z historii gita, jeśli ma wrócić.
+
+## BlockCraft (`blockcraft`) — silnik z repo `rejson59/mconline`
+
+- **Źródło i licencja.** `https://github.com/rejson59/mconline` (MIT, ta sama osoba co
+  JoyPad), wersja silnika 2.29 — voxelowy sandbox na Three.js z biomami, wioskami,
+  redstoneem i Netherem. Sklonowany płytko do `.cache/mconline` (poza commitem).
+- **Co skopiowano.** `src/game/**` → `src/arcade/blockcraft/game/` niemal 1:1 oraz
+  `src/utils/version.ts` → `src/arcade/blockcraft/utils/version.ts`. **Jedyny wyjątek:**
+  `online.ts` — w oryginale klient Supabase multiplayera; w JoyPadzie to dwuliniowy stub
+  (`PUBLIC_POS_HZ = 0`), bo runda jest zawsze lokalna i konsola nie wysyła nic do sieci.
+  Reactowe ekrany (`src/components/*`), Tailwind i Supabase do konsoli nie wchodzą.
+- **Most rundy** — `src/arcade/blockcraft/BlockCraftRound.ts`: silnik tworzy własny canvas
+  i prowadzi własną pętlę renderu, więc runda chowa canvas konsoli (zwraca go w
+  `destroy`), a wejście z pada zapisuje w publiczne pola silnika (`keys`, `mouseRight`) —
+  dokładnie ten sam kanał, którym sterują dotykowe `TouchControls` oryginału. AKCJA stawia
+  blok (prawy przycisk myszy), pad nie skacze. Zegar zmiany (3/5/8 min) chodzi we
+  własnym rAF-ie adaptera; wynik zmiany to suma bloków zmienionych przez gracza
+  (`world.mods`), zwycięzcy nie ma — sandbox kończy się czasem, nie punktacją.
+  `onHud` silnika (wołany po renderze) karmi HUD z tokenów i klatkę Momentów.
+- **Zasada bez wyjątku.** W skopiowanym silniku poprawiono dokładnie jedną linię: napisy
+  świata rysowane na czarnym tle dostały `hudFont(700, 28, 'mono')` zamiast literału
+  `'bold 28px monospace'` — bramka hudKit czyta wszystkie pliki gry i nie zna wyjątku
+  dla vendora. Reszta stylu vendora (jak w STAR CLASH) jest poza lintem przez override
+  `src/arcade/blockcraft/game/**` w `eslint.config.js`.
+- **Nagranie.** Gałąź `blockcraft` w `capture.mjs`: płaski świat kreatywny, silnik
+  sterowany bezpośrednio (`g.loop(...)` — capture wyłącza rAF), scenariusz spaceru z
+  serią stawianych bloków; klip (parę mp4+webm, ~3,3 MB) nagrał `previews.yml`
+  i opublikował commit `a411b7d` — `awaitingRecording` w bramce PREVIEW znów pusta.
+- **Bramki.** `probeWebGL2()` — bez WebGL2 runda zgłasza błąd zamiast wisieć na pustym
+  płótnie (jak WEBZA/STAR CLASH); `worldName: 'JoyPad'`; zapis silnika zostaje w
+  localStorage urządzenia (`blockcraft-save-v1`) i nie miesza się ze stanem konsoli.

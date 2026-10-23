@@ -8,7 +8,7 @@ import { ConnectionsScreen } from '../components/ConnectionsScreen';
 import { PauseSheet } from '../console/PauseSheet';
 import { clearLeaveWish, isLeaving, wishToLeave } from '../lib/exitWish';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Gamepad2, Home, Pause, Smartphone, Timer, Volume2, VolumeX, Zap } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, ChevronRight, Gamepad2, Home, Pause, Smartphone, Timer, Volume2, VolumeX, Zap } from 'lucide-react';
 import { gameAudio } from '../game/audio';
 import { menuMusic } from '../game/menuMusic';
 import { PLAYER_DEFS } from '../game/types';
@@ -21,8 +21,12 @@ import { nextTournamentRound, type MatchMode } from './matchModes';
 import { useMenuMusic } from '../lib/useMenuMusic';
 import { useT, type Language } from '../platform/i18n';
 import { COLORS, type DisplayMode, type GameRound, type Racer, type RenderQuality, type RoundConfig, type RoundHud, type RoundResult } from './runtime';
+// Jeden HUD dla wszystkich gier: oprawa rundy żyje w `console/RoundChrome`,
+// więc arcade i Stalowy Front wyglądają jak ta sama konsola (runda 21).
+import { RoundArena, RoundChip, RoundCountdown, RoundDeck, RoundFrame, RoundIconButton, RoundLoading, RoundObjective, RoundOverlay, RoundPlayerCard, RoundPowerUp, RoundStartFlash, RoundTimer, RoundTitle, RoundTopBar } from '../console/RoundChrome';
+import { announceUnlocked, recordRound, type RoundSignal } from '../platform/achievements';
 
-type ArcadeId = Exclude<GameId, 'tanks' | 'blockcraft'>;
+type ArcadeId = Exclude<GameId, 'tanks'>;
 type Stage = 'menu' | 'game' | 'over';
 type GameRules = { primaryLabel: string; primary: string[]; secondaryLabel: string; secondary: string[]; hint: string; action: string; win: string };
 const RULES: Record<ArcadeId, Record<Language, GameRules>> = {
@@ -42,6 +46,10 @@ const RULES: Record<ArcadeId, Record<Language, GameRules>> = {
     pl: { primaryLabel: 'LIMIT GOLI', primary: ['3 gole', '5 goli', '7 goli'], secondaryLabel: 'BOTY', secondary: ['Bez botów', '1 bot', '2 boty', '3 boty'], hint: 'Joystick wskazuje kierunek jazdy — auto samo skręca i przyspiesza, puszczona gałka hamuje. Przytrzymaj AKCJĘ, by użyć boosta; żółte pola uzupełniają paliwo. Niebiescy atakują w prawo, pomarańczowi w lewo.', action: 'BOOST', win: 'Pierwsza drużyna do limitu goli wygrywa; remis po 3 minutach rozstrzyga złoty gol.' },
     en: { primaryLabel: 'GOAL LIMIT', primary: ['3 goals', '5 goals', '7 goals'], secondaryLabel: 'BOTS', secondary: ['No bots', '1 bot', '2 bots', '3 bots'], hint: 'The stick points where you want to drive — the car turns and accelerates by itself, and letting go brakes. Hold ACTION to boost; yellow pads refill it. Blue attacks to the right, orange to the left.', action: 'BOOST', win: 'First team to the goal limit wins; a tie after 3 minutes is settled by a golden goal.' },
   },
+  blockcraft: {
+    pl: { primaryLabel: 'CZAS ZMIANY', primary: ['3 minuty', '5 minut', '8 minut'], secondaryLabel: 'TRYB', secondary: ['Kreatywny', 'Przetrwanie'], hint: 'WASD i mysz prowadzą gracza, E otwiera ekwipunek z rzemiosłem, pad steruje ruchem, a AKCJA stawia trzymany blok. Koniec zmiany zamyka rundę statystykami — świat zostaje na urządzeniu.', action: 'BUDUJ', win: 'Świat się nie kończy: zmianę zamyka czas, a dorobek liczy się w blokach.' },
+    en: { primaryLabel: 'SHIFT LENGTH', primary: ['3 minutes', '5 minutes', '8 minutes'], secondaryLabel: 'MODE', secondary: ['Creative', 'Survival'], hint: 'WASD and the mouse drive the player, E opens the crafting inventory, the pad steers and ACTION places the held block. The shift end closes the round with stats — the world stays on this device.', action: 'BUILD', win: 'The world does not end: the shift closes on time and your work counts in blocks.' },
+  },
   pizza: {
     pl: { primaryLabel: 'DŁUGOŚĆ ZMIANY', primary: ['Krótka · 1:00', 'Zmiana · 2:00', 'Maraton · 3:00'], secondaryLabel: 'TRYB', secondary: ['Współpraca', 'Rywalizacja'], hint: 'Joystick: bieg. Przytrzymaj AKCJĘ — kurier wystrzeli sieć; puść w dole łuku, by nabrać rozpędu. Pizzę rzuca sam, gdy masz klienta przed sobą. Pusty plecak uzupełnisz przy furgonetce.', action: 'SIEĆ', win: 'Dowieźcie jak najwięcej pizz przed końcem zmiany.' },
     en: { primaryLabel: 'SHIFT LENGTH', primary: ['Short · 1:00', 'Shift · 2:00', 'Marathon · 3:00'], secondaryLabel: 'MODE', secondary: ['Co-op', 'Versus'], hint: 'Stick: run. Hold ACTION — your courier shoots a web; let go at the bottom of the arc to gain speed. The pizza throws itself when a customer is ahead of you. Refill an empty bag at the van.', action: 'WEB', win: 'Deliver as many pizzas as you can before the shift ends.' },
@@ -58,9 +66,8 @@ const SETUP: Record<ArcadeId, { primary: number; secondary: number; bots: boolea
   snake: { primary: 1, secondary: 1, bots: true },
   league: { primary: 1, secondary: 2, bots: true },
   pizza: { primary: 1, secondary: 0, bots: false },
+  blockcraft: { primary: 1, secondary: 0, bots: false },
 };
-
-const formatTime = (n: number) => `${Math.floor(n / 60)}:${String(Math.floor(n % 60)).padStart(2, '0')}`;
 
 function readLocalRecord(id: ArcadeId): number {
   try { return Number(localStorage.getItem(`joypad-record-${id}`) || 0) || 0; } catch { return 0; }
@@ -70,8 +77,33 @@ function readPreference<T extends string>(key: string, fallback: T, values: read
   try { const value = localStorage.getItem(key) as T | null; return value && values.includes(value) ? value : fallback; } catch { return fallback; }
 }
 
-function hasWebGL2(canvas: HTMLCanvasElement) {
-  try { return Boolean(canvas.getContext('webgl2')); } catch { return false; }
+/** Dlaczego gra renderuje się tym, czym się renderuje — widoczne w UI i w konsoli. */
+export type RenderReport = { game: ArcadeId; webgl2: boolean; engine: 'webgl2' | 'canvas'; reason: string };
+let lastRenderReport: RenderReport | null = null;
+export function readRenderReport(): RenderReport | null { return lastRenderReport; }
+function noteRender(report: RenderReport) {
+  lastRenderReport = report;
+  // Diagnoza bez zgadywania: jedno pole w konsoli mówi, czemu Pęd jedzie z góry.
+  (window as unknown as { joypadRenderReport?: RenderReport }).joypadRenderReport = report;
+}
+function errorText(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return /dynamically imported module|Failed to fetch/i.test(message) ? 'brak fragmentu 3D (odśwież)' : message.slice(0, 80);
+}
+
+function probeWebGL2(): boolean {
+  // Sonda na JEDNORAZOWYM płótnie, z natychmiastowym oddaniem kontekstu. Pytanie płótna
+  // gospodarza przypinało do niego kontekst webgl2 i fallback 2D dostawał potem
+  // `getContext('2d') === null` (płótno ma jeden kontekst), a porzucone konteksty scen 3D
+  // zjadały limit przeglądarki (~16) — po kilku rundach sonda odpowiadała „nie" i gra
+  // cicho zrzucała się do widoku z góry, czyli „starej wersji 3D" ze zgłoszenia.
+  try {
+    const probe = document.createElement('canvas');
+    const gl = probe.getContext('webgl2');
+    if (!gl) return false;
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
+    return true;
+  } catch { return false; }
 }
 
 async function createRound(id: ArcadeId, canvas: HTMLCanvasElement, config: RoundConfig): Promise<GameRound> {
@@ -80,34 +112,62 @@ async function createRound(id: ArcadeId, canvas: HTMLCanvasElement, config: Roun
     case 'race': {
       // Neonowy Pęd korzysta z rozpakowanego miasta i kartów Three.js na obsługiwanych GPU.
       // The existing Canvas race remains the explicit low-capability fallback.
-      if (hasWebGL2(canvas)) {
-        try { return new (await import('./neon/NeonCircuitRound')).NeonCircuitRound(canvas, config); }
-        catch (error) { console.warn('Neonowy Pęd WebGL niedostępny — używam fallbacku Canvas', error); }
-      }
+      const webgl2 = probeWebGL2();
+      if (webgl2) {
+        try {
+          const round = new (await import('./neon/NeonCircuitRound')).NeonCircuitRound(canvas, config);
+          noteRender({ game: id, webgl2, engine: 'webgl2', reason: '' });
+          return round;
+        } catch (error) {
+          console.warn('Neonowy Pęd: silnik 3D nie wystartował — fallback Canvas', error);
+          noteRender({ game: id, webgl2, engine: 'canvas', reason: errorText(error) });
+        }
+      } else noteRender({ game: id, webgl2: false, engine: 'canvas', reason: config.language === 'en' ? 'no WebGL2' : 'brak WebGL2' });
       return new (await import('./games/Race')).RaceRound(canvas, config);
     }
     case 'orbit': {
       // Orbitalna Fala = STAR CLASH 3D z orbitalna-fala.zip. Bez WebGL2 zostaje klasyczny Orbit 2D.
-      if (hasWebGL2(canvas)) {
-        try { return new (await import('./starclash/StarClashRound')).StarClashRound(canvas, config); }
-        catch (error) { console.warn('STAR CLASH WebGL niedostępny — używam fallbacku Canvas', error); }
-      }
+      const webgl2 = probeWebGL2();
+      if (webgl2) {
+        try {
+          const round = new (await import('./starclash/StarClashRound')).StarClashRound(canvas, config);
+          noteRender({ game: id, webgl2, engine: 'webgl2', reason: '' });
+          return round;
+        } catch (error) {
+          console.warn('STAR CLASH: silnik 3D nie wystartował — fallback Canvas', error);
+          noteRender({ game: id, webgl2, engine: 'canvas', reason: errorText(error) });
+        }
+      } else noteRender({ game: id, webgl2: false, engine: 'canvas', reason: config.language === 'en' ? 'no WebGL2' : 'brak WebGL2' });
       return new (await import('./games/Orbit')).OrbitRound(canvas, config);
     }
     case 'snake':
-      // Wężowy Wir pozostaje celowo lekki: zawsze renderuje się w Canvas 2D.
+      // Wężowy Wir pozostaje celowo lekki: zawsze renderuje się w Canvas 2D — bez powodu
+      // w raporcie, bo to wybór projektu, nie degradacja (chip pokazuje tylko degradacje).
+      noteRender({ game: id, webgl2: false, engine: 'canvas', reason: '' });
       return new (await import('./games/Snake')).SnakeRound(canvas, config);
     case 'league': {
       // Turbo League = silnik z nitro-league.zip (src/arcade/league-next) renderujący na płótnie platformy.
       // Prosty prototyp Canvas 2D zostaje wyłącznie tam, gdzie WebGL2 w ogóle nie istnieje — po nieudanym
       // starcie WebGL płótno ma już kontekst 3D i nie da się na nim założyć 2D, więc wtedy zgłaszamy błąd.
-      if (hasWebGL2(canvas)) return new (await import('./league-next/LeagueRound')).LeagueNextRound(canvas, config);
+      if (probeWebGL2()) {
+        noteRender({ game: id, webgl2: true, engine: 'webgl2', reason: '' });
+        return new (await import('./league-next/LeagueRound')).LeagueNextRound(canvas, config);
+      }
+      noteRender({ game: id, webgl2: false, engine: 'canvas', reason: config.language === 'en' ? 'no WebGL2' : 'brak WebGL2' });
       return new (await import('./games/League')).LeagueRound(canvas, config);
+    }
+    case 'blockcraft': {
+      // BlockCraft to silnik Three.js z repo mconline — bez WebGL2 nie ma wersji
+      // zastępczej, więc mówimy to wprost (widok wraca do menu, nie wisi na płótnie).
+      if (!probeWebGL2()) throw new Error('BlockCraft wymaga WebGL2');
+      noteRender({ game: id, webgl2: true, engine: 'webgl2', reason: '' });
+      return new (await import('./blockcraft/BlockCraftRound')).BlockCraftRound(canvas, config);
     }
     case 'pizza': {
       // WEBZA to czyste Three.js — bez WebGL2 nie ma wersji zastępczej, więc zgłaszamy to wprost
       // (widok wraca do menu zamiast zawisnąć na pustym płótnie).
-      if (!hasWebGL2(canvas)) throw new Error('WEBZA wymaga WebGL2');
+      if (!probeWebGL2()) throw new Error('WEBZA wymaga WebGL2');
+      noteRender({ game: id, webgl2: true, engine: 'webgl2', reason: '' });
       return new (await import('./pizza/PizzaRound')).PizzaRound(canvas, config);
     }
   }
@@ -163,6 +223,9 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   const [participants, setParticipants] = useState<Racer[]>([]);
   const [roundKey, setRoundKey] = useState(0);
   const [showPads, setShowPads] = useState(false);
+  const [renderReport, setRenderReport] = useState<RenderReport | null>(null);
+  /** Zdarzenia `onFx` ludzi w bieżącej rundzie — sygnał dla osiągnięć. */
+  const fxCounts = useRef<Record<number, Record<string, number>>>({});
   const [muted, setMuted] = useState(gameAudio.muted);
   const [menuMusicOn, toggleMenuMusic] = useMenuMusic();
   const curtain = useCurtain();
@@ -275,6 +338,7 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
     const { participants, primary, secondary, displayMode, quality, language } = roundSetupRef.current;
     const recording = beginRecording(language);
     const recorder = recording.events;
+    fxCounts.current = {}; // nowa runda = czyste liczniki zdarzeń dla osiągnięć
     recorder.observe({ timeLeft: 0, countdown: 3, paused: false, players: participants.map(p => ({ ...p, score: 0 })) });
     const config = {
       onFrame: recording.video.frame,
@@ -296,10 +360,30 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
           maxValue: p.maxValue,
         });
       },
-      onFx: (slot: number, fx: Parameters<typeof padHost.sendFx>[1]) => { recorder.fx(slot, fx); padHost.sendFx(slot, fx); },
-      onFinish: (next: RoundResult) => { if (!cancelled) { finishRecording(recording); setResult(next); setStage('over'); } },
+      onFx: (slot: number, fx: Parameters<typeof padHost.sendFx>[1]) => {
+        const bucket = fxCounts.current[slot] ?? (fxCounts.current[slot] = {});
+        bucket[fx] = (bucket[fx] ?? 0) + 1;
+        recorder.fx(slot, fx); padHost.sendFx(slot, fx);
+      },
+      onFinish: (next: RoundResult) => {
+        if (!cancelled) {
+          finishRecording(recording); setResult(next); setStage('over');
+          // Karta pilota: runda dokłada liczby i sprawdza trofea tym samym
+          // wynikiem i zdarzeniami, które runda i tak już wysłała.
+          const signal: RoundSignal = {
+            game: id, winnerSlot: next.winnerSlot,
+            humans: config.players.filter(player => !player.isBot).length,
+            fx: fxCounts.current,
+            scores: next.players.map(player => ({ slot: player.slot, isBot: Boolean(player.isBot), score: player.score })),
+          };
+          void announceUnlocked(recordRound(signal), language);
+        }
+      },
     };
     void createRound(id, canvas.current, config).then(engine => {
+      setRenderReport(readRenderReport());
+      // CI (Playwright na serwerze dev) sprawdza sterowanie stanem wejścia, nie pikselami.
+      if (import.meta.env.DEV) (window as unknown as { joypadRound?: GameRound }).joypadRound = engine;
       if (cancelled) { engine.destroy(); return; }
       round.current = engine;
       engine.start();
@@ -347,7 +431,6 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
   // przechwytującej i sama wygasza zdarzenie, więc własny nasłuch tylko by dublował
   // ruch (i kasował fokus postawiony przez nawigację).
   const mute = () => { gameAudio.init(); gameAudio.setMuted(!muted); setMuted(!muted); };
-  const cssVars = { '--game-accent': info.accent, '--game-soft': info.accentSoft } as React.CSSProperties;
   const modeLabels = language === 'en' ? { classic: 'QUICK MATCH', tournament: 'TOURNAMENT', '2v2': '2V2 / TEAMS' } : { classic: 'ZWYKŁA RUNDA', tournament: 'TURNIEJ', '2v2': '2V2 / DRUŻYNY' };
   const displayLabels = language === 'en' ? { shared: 'SHARED', split: 'SPLIT-SCREEN' } : { shared: 'WSPÓLNY', split: 'PODZIELONY EKRAN' };
   const qualityLabels = language === 'en' ? { performance: 'PERFORMANCE', balanced: 'BALANCED', quality: 'QUALITY' } : { performance: 'PŁYNNOŚĆ', balanced: 'BALANS', quality: 'DETAL' };
@@ -368,26 +451,33 @@ export function ArcadeGameView({ id, onExit, remote }: { id: ArcadeId; onExit: (
 
   return (
     <>
-    <div className={`arcade-page arcade-${id} flex h-screen min-h-[360px] flex-col overflow-hidden text-white`} style={cssVars}>
-      <div className="arcade-hudbar z-20 flex shrink-0 items-center justify-between gap-2 border-b border-white/10 bg-[#0b0e12]/95 px-3 py-2 sm:px-5"><div className="flex min-w-0 items-center gap-2 sm:gap-4"><div className="arcade-title truncate text-sm font-bold sm:text-lg" style={{ color: info.accent }}>{info.title}</div><span className="hidden rounded-full border border-white/10 px-2 py-1 text-[10px] font-bold text-slate-300 sm:block">{hud?.status || t('game.statusLoading')}</span></div>
-        <div className="flex items-center gap-1.5 font-mono2 text-sm font-bold sm:gap-2 sm:text-lg"><Timer size={16} style={{ color: info.accent }} /> {formatTime(hud?.timeLeft ?? 0)}</div>
-        <div className="flex items-center gap-1"><span className="hidden rounded-full border border-white/10 px-2 py-1 text-[10px] font-bold text-slate-500 sm:block">{modeTag} · {qualityLabels[quality]}</span><button onClick={mute} title={muted ? t('game.soundOn') : t('game.mute')} className="arcade-icon">{muted ? <VolumeX size={17} /> : <Volume2 size={17} />}</button><button onClick={() => setShowPads(true)} title={t('game.pads')} className="arcade-icon"><Smartphone size={17} /></button><button onClick={() => round.current?.togglePause()} title={t('game.pause')} className="arcade-icon"><Pause size={17} /></button><button onClick={() => setStage('menu')} title={t('game.endRound')} className="arcade-icon text-amber-300"><Home size={17} /></button><button onClick={leave} title={t('game.back')} className="arcade-icon text-orange-300"><Gamepad2 size={17} /></button></div>
-      </div>
-      <div className="relative min-h-0 flex-1 bg-[#06090c]"><canvas ref={canvas} className="absolute inset-0 h-full w-full" aria-label={language === 'en' ? `${info.title} game arena` : `Arena gry ${info.title}`} />
-        <div className="arcade-hudnote lg-enter pointer-events-none absolute left-3 top-3 z-10 rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-[11px] font-bold backdrop-blur sm:left-5 sm:top-4 sm:text-sm" style={{ color: info.accent }}>{hud?.objective || rules.win}</div>
-        {hud?.powerUp && <div className={`arcade-hudnote pointer-events-none absolute right-3 top-3 z-10 w-[min(205px,52vw)] rounded-xl border bg-black/75 px-3 py-2.5 shadow-2xl backdrop-blur sm:right-5 sm:top-4 ${hud.powerUp.rolling ? 'animate-pulse' : ''}`} style={{ borderColor: `${hud.powerUp.color}66`, boxShadow: `0 10px 30px ${hud.powerUp.color}20` }}>
-          <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[.16em] text-white/55"><Zap size={13} style={{ color: hud.powerUp.color }} /> {t('game.actionBonus')}</div>
-          <div className="mt-1 flex items-center justify-between gap-2"><b className="truncate text-sm font-black" style={{ color: hud.powerUp.color }}>{hud.powerUp.label}</b>{hud.powerUp.count > 1 && <span className="shrink-0 rounded-full px-1.5 py-0.5 font-mono2 text-[11px] font-bold text-black" style={{ background: hud.powerUp.color }}>×{hud.powerUp.count}</span>}</div>
-          <div className="mt-1 text-[10px] leading-tight text-white/60">{hud.powerUp.hint}</div>
-        </div>}
-        {hud?.countdown !== undefined && hud.countdown > 0 && <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/30"><span className="joy-kicker text-white/70">{t('game.ready')}</span><span key={Math.ceil(hud.countdown)} className="count-pop arcade-title text-8xl font-black drop-shadow-lg sm:text-9xl" style={{ color: info.accent, textShadow: `0 0 70px ${info.accent}99` }}>{Math.ceil(hud.countdown)}</span></div>}
-        {startFlash && <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"><span className="start-flash arcade-title text-7xl font-black sm:text-9xl" style={{ color: info.accent, textShadow: `0 0 90px ${info.accent}` }}>START</span></div>}
+    <RoundFrame accent={info.accent} soft={info.accentSoft}>
+      <RoundTopBar
+        center={<RoundTimer seconds={hud?.timeLeft ?? 0} icon={<Timer size={16} />} />}
+        actions={<>
+          {renderReport?.engine === 'canvas' && renderReport.reason && <RoundChip tone="danger" optional icon={<AlertTriangle size={12} />}>{language === 'en' ? `2D MODE · ${renderReport.reason}` : `TRYB 2D · ${renderReport.reason}`}</RoundChip>}
+          <RoundChip tone="quiet" optional>{modeTag} · {qualityLabels[quality]}</RoundChip>
+          <RoundIconButton label={muted ? t('game.soundOn') : t('game.mute')} onClick={mute}>{muted ? <VolumeX size={17} /> : <Volume2 size={17} />}</RoundIconButton>
+          <RoundIconButton label={t('game.pads')} onClick={() => setShowPads(true)}><Smartphone size={17} /></RoundIconButton>
+          <RoundIconButton label={t('game.pause')} onClick={() => round.current?.togglePause()}><Pause size={17} /></RoundIconButton>
+          <RoundIconButton label={t('game.endRound')} onClick={() => setStage('menu')} tone="accent"><Home size={17} /></RoundIconButton>
+          <RoundIconButton label={t('game.back')} onClick={leave} tone="danger"><Gamepad2 size={17} /></RoundIconButton>
+        </>}>
+        <RoundTitle>{info.title}</RoundTitle>
+        <RoundChip optional>{hud?.status || t('game.statusLoading')}</RoundChip>
+      </RoundTopBar>
+      <RoundArena>
+        <canvas ref={canvas} className="absolute inset-0 h-full w-full" aria-label={language === 'en' ? `${info.title} game arena` : `Arena gry ${info.title}`} />
+        <RoundObjective>{hud?.objective || rules.win}</RoundObjective>
+        {hud?.powerUp && <RoundPowerUp kicker={<><Zap size={13} style={{ color: hud.powerUp.color }} /> {t('game.actionBonus')}</>} label={hud.powerUp.label} count={hud.powerUp.count} color={hud.powerUp.color} hint={hud.powerUp.hint} rolling={hud.powerUp.rolling} />}
+        {hud?.countdown !== undefined && hud.countdown > 0 && <RoundCountdown value={hud.countdown} kicker={t('game.ready')} />}
+        {startFlash && <RoundStartFlash />}
         {hud?.paused && <PauseSheet game={info.title} onResume={() => { if (!isLeaving()) round.current?.togglePause(); }} onExit={leave} />}
-        {!hud && <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 text-sm text-slate-300"><PlamekOrbit size={44} /> {t('game.loading')}</div>}
-        {showPads && <div className="absolute inset-0 z-40 flex items-center justify-center overflow-auto bg-black/80 p-4 backdrop-blur" onClick={() => setShowPads(false)}><div className="w-full max-w-2xl" onClick={e => e.stopPropagation()}><PadHostPanel players={PLAYER_DEFS} onClose={() => setShowPads(false)} context="arcade" /></div></div>}
-      </div>
-      <div className="arcade-huddeck lg-enter z-10 flex min-h-[76px] shrink-0 gap-2 overflow-x-auto border-t border-white/10 bg-[#0b0e12] p-2 sm:justify-center sm:p-3">{hud?.players.map(p => <div key={p.slot} className="arcade-hudcard min-w-[142px] flex-1 rounded-xl border border-white/10 bg-white/[.035] px-3 py-2 sm:max-w-[250px]"><div className="flex items-center justify-between gap-2"><span className="truncate text-xs font-bold" style={{ color: p.color }}>{p.name}{p.isBot && <span className="ml-1 text-[9px] text-slate-500">BOT</span>}</span><b className="font-mono2 text-base" style={{ color: p.color }}>{p.score}</b></div><div className="mt-1 truncate text-[11px] text-slate-400">{p.detail}</div>{p.value !== undefined && <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, p.value / (p.maxValue || 100) * 100))}%`, background: p.color }} /></div>}</div>)}</div>
-    </div>
+        {!hud && <RoundLoading><PlamekOrbit size={44} /> {t('game.loading')}</RoundLoading>}
+        {showPads && <RoundOverlay onClose={() => setShowPads(false)}><PadHostPanel players={PLAYER_DEFS} onClose={() => setShowPads(false)} context="arcade" /></RoundOverlay>}
+      </RoundArena>
+      <RoundDeck>{hud?.players.map(p => <RoundPlayerCard key={p.slot} name={p.name} color={p.color} score={p.score} detail={p.detail} value={p.value} maxValue={p.maxValue} isBot={p.isBot} />)}</RoundDeck>
+    </RoundFrame>
     <ScreenCurtain state={curtain.state} />
     </>
   );

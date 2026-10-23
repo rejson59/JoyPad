@@ -51,6 +51,25 @@ export default tseslint.config(
     },
   },
   {
+    // BlockCraft (vendor z repo rejson59/mconline, MIT) wchodzi niemal bez zmian,
+    // dokładnie jak STAR CLASH z paczki: adaptujemy mostem `BlockCraftRound`,
+    // nie przerabiamy cudzego silnika na własny styl.
+    files: ["src/arcade/blockcraft/game/**"],
+    rules: {
+      "@typescript-eslint/ban-ts-comment": "off",
+      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-unused-expressions": "off",
+      "@typescript-eslint/no-unused-vars": "off",
+      "prefer-const": "off",
+      "no-case-declarations": "off",
+      "no-empty": "off",
+      "no-control-regex": "off",
+      "no-useless-assignment": "off",
+      "no-dupe-else-if": "off",
+      "preserve-caught-error": "off",
+    },
+  },
+  {
     // Testy silników 3D w node (bez GPU i przeglądarki): atrapy DOM/renderera i testy white-box
     // sięgają po prywatny stan silnika, a atrapy są z natury „uniwersalne” — `any` jest tu zamierzony.
     // Kod gier i adapterów (src/arcade/**) dalej podlega pełnym regułom.

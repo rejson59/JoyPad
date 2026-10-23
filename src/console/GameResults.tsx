@@ -35,7 +35,7 @@ export function GameResults({ replayNotice = '', moments = [], info, title, subt
     focusUiScope(root.current);
   }, []);
   // Wyniki: naturalna wysokość i pomniejszanie zamiast przycinania treści.
-  return <FitScreen minScale={.78} label={t('results.title')}><div ref={root} data-ui-scope="game-results" data-ui-focus={'.cine-result-actions .cine-start'} className="cine-results" style={{ '--result-color': winner?.color || 'var(--os-accent)' } as CSSProperties}>
+  return <FitScreen minScale={.78} label={t('results.title')}><div ref={root} data-ui-scope="game-results" data-ui-focus={'.cine-result-actions .cine-start'} className="cine-results" style={{ '--result-color': winner?.color || 'var(--os-accent)', '--game-accent': info.accent, '--game-soft': info.accentSoft } as CSSProperties}>
     <div className="cine-results-art" aria-hidden="true"><img src={`${import.meta.env.BASE_URL}${info.cover}`} alt="" /></div>
     <header className="cine-result-header"><span className="os-wordmark"><JoyPadLogo size={38} />JoyPad<span>.</span></span><span>{info.title} <i /> {t('results.roundEnd')}</span><button className="cine-back" onClick={onExit}><Home size={16} /> {t('results.library')}</button></header>
     <main className="cine-results-main"><section className="cine-result-moment">

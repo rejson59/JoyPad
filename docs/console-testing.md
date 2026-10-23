@@ -91,6 +91,23 @@ odłącz pada w połowie ruchu (kursor ma stanąć, nie jechać) i podłącz go 
 - Układ desktop 1440×1000, mobile 390×844; brak poziomego przepełnienia biblioteki.
 - Telefon: portret i poziom 844×390, lokalne naciśnięcie/zwolnienie akcji.
 - Start Neonowego Pędu w trybie Canvas fallback, wspólna pauza, potwierdzenie zakończenia, powrót do biblioteki; wejście i wyjście Stalowego Frontu. Pełnej wydajności WebGL nie można ocenić na programowym GPU sandboxa.
+- Karta pilota i osiągnięcia (`src/platform/achievements.ts`, storage `joypad.achievements.v1`):
+  dwanaście trofeów wyprowadzonych z sygnałów rundy (wynik + zdarzenia `onFx`), okno „Osiągnięcia"
+  w stopce biblioteki, trofea na kafelkach gier i toast przy odblokowaniu. Rdzeń jest czysty
+  (storage wstrzykiwany, bez Reacta), więc PILOT CARD SELFTEST ćwiczy go w Node: trofea wpadają
+  raz, liczniki karty rosną, paski postępu mają prawdziwe cele, a `announceUnlocked` bierze
+  konstruktor zdarzenia z docelowego okna (realm jsdom w teście dymnym).
+- Telefon (profil `handheld`) ma własny układ w `viewport.css`: zawijany pasek górny, jedna
+  kolumna sceny i decku gry, półka 2×, cele dotyku ≥44 px, stopka bez skrótów klawiszowych
+  i z oddechem na pływającą podpowiedź kontrolera. `tests/phone.spec.ts` pilnuje w CI, że nic
+  nie wypada poza okno (ramka `fit-frame` tnie nadmiar, więc ucięcie = niewidzialny przycisk).
+- Gry płótna w rundzie solo słuchają strzałek poza WASD (`keySetFor(0, solo)` w `runtime.ts`),
+  bo katalog obiecuje „Strzałki lub joystick"; przy człowieku w slocie 1 podział zostaje
+  klasyczny. `tests/phone.spec.ts` sprawdza to stanem `debugInput(0)` po starcie Wężowego Wiru.
+- Zrzut do fallbacku nigdy nie jest cichy: chip „TRYB 2D · powód" w oprawie rundy i `window.joypadRenderReport`
+  mówią, czemu gra nie wystartowała w 3D (`brak WebGL2`, `brak fragmentu 3D (odśwież)`, błąd silnika).
+  Silniki 3D oddają kontekst WebGL w `dispose()` (`forceContextLoss`), a sonda pyta jednorazowe płótno
+  i od razu je gubi — limit ~16 kontekstów przeglądarki nie zjada już kolejnych rund w długiej sesji.
 - Zapisywanie rozmiaru, zamiana stron, zmiana orientacji, ograniczony ruch.
 - Testowane za pomocą wstrzykniętego stanu hosta: wspólny lab, odliczanie i pauza, blokada akcji podczas pauzy. Nie jest to test rzeczywistej sieci ani silnika wibracji.
 
@@ -149,7 +166,7 @@ Suggested physical iPhone check: choose iPhone/iPad → connect → quick lab �
 
 ### Recorded menu previews
 
-- Only the selected playable game has a preview element. No engine runs in the menu: files are captured offline by `scripts/previews/capture.mjs`; provenance and regeneration instructions live in `public/previews/README.md`.
+- Only the selected playable game has a preview element. No engine runs in the menu: files are captured offline by `scripts/previews/capture.mjs` — locally or by the `Previews` workflow (`.github/workflows/previews.yml`), which records one engine per job and commits the clips back to the branch. Every playable title in `catalog.ts` has a recording (`PREVIEW_GAMES` in `GamePreview.tsx` is checked against the catalogue by `selftest:console`; a title whose first clip is still being recorded by CI is listed in `awaitingRecording` for that one round — BlockCraft's arrived from CI in round 25); `wip` announcements fall back to their cover art. Provenance and regeneration instructions live in `public/previews/README.md`.
 - Desktop autoplay waits 900 ms after eligibility to avoid downloads while browsing quickly. It requires an intersecting preview, a visible tab, no overlay, no reduced-motion preference, and no detected Save-Data/2G/3G connection. Eligible viewports are `≥1000px with a fine pointer` and `≥1400px regardless of pointer`, because TV browsers report a coarse pointer; phones and tablets stay manual.
 - A persistent settings switch disables automatic playback. Each clip has a keyboard-accessible play/pause button; pausing returns to the original cover. Unselected/offscreen/hidden/covered previews are removed and their media resources released. Source changes never run two clips together.
 - Check all three actual video decoders, MP4/WebM fallback, no audio, missing-file fallback, rejected autoplay, rapid selection, below-fold scroll, settings/connection/lab overlays and page visibility. Broken video must never block “Uruchom grę”.
@@ -158,7 +175,7 @@ Suggested physical iPhone check: choose iPhone/iPad → connect → quick lab �
 
 ### Background gameplay and clear Neon tire effects
 
-Recordings are Full HD masters (1920×1080, 24 fps, H.264 CRF 19 / VP9 CRF 31) captured from the engine canvas at native size by `scripts/previews/capture.mjs`; the console selftest reads the MP4 track dimensions so the masters cannot silently shrink again. Source URLs carry a `?v=` revision (`PREVIEW_REVISION` in `GamePreview.tsx`): bump it whenever the clips are re-recorded, otherwise browsers and CDNs keep serving the previous file under the same name. Presentation: the wallpaper band grows with the viewport (`clamp(560px,100dvh,1180px)`) and the video is fitted to its own 16:9 shape inside it, so the whole frame stays visible on a small laptop, a 16:10 monitor and an ultrawide TV instead of being cropped by `object-fit:cover`. The selected cover stays behind the frame, blurred, as ambient art for the bars; the frame gets a rounded edge and a soft accent glow. The right-hand “WSPÓLNY EKRAN” panel is translucent smoked glass (`backdrop-filter: blur(22px) saturate(135%)`) with an opaque fallback for `@supports`-less and `prefers-reduced-transparency` browsers, so the preview is not covered by an opaque card. Scrims are lighter than before: a left gradient protects the copy, the bottom fades into the page background.
+Recordings are Full HD masters (1920×1080, 24 fps, H.264 CRF 21 / VP9 CRF 33, silent) captured from the engine canvas at native size by `scripts/previews/capture.mjs`; the console selftest reads the MP4 track dimensions so the masters cannot silently shrink again. Source URLs carry a `?v=` revision (`PREVIEW_REVISION` in `GamePreview.tsx`): bump it whenever the clips are re-recorded, otherwise browsers and CDNs keep serving the previous file under the same name. Presentation: the wallpaper band grows with the viewport (`clamp(560px,100dvh,1180px)`) and the video is fitted to its own 16:9 shape inside it, so the whole frame stays visible on a small laptop, a 16:10 monitor and an ultrawide TV instead of being cropped by `object-fit:cover`. The selected cover stays behind the frame, blurred, as ambient art for the bars; the frame gets a rounded edge and a soft accent glow. The right-hand “WSPÓLNY EKRAN” panel is translucent smoked glass (`backdrop-filter: blur(22px) saturate(135%)`) with an opaque fallback for `@supports`-less and `prefers-reduced-transparency` browsers, so the preview is not covered by an opaque card. Scrims are lighter than before: a left gradient protects the copy, the bottom fades into the page background.
 
 Check: the video is contained inside the wallpaper band at 1366×768, 1920×1080, 2560×1440 and 3440×1440 (no clipping, aspect ratio preserved), text over bright tank terrain stays legible, the glass panel keeps its contrast over both bright and near-black scenes, and the fallback path (no `backdrop-filter`, no container query units) still shows the whole recording. Keep all previous autoplay, one-video, reduced-motion and data-saving checks.
 

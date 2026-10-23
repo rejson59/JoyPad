@@ -445,18 +445,95 @@ export function pourEdges(target: Edges, spread: number, progress: number): Edge
  * Wisieje od .42 domknięcia (kiedy strugi już zeszły po bokach), pełnię osiąga w trzech
  * czwartych, a potem daje się wciągnąć z powrotem — przed zwarciem nie ma jej już wcale.
  */
-export function dripTail(box: Box, wrap: number, thickness: number, wob = 0) {
+/**
+ * Oddech farby w spoczynku — i dlaczego ruchem, nie rozmyciem.
+ *
+ * Rozlany Plamek zastygał: `wrap` dochodził do 1, więc `dripTail` zwracał `null`,
+ * pętla klatki gasła (`busy === false`) i na ekranie zostawał równy, nieruchomy
+ * pierścień z buźką — zgłoszenie „to zwykła otoczka, nie farba”. Mokrości w spoczynku
+ * nie da się podnieść: `gooStrength` ma podłogę .3 przypiętą bramką (przy większym
+ * rozmyciu próg alfa 18/-6 zjadał cienką górną krawędź taśmy na małych przyciskach).
+ * Ciecz wraca więc RUCHEM: kałuża pod przyciskiem wolno nabiera materiału i go oddaje,
+ * kropla zwisa, wydłuża się i wraca do kałuży, a odblask na rancie jedzie z oddechem.
+ *
+ * Wszystko jest funkcją `now` (deterministyczne — w widoku obowiązuje zakaz
+ * `Math.random`), znika przy ograniczonym ruchu, a po zaśnięciu kulki zwalnia
+ * i płytkieje zamiast gasnąć: śpiąca maskotka nadal jest mokrą farbą.
+ */
+export const PLAMEK_IDLE = {
+  /** Jeden oddech kałuży (~9 s): ruch kątem oka, nie coś, co niepokoi. */
+  poolMs: 9000,
+  /** Cykl kropli (~6.5 s): wisi → wydłuża się → wraca do kałuży. */
+  dripMs: 6500,
+  /** O ile dół kałuży dorasta w szczycie oddechu (`ANISO.bottom` 1.4 → max ~1.62). */
+  poolAmp: .22,
+  /** O ile grubieje CAŁA taśma w szczycie oddechu: farba zbiera się, nie tylko ścieka. */
+  poolSwell: .07,
+  /** Kropla w spoczynku wobec kropli z rozlewu: krótsza i węższa, ale obecna. */
+  dripScale: .82,
+  /** Najkrótsza kropla w cyklu — nigdy nie znika do zera, bo wtedy miga. */
+  dripFloor: .46,
+  /** Po zaśnięciu: oddech płytszy i ~1.6× wolniejszy — śpiąca kulka wciąż jest mokrą farbą. */
+  napFactor: .55,
+  /** Kadencja rysowania oddechu: ~12 fps, po zaśnięciu ~5 fps (w tle rAF i tak staje). */
+  frameMs: 80,
+  napFrameMs: 190,
+} as const;
+
+/**
+ * Jedna fala 0 → 1 → 0 bez skoku na końcu okresu (`easeInOutSine` w dwie strony).
+ * Sinus bez wygładzania miał w środku zauważalną „prędkość jednostajną”.
+ */
+export function idleWave(now: number, periodMs: number): number {
+  const period = Math.max(1, periodMs);
+  const t = (Math.max(0, now) % period) / period;
+  return easeInOutSine(t < .5 ? t * 2 : 2 - t * 2);
+}
+
+/** Ile materiału zbiera się teraz pod przyciskiem (0..1, po zaśnięciu płycej). */
+export function idlePool(now: number, asleep = false): number {
+  const slower = asleep ? 1.6 : 1;
+  return idleWave(now, PLAMEK_IDLE.poolMs * slower) * (asleep ? PLAMEK_IDLE.napFactor : 1);
+}
+
+/**
+ * Kropla w spoczynku: `dripFloor`..1. Większość okresu wisi krótko, potem wolno
+ * nabiera i szybko wraca — `pow` robi asymetrię, więc farba żyje, ale nie pulsuje.
+ */
+export function idleDrip(now: number, asleep = false): number {
+  if (asleep) return PLAMEK_IDLE.dripFloor * PLAMEK_IDLE.napFactor;
+  const floor = PLAMEK_IDLE.dripFloor;
+  return floor + (1 - floor) * Math.pow(idleWave(now, PLAMEK_IDLE.dripMs), 1.7);
+}
+
+/**
+ * Kropla pod dolną krawędzią taśmy.
+ *
+ * `wrap < 1` = rozlewanie: kropla rośnie razem z frontem farby i jest wciągana, gdy
+ * farba dochodzi do siebie. `wrap === 1` (spoczynek) znaczyło kiedyś `null` — dlatego
+ * rozlany Plamek nie miał ani jednego elementu, który by się ruszał. `rest` (z
+ * `idleDrip`) zwiesza kroplę także wtedy: krótszą (`box.height * .34`, nie `.55`)
+ * i liczoną z mniejszej grubości, więc nie konkuruje z kałużą, tylko z niej wyrasta.
+ */
+export function dripTail(box: Box, wrap: number, thickness: number, wob = 0, rest = 0) {
   const w = clamp01(wrap);
-  if (w < .42 || w >= 1) return null;
+  const resting = w >= 1 && rest > 0;
+  if (!resting && (w < .42 || w >= 1)) return null;
   const arc = Math.sin(Math.pow(clamp01((w - .42) / .58), .82) * Math.PI);
-  const hang = arc * (1 + Math.abs(wob) * .7);
-  const height = Math.min(box.height * .55, thickness * 1.9 * hang);
-  if (height < 3) return null;
+  // W rozlewie kropla zachowuje objętość: krótsza znaczy szersza (`1.32 - .42 * hang`).
+  // W spoczynku jest mniejsza w OBU osiach (`dripScale`), bo wyrasta z kałuży, a nie z lania
+  // — inaczej wisiałaby pod przyciskiem druga kałuża i czytałaby się jak błąd taśmy.
+  const hang = resting ? clamp01(rest) : arc * (1 + Math.abs(wob) * .7);
+  const scale = resting ? PLAMEK_IDLE.dripScale * (1 + Math.abs(wob) * .18) : 1;
+  const height = Math.min(box.height * (resting ? .34 : .55), thickness * 1.9 * hang * scale);
+  if (height < (resting ? 2.4 : 3)) return null;
   const center = boxCenter(box);
+  const width = thickness * (resting ? .74 + .3 * hang : 1.32 - .42 * Math.min(1, hang)) * scale;
   return {
     x: center.x, y: box.top + box.height + thickness * .55,
-    width: Math.max(5, thickness * (1.32 - .42 * Math.min(1, hang))), height,
-    alpha: Math.min(1, .6 + hang * .4), swell: hang,
+    width: Math.max(resting ? 3.6 : 5, width), height,
+    alpha: resting ? Math.min(.92, .42 + hang * .5) : Math.min(1, .6 + hang * .4),
+    swell: hang * scale,
   };
 }
 

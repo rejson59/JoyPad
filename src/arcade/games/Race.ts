@@ -1,5 +1,6 @@
 import { CanvasRound, HEIGHT, WIDTH, clamp, distance, glow, rand, roundRect, type InputState, type Racer, type RoundConfig, type RoundHud, type RoundPlayer } from '../runtime';
 import { gameAudio } from '../../game/audio';
+import { drawArenaWatermark, drawWorldLabel, hudFont } from '../hudKit';
 
 type Point = { x: number; y: number };
 interface Car extends Racer { x: number; y: number; angle: number; speed: number; energy: number; lap: number; checkpoint: number; nearest: number; trail: Point[]; }
@@ -167,7 +168,7 @@ export class RaceRound extends CanvasRound {
       glow(ctx, pos.x, pos.y, 32, 'rgba(88,225,245,.32)');
       ctx.save(); ctx.translate(pos.x, pos.y); ctx.rotate(this.clock * 1.5);
       roundRect(ctx, -9, -9, 18, 18, 3, '#63e6f6', '#e1feff');
-      ctx.fillStyle = '#071426'; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center'; ctx.fillText('↯', 0, 5);
+      ctx.fillStyle = '#071426'; ctx.font = hudFont(800, 14, 'mono'); ctx.textAlign = 'center'; ctx.fillText('↯', 0, 5);
       ctx.restore();
     });
     for (const car of this.cars) {
@@ -185,11 +186,10 @@ export class RaceRound extends CanvasRound {
       ctx.fillStyle = '#fb7185'; ctx.fillRect(-21, -9, 3, 4); ctx.fillRect(-21, 5, 3, 4);
       ctx.restore();
       roundRect(ctx, car.x - 30, car.y - 34, 60, 17, 5, 'rgba(5,8,21,.8)');
-      ctx.fillStyle = car.color; ctx.textAlign = 'center'; ctx.font = 'bold 10px sans-serif'; ctx.fillText(car.name.toUpperCase().slice(0, 10), car.x, car.y - 22);
+      drawWorldLabel(ctx, car.name.toUpperCase().slice(0, 10), car.x, car.y - 22, { color: car.color, size: 10 });
     }
     // ambient city lamp lights
     for (const x of [66, 1130]) for (const y of [72, 642]) { glow(ctx, x, y, 67, 'rgba(143,78,250,.16)'); ctx.fillStyle = '#9b61db'; ctx.fillRect(x - 4, y - 4, 8, 8); }
-    ctx.fillStyle = '#80a0bd'; ctx.font = 'bold 12px monospace'; ctx.textAlign = 'left';
-    ctx.fillText(this.isEnglish ? 'NEON RUSH  /  NIGHT CITY' : 'NEONOWY PĘD  /  NOCNE MIASTO', 25, HEIGHT - 21);
+    drawArenaWatermark(ctx, this.isEnglish ? 'NEON RUSH  /  NIGHT CITY' : 'NEONOWY PĘD  /  NOCNE MIASTO', HEIGHT - 21);
   }
 }

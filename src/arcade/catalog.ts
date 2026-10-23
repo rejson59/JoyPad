@@ -46,7 +46,7 @@ export const GAMES: GameInfo[] = [
   {
     id: 'race', number: '02', title: 'Neonowy Pęd', eyebrow: 'NOCNY WYŚCIG', genre: 'Wyścigi',
     description: 'Nocne miasto, mokry asfalt i zakręty pokonywane bokiem. Zostaw rywali za sobą — liczy się każdy drift.',
-    teaser: 'Miasto 3D • Drift • Turbo', cover: 'images/neon-rush.webp', accent: '#ff9a52', accentSoft: '#8a421c',
+    teaser: 'Miasto 3D • Drift • Turbo', cover: 'images/neon-rush.webp', accent: '#ff7ad9', accentSoft: '#7a2c62',
     controls: 'Joystick: kierunek jazdy · AKCJA: bonus / turbo', players: '1–4 graczy + boty',
     features: ['Nocne wyścigi', 'Podzielony ekran', 'Drift i turbo'], renderTag: '3D',
     english: english({
@@ -59,7 +59,7 @@ export const GAMES: GameInfo[] = [
   {
     id: 'orbit', number: '03', title: 'Orbitalna Fala', eyebrow: 'KOSMICZNA BITWA', genre: 'Bitwa 3D',
     description: 'Wasza eskadra. Bezkresny kosmos. Wybierz statek i przedrzyj się przez pole asteroid, by wspólnie stawić czoła wrogiej flocie.',
-    teaser: 'Bitwa 3D • Rakiety • Eskadra', cover: 'images/orbital-wave.webp', accent: '#ff9a52', accentSoft: '#8a421c',
+    teaser: 'Bitwa 3D • Rakiety • Eskadra', cover: 'images/orbital-wave.webp', accent: '#baa6fa', accentSoft: '#4a3d78',
     controls: 'Joystick: lot · OGIEŃ: działa · pełne wychylenie: dopalacz', players: '1–4 graczy (eskadra)',
     features: ['Bitwa 3D', 'Rakiety z namierzaniem', 'Sojusznicze boty'], renderTag: '3D',
     english: english({
@@ -85,7 +85,7 @@ export const GAMES: GameInfo[] = [
   {
     id: 'league', number: '05', title: 'Turbo League', eyebrow: 'MECZ NA STADIONIE', genre: 'Piłka samochodowa',
     description: 'Wskocz za kierownicę i wbij piłkę do bramki. Pełna fizyka 3D, boost z żółtych pól, odbicia od band i powtórki goli — mecze od 1v1 do 2v2, zawsze z podziałem na drużyny.',
-    teaser: 'Samochody • Boost • Bramki', cover: 'images/turbo-league.webp', accent: '#ff9a52', accentSoft: '#8a421c',
+    teaser: 'Samochody • Boost • Bramki', cover: 'images/turbo-league.webp', accent: '#4fd2ff', accentSoft: '#1d5a72',
     controls: 'Joystick: kierunek jazdy · AKCJA: boost (przytrzymaj)', players: '1–4 graczy + boty',
     features: ['Fizyka 3D', 'Powtórki goli', 'Mecze do 2v2'], renderTag: '3D',
     english: english({
@@ -98,7 +98,7 @@ export const GAMES: GameInfo[] = [
   {
     id: 'pizza', number: '06', title: 'WEBZA', eyebrow: 'NOCNA DOSTAWA', genre: 'Dostawa pizzy 3D',
     description: 'Noc, dachy i pizza, która nie może ostygnąć. Huśtaj się na sieci między budynkami i trafiaj w światło zamówień — im wyżej i bardziej widowiskowo, tym więcej punktów.',
-    teaser: 'Dachy • Sieć • Pizza', cover: 'images/webza.webp', accent: '#ff9a52', accentSoft: '#8a421c',
+    teaser: 'Dachy • Sieć • Pizza', cover: 'images/webza.webp', accent: '#c9f25e', accentSoft: '#586b23',
     controls: 'Joystick: bieg · AKCJA: sieć (przytrzymaj) · pizza leci sama w klienta', players: '1–4 graczy (współpraca lub rywalizacja)',
     features: ['Huśtanie na sieci', 'Zamówienia z dachów', 'Współpraca i rywalizacja'], renderTag: '3D',
     english: english({
@@ -109,10 +109,10 @@ export const GAMES: GameInfo[] = [
     }),
   },
   {
-    id: 'blockcraft', number: '07', title: 'BlockCraft', eyebrow: 'ZAPOWIEDŹ', genre: 'Sandbox / budowanie', wip: true,
-    description: 'Przygotowujemy sandbox z budowaniem z bloków: swobodną eksplorację, zbieranie surowców i wspólne tworzenie własnego świata. To zapowiedź — gra nie jest jeszcze dostępna.',
-    teaser: 'Blokowy świat • Budowanie • Co-op', cover: 'images/blockcraft-cover.webp', accent: '#7cd67f', accentSoft: '#285d38',
-    controls: 'Sterowanie i zasady gry są jeszcze w przygotowaniu', players: 'Szczegóły wkrótce',
+    id: 'blockcraft', number: '07', title: 'BlockCraft', eyebrow: 'OTWARTY ŚWIAT', genre: 'Sandbox / budowanie',
+    description: 'Nieskończony voxelowy świat z biomami, wioskami, redstoneem i Netherem: kop, buduj, handluj i gotuj w samotnej zmianie czasowej. Silnik BlockCraft 2.29 z repo `mconline` — świat zostaje na urządzeniu.',
+    teaser: 'Blokowy świat • Budowanie • Redstone', cover: 'images/blockcraft-cover.webp', accent: '#7cd67f', accentSoft: '#285d38',
+    controls: 'WASD: ruch · mysz: rozglądanie i kopanie · AKCJA (pad): stawiaj blok · E: ekwipunek', players: '1 gracz · świat zostaje na urządzeniu',
     features: ['Sandbox z bloków', 'Własne budowle', 'Zapowiedź'], renderTag: '3D LITE',
     english: english({
       title: 'BlockCraft', eyebrow: 'COMING SOON', genre: 'Sandbox / building',

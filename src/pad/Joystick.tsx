@@ -1,5 +1,5 @@
 import { usesStableStick } from '../console/DeviceProfile';
-import { useCallback, useEffect, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent, type ReactNode } from 'react';
 import type { PadSteer } from '../net/protocol';
 import { unlockHaptics } from './haptics';
 import { useConsolePreferences } from '../console/preferences';
@@ -270,7 +270,14 @@ export function Joystick({
       data-joystick={side}
       data-active={active}
       className={`fixed bottom-0 top-0 select-none ${side === 'right' ? 'right-0' : 'left-0'}`}
-      style={{ width: `${zoneWidthPct}%`, touchAction: 'none', zIndex, opacity: disabled ? 0.4 : 1 }}
+      style={{
+        // iOS w poziomie (`viewport-fit=cover`): wycięcie jest z boku, więc strefa
+        // dotyku zaczyna się dopiero za bezpiecznym marginesem. Strefa jest mierzona
+        // w JS, więc domowa pozycja gałki sama liczy się z węższym obszarem.
+        [side === 'right' ? 'right' : 'left']: `env(safe-area-inset-${side}, 0px)`,
+        width: `calc(${zoneWidthPct}% - env(safe-area-inset-${side}, 0px))`,
+        touchAction: 'none', zIndex, opacity: disabled ? 0.4 : 1,
+      } as CSSProperties}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

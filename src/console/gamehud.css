@@ -1,0 +1,236 @@
+/* --------------------------------------------------------------------------
+   Wspólna oprawa rundy — jeden język wizualny dla wszystkich gier.
+
+   Dlaczego ten plik istnieje: każda gra miała własny HUD. Arcade dostawał
+   grafitowe paski z Tailwinda (`bg-[#0b0e12]`, `text-slate-400`), a Stalowy
+   Front ekran z `zinc-900`, bursztynem i fontem z czołgów — po wejściu w rundę
+   JoyPad znikał i zostawała „inna aplikacja”. Tutaj jest jedna oprawa: te same
+   powierzchnie co biblioteka i okienka systemowe, ta sama typografia i ta sama
+   paleta, a tożsamość gry niesie wyłącznie akcent (`--game-accent`).
+
+   Podział odpowiedzialności:
+   - `liquid.css` — powierzchnie (szkło, krawędzie, cienie, stany hover),
+   - ten plik — układ, typografia i kolory tekstu z palety `--os-*`,
+   - `RoundChrome.tsx` — jedyne komponenty, z których składają się HUD-y gier.
+   Plik jest ładowany PRZED `liquid.css`, więc szkło ma zawsze ostatnie słowo.
+   -------------------------------------------------------------------------- */
+
+.arcade-page { color: var(--os-text); font-family: var(--font-joy); }
+.arcade-page ::selection { background: var(--game-accent, var(--os-accent)); color: var(--os-on-accent); }
+
+/* --- Pasek górny: tytuł, stan rundy, zegar, ikony systemowe ---------------- */
+.arcade-hudbar { gap: clamp(8px, 1vw, 18px); }
+.arcade-hudgroup { display: flex; align-items: center; gap: clamp(8px, .8vw, 16px); min-width: 0; }
+.arcade-title {
+  font-family: var(--font-joy-heading);
+  font-size: clamp(14px, 1.15vw, 21px);
+  line-height: 1.1;
+  letter-spacing: -.01em;
+  color: var(--game-accent, var(--os-accent));
+}
+.arcade-chip {
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  border: 1px solid var(--lg-edge-soft); border-radius: 999px;
+  background-color: var(--lg-fill);
+  padding: 5px 11px;
+  font: 700 10px/1.35 var(--font-joy);
+  letter-spacing: .13em; text-transform: uppercase;
+  color: var(--os-secondary);
+}
+.arcade-chip.is-accent { color: var(--game-accent, var(--os-accent)); border-color: color-mix(in srgb, var(--game-accent, var(--os-accent)) 40%, transparent); }
+.arcade-chip.is-danger { color: var(--os-danger); border-color: color-mix(in srgb, var(--os-danger) 42%, transparent); }
+.arcade-chip.is-success { color: var(--os-success); border-color: color-mix(in srgb, var(--os-success) 42%, transparent); }
+.arcade-chip.is-quiet { color: var(--os-muted); }
+.arcade-timer {
+  display: inline-flex; align-items: center; gap: 8px;
+  border: 1px solid var(--lg-edge-soft); border-radius: 999px;
+  background-color: var(--lg-base-strong);
+  padding: 6px 14px;
+  font: 800 clamp(15px, 1.3vw, 22px)/1 var(--font-mono);
+  font-variant-numeric: tabular-nums; letter-spacing: .03em;
+  color: var(--game-accent, var(--os-accent));
+}
+@keyframes arcade-urgent {
+  0%, 100% { box-shadow: 0 0 0 transparent; }
+  50% { box-shadow: 0 0 20px color-mix(in srgb, var(--os-danger) 55%, transparent); }
+}
+.arcade-timer.is-urgent {
+  color: var(--os-danger);
+  border-color: color-mix(in srgb, var(--os-danger) 48%, transparent);
+  animation: arcade-urgent 1s ease-in-out infinite;
+}
+.arcade-actions { display: flex; align-items: center; gap: 6px; }
+.arcade-icon { position: relative; color: var(--os-secondary); }
+.arcade-icon.is-accent { color: var(--game-accent, var(--os-accent)); }
+.arcade-icon.is-danger { color: var(--os-danger); }
+.arcade-icon.is-active { color: var(--os-on-accent); background-color: var(--game-accent, var(--os-accent)); border-color: transparent; }
+.arcade-badge {
+  position: absolute; top: -4px; right: -4px; min-width: 16px; padding: 0 4px;
+  border-radius: 999px; background: var(--os-success); color: var(--os-bg);
+  font: 800 9px/16px var(--font-joy); text-align: center;
+}
+
+/* --- Arena: notatki, odliczanie, „START” ---------------------------------- */
+.arcade-arena { position: relative; min-height: 0; flex: 1 1 auto; }
+.arcade-objective {
+  position: absolute; left: clamp(12px, 2vw, 28px); top: clamp(12px, 2dvh, 26px); z-index: 10;
+  max-width: min(46ch, 62vw); padding: 9px 16px;
+  font: 700 clamp(11px, .95vw, 14px)/1.35 var(--font-joy);
+  letter-spacing: .02em; color: var(--game-accent, var(--os-accent));
+}
+.arcade-powerup {
+  position: absolute; right: clamp(12px, 2vw, 28px); top: clamp(12px, 2dvh, 26px); z-index: 10;
+  width: min(215px, 52vw); padding: 10px 14px;
+  border: 1px solid var(--lg-edge-soft); border-radius: 18px;
+  background-color: var(--lg-base-strong);
+  backdrop-filter: var(--lg-glass-hud); -webkit-backdrop-filter: var(--lg-glass-hud);
+}
+.arcade-powerup-kicker { display: flex; align-items: center; gap: 6px; font: 800 9px/1 var(--font-joy); letter-spacing: .18em; text-transform: uppercase; color: var(--os-muted); }
+.arcade-powerup-name { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; font: 800 14px/1.2 var(--font-joy-heading); }
+.arcade-powerup-count { border-radius: 999px; padding: 2px 7px; font: 800 11px/1.3 var(--font-mono); color: var(--os-bg); }
+.arcade-powerup-hint { margin-top: 5px; font: 500 10px/1.4 var(--font-joy); color: var(--os-secondary); }
+.arcade-count {
+  position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 6px;
+  background: color-mix(in srgb, var(--os-bg) 46%, transparent);
+  pointer-events: none;
+}
+.arcade-count-kicker { font: 700 11px/1 var(--font-joy); letter-spacing: .3em; text-transform: uppercase; color: var(--os-secondary); }
+.arcade-count-value {
+  font: 900 clamp(76px, 12vw, 168px)/.9 var(--font-joy-heading);
+  color: var(--game-accent, var(--os-accent));
+  text-shadow: 0 0 70px color-mix(in srgb, var(--game-accent, var(--os-accent)) 60%, transparent);
+}
+.arcade-startflash { position: absolute; inset: 0; z-index: 10; display: grid; place-items: center; pointer-events: none; }
+.arcade-startflash span {
+  font: 900 clamp(58px, 9vw, 140px)/1 var(--font-joy-heading); letter-spacing: .04em;
+  color: var(--game-accent, var(--os-accent));
+  text-shadow: 0 0 90px color-mix(in srgb, var(--game-accent, var(--os-accent)) 70%, transparent);
+}
+.arcade-loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--os-secondary); font: 600 13px/1.4 var(--font-joy); pointer-events: none; }
+
+/* --- Dolny pokład: karty graczy ------------------------------------------- */
+.arcade-huddeck { flex-wrap: nowrap; min-height: 76px; }
+.arcade-hudcard { min-width: 148px; flex: 1 1 0; padding: 10px 14px; }
+.arcade-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.arcade-card-name { display: flex; align-items: center; gap: 6px; min-width: 0; font: 700 12px/1.3 var(--font-joy); letter-spacing: .01em; }
+.arcade-card-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arcade-card-bot { font: 800 8px/1 var(--font-joy); letter-spacing: .18em; color: var(--os-muted); }
+.arcade-card-score { font: 800 16px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
+.arcade-card-detail { margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 11px/1.35 var(--font-joy); color: var(--os-secondary); }
+.arcade-meter { margin-top: 7px; height: 4px; overflow: hidden; border-radius: 999px; background-color: var(--lg-field); }
+.arcade-meter i { display: block; height: 100%; border-radius: 999px; transition: width 180ms linear; }
+.arcade-card-strip { height: 3px; width: 100%; border-radius: 999px 999px 0 0; }
+.arcade-card-meta { display: flex; align-items: center; gap: 8px; font: 700 11px/1 var(--font-mono); color: var(--os-secondary); }
+.arcade-card-meta small { font: 600 9px/1 var(--font-joy); letter-spacing: .16em; text-transform: uppercase; color: var(--os-muted); }
+.arcade-card.is-down { opacity: .62; }
+.arcade-card.is-down .arcade-card-name { color: var(--os-muted); }
+.arcade-card-body { padding: 10px 12px; }
+.arcade-card-name svg { flex-shrink: 0; opacity: .8; }
+.arcade-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; font: 600 10px/1.3 var(--font-mono); color: var(--os-muted); }
+.arcade-card-footer .arcade-buffs { display: flex; gap: 6px; }
+.arcade-card-footer .arcade-buffs span { display: inline-flex; color: var(--game-accent, var(--os-accent)); }
+.arcade-pips { display: flex; gap: 3px; margin-top: 7px; }
+.arcade-pips i { flex: 1 1 0; height: 3px; border-radius: 999px; background-color: var(--lg-field); }
+
+/* --- Kolumny boczne (Stalowy Front) i panele informacyjne ------------------ */
+.arcade-side {
+  display: none; flex-direction: column; gap: 10px; overflow-y: auto;
+  width: clamp(190px, 15vw, 236px); flex-shrink: 0; padding: 10px;
+  border-inline: 1px solid var(--lg-edge-soft);
+  background-color: var(--lg-base);
+  backdrop-filter: var(--lg-glass-soft); -webkit-backdrop-filter: var(--lg-glass-soft);
+  scrollbar-width: thin; scrollbar-color: var(--os-border-hard, var(--os-edge)) transparent;
+}
+.arcade-side.is-left { border-right: 1px solid var(--lg-edge-soft); }
+.arcade-side.is-right { border-left: 1px solid var(--lg-edge-soft); }
+.arcade-info { margin-top: auto; padding: 12px 14px; border: 1px solid var(--lg-edge-soft); border-radius: 16px; background-color: var(--lg-fill); }
+.arcade-info-title { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; font: 800 9px/1 var(--font-joy); letter-spacing: .2em; text-transform: uppercase; color: var(--game-accent, var(--os-accent)); }
+.arcade-info-body { font: 500 10.5px/1.65 var(--font-joy); color: var(--os-secondary); }
+.arcade-info-body b { color: var(--os-text); font-weight: 700; }
+.arcade-info-row { display: flex; align-items: center; gap: 7px; }
+.arcade-info-mark { font: 800 12px/1 var(--font-mono); color: var(--os-success); }
+
+/* --- Nakładki w rundzie (pady, sterowanie) -------------------------------- */
+.arcade-overlay {
+  position: absolute; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center;
+  overflow: auto; padding: clamp(12px, 3vw, 32px);
+  background-color: var(--lg-scrim);
+  backdrop-filter: var(--lg-glass); -webkit-backdrop-filter: var(--lg-glass);
+}
+.arcade-overlay-card { width: 100%; max-width: 46rem; }
+.arcade-overlay-card.is-wide { max-width: 60rem; }
+.arcade-help { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+.arcade-help > .is-span { grid-column: 1 / -1; }
+.arcade-info.is-accent { border-color: color-mix(in srgb, var(--game-accent, var(--os-accent)) 38%, transparent); }
+.arcade-info.is-accent .arcade-info-body { color: var(--os-text); }
+.arcade-help-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font: 500 11.5px/1.5 var(--font-joy); color: var(--os-secondary); }
+.arcade-help-row .arcade-info-row { gap: 5px; }
+@media (min-width: 640px) { .arcade-help { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* --- Feed zdarzeń (fragi) i pasek klawiszy -------------------------------- */
+.arcade-feed { position: absolute; right: clamp(12px, 2vw, 26px); top: clamp(12px, 2dvh, 26px); z-index: 10; display: flex; flex-direction: column; gap: 6px; width: min(268px, 62vw); pointer-events: none; }
+.arcade-feed-row {
+  display: flex; align-items: center; gap: 7px; padding: 7px 12px;
+  border: 1px solid var(--lg-edge-soft); border-radius: 999px;
+  background-color: var(--lg-base-strong);
+  backdrop-filter: var(--lg-glass-hud); -webkit-backdrop-filter: var(--lg-glass-hud);
+  font: 700 11px/1.2 var(--font-joy); color: var(--os-text);
+}
+.arcade-feed-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arcade-feed-row .is-victim { color: var(--os-muted); }
+.arcade-keys {
+  display: none; align-items: center; justify-content: center; gap: clamp(10px, 1.4vw, 22px);
+  padding: 8px clamp(12px, 2vw, 24px) max(8px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--lg-edge-soft);
+  background-color: var(--lg-base-strong);
+  backdrop-filter: var(--lg-glass-hud); -webkit-backdrop-filter: var(--lg-glass-hud);
+  font: 600 11px/1 var(--font-joy); color: var(--os-secondary);
+}
+.arcade-keys-hint { color: var(--os-muted); }
+.arcade-keygroup { display: flex; align-items: center; gap: 7px; }
+.arcade-keydot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.arcade-phone { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 3px 8px; background-color: color-mix(in srgb, var(--os-success) 16%, transparent); color: var(--os-success); font: 700 10px/1 var(--font-joy); }
+.keycap {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 26px;
+  border: 1px solid var(--lg-edge); border-radius: 8px; padding: 4px 7px;
+  background-image: linear-gradient(180deg, var(--os-raised), var(--os-surface));
+  box-shadow: 0 2px 0 #00000099, inset 0 1px 0 #ffffff26;
+  font: 700 11px/1 var(--font-mono); color: var(--os-text);
+}
+.keycap.is-fire { border-color: color-mix(in srgb, var(--game-accent, var(--os-accent)) 55%, transparent); color: var(--game-accent, var(--os-accent)); }
+
+/* --- Kompaktowy HUD na telefonie (zamiast kolumn bocznych) ----------------- */
+.arcade-mini { position: absolute; left: clamp(8px, 2vw, 16px); top: clamp(8px, 2dvh, 16px); z-index: 10; display: flex; gap: 6px; }
+.arcade-mini-card { width: 68px; overflow: hidden; padding: 5px 6px; border: 1px solid var(--lg-edge-soft); border-radius: 12px; background-color: var(--lg-base-strong); backdrop-filter: var(--lg-glass-hud); -webkit-backdrop-filter: var(--lg-glass-hud); }
+.arcade-mini-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 9px/1.2 var(--font-joy); }
+.arcade-mini-score { font: 700 9px/1.4 var(--font-mono); color: var(--os-secondary); }
+
+/* --- Telewizor i telefon -------------------------------------------------- */
+@media (min-width: 768px) {
+  .arcade-side { display: flex; }
+  .arcade-mini { display: none; }
+}
+@media (min-width: 1024px) { .arcade-keys { display: flex; } }
+@media (max-width: 640px) {
+  .arcade-chip.is-optional { display: none; }
+  .arcade-hudcard { min-width: 132px; padding: 8px 11px; }
+}
+html[data-profile="tv"] .arcade-title { font-size: clamp(20px, 1.5vw, 30px); }
+html[data-profile="tv"] .arcade-chip { font-size: 12px; padding: 7px 14px; }
+html[data-profile="tv"] .arcade-timer { font-size: clamp(20px, 1.6vw, 30px); padding: 8px 18px; }
+html[data-profile="tv"] .arcade-hudcard { padding: 14px 18px; }
+html[data-profile="tv"] .arcade-card-name { font-size: 14px; }
+html[data-profile="tv"] .arcade-card-score { font-size: 20px; }
+html[data-profile="tv"] .arcade-card-detail { font-size: 12.5px; }
+html[data-profile="tv"] .arcade-icon { min-width: 46px; width: 46px; height: 46px; }
+html[data-profile="tablet"] .arcade-icon { min-width: 46px; width: 46px; height: 46px; }
+
+/* Ograniczony ruch: HUD nie może migać ani „oddychać” — zostaje sama czytelność. */
+@media (prefers-reduced-motion: reduce) {
+  .arcade-count-value, .arcade-startflash span, .arcade-feed-row, .arcade-hudcard, .arcade-timer.is-urgent { animation: none; transition: none; }
+}
+html[data-motion="reduced"] .arcade-count-value,
+html[data-motion="reduced"] .arcade-startflash span,
+html[data-motion="reduced"] .arcade-feed-row,
+html[data-motion="reduced"] .arcade-timer.is-urgent { animation: none; }

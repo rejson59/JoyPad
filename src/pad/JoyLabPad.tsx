@@ -4,6 +4,7 @@ import { Gamepad2, Sparkles, Zap } from 'lucide-react';
 import { padClient } from '../net/padClient';
 import { getHapticStatus, haptic, unlockHaptics } from './haptics';
 import { t as translateMessage, useT } from '../platform/i18n';
+import { hudFont } from '../arcade/hudKit';
 
 /**
  * LAB KONTROLERA na telefonie — „Astro's Playroom” dla JoyPad.
@@ -199,7 +200,7 @@ function SensorLabPad({ nick, color, onDone }: { nick: string; color: string; on
         [translateMessage(language, 'joylab.meter.gyro'), clamp1(rot.current.beta), '#a78bfa'],
       ];
       const mw = W - 24, my0 = boxH + 10;
-      ctx.font = '700 9px ui-monospace, monospace';
+      ctx.font = hudFont(700, 9, 'mono');
       meters.forEach(([label, v, col], i) => {
         const y = my0 + i * 18;
         ctx.fillStyle = 'rgba(255,255,255,0.55)';

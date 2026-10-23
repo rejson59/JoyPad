@@ -189,7 +189,7 @@ console.log('DEVICE PROFILE SELFTEST: OK (selection, defaults, readiness names)'
 
 assert.equal(sanitizePreferences({}).previews, true);
 assert.equal(sanitizePreferences({ previews: false }).previews, false);
-const { statSync } = await import('node:fs');
+const { existsSync, statSync } = await import('node:fs');
 /** Full HD masters are the point of the previews: never let them shrink back to a small upscale. */
 const previewWidth = 1920, previewHeight = 1080;
 const mp4Size = (buffer: Buffer) => {
@@ -197,12 +197,39 @@ const mp4Size = (buffer: Buffer) => {
   const entry = stsd < 0 ? -1 : buffer.indexOf('avc1', stsd + 16);
   return entry < 0 ? null : [buffer.readUInt16BE(entry + 28), buffer.readUInt16BE(entry + 30)];
 };
+// Lista tytułów z podglądem należy do `GamePreview`, a brama porównuje ją z katalogiem:
+// każdy grywalny tytuł ma mieć swój urywek botów, żaden `wip` nie ma prawa go żądać.
+const previewSource = readFileSync('src/console/GamePreview.tsx', 'utf8');
+const previewGames = [...(previewSource.match(/export const PREVIEW_GAMES = \[([^\]]*)\]/)?.[1] ?? '')
+  .matchAll(/'([a-z-]+)'/g)].map(match => match[1]);
+const { GAMES: previewCatalog } = await import('../src/arcade/catalog');
+for (const game of previewCatalog.filter(entry => !entry.wip)) {
+  assert.ok(previewGames.includes(game.id), `${game.id}: grywalny tytuł bez nagrania botów w PREVIEW_GAMES`);
+}
+assert.ok(previewGames.every(id => previewCatalog.some(game => game.id === id)),
+  'PREVIEW_GAMES wskazuje tytuł spoza katalogu');
+/**
+ * Nagrania powstają w CI (`.github/workflows/previews.yml`) — tam jest Chromium i ffmpeg.
+ * Workflow dowiezł komplet (runda 21: `snake`, `league`, `pizza` obok `tanks`, `race`,
+ * `orbit`), więc lista oczekujących jest PUSTA i od tej pory brama pilnuje całości:
+ * każdy grywalny tytuł z `PREVIEW_GAMES` musi mieć parę mp4+webm w natywnym Full HD.
+ * Wpis trafia tu tylko wtedy, gdy nagranie celowo czeka na CI w tej samej rundzie.
+ */
+// BlockCraft dostał swój klip z CI (workflow `previews.yml`, commit `a411b7d`),
+// więc lista oczekujących znów jest pusta i brama żąda kompletu siedmiu tytułów.
+const awaitingRecording = new Set<string>([]);
 let previewBytes = 0;
-for (const id of ['tanks', 'race', 'orbit']) {
-  for (const extension of ['mp4', 'webm'] as const) {
+const pending: string[] = [];
+for (const id of previewGames) {
+  const present = (['mp4', 'webm'] as const).filter(extension => existsSync(`public/previews/${id}.${extension}`));
+  // Para formatów jest całością: przeglądarka wybiera jedną, więc połowa pary to błąd nagrania.
+  assert.ok(present.length === 0 || present.length === 2,
+    `public/previews/${id}: mp4 i webm muszą istnieć razem (jest: ${present.join(', ') || 'nic'})`);
+  if (present.length === 0) { pending.push(id); continue; }
+  for (const extension of present) {
     const path = `public/previews/${id}.${extension}`;
     const bytes = statSync(path).size;
-    assert.ok(bytes > 100_000 && bytes < 8_000_000, `${path}: bounded, nonempty Full HD clip`);
+    assert.ok(bytes > 100_000 && bytes < 12_000_000, `${path}: bounded, nonempty Full HD clip`);
     previewBytes += bytes;
     const buffer = readFileSync(path);
     if (extension === 'mp4') {
@@ -213,8 +240,14 @@ for (const id of ['tanks', 'race', 'orbit']) {
     }
   }
 }
-assert.ok(previewBytes < 30_000_000, 'compressed library preview asset budget');
-console.log('PREVIEW SELFTEST: OK (preferences, three Full HD recordings, MP4/WebM headers and asset budget)');
+// Trzy pierwsze mastery są w repo od dawna: ich zniknięcie to regresja, nie „jeszcze nie nagrane”.
+for (const id of ['tanks', 'race', 'orbit']) {
+  assert.ok(!pending.includes(id), `public/previews/${id}: nagranie zniknęło z repo`);
+}
+const unexpected = pending.filter(id => !awaitingRecording.has(id));
+assert.deepEqual(unexpected, [], `public/previews: brak nagrań i brak ich na liście oczekujących`);
+assert.ok(previewBytes < 60_000_000, 'compressed library preview asset budget');
+console.log(`PREVIEW SELFTEST: OK (preferences, ${previewGames.length - pending.length}/${previewGames.length} Full HD recordings${pending.length ? `, w CI nagrywają się: ${pending.join(', ')}` : ''}, MP4/WebM headers and asset budget)`);
 
 /* --- Warstwa „liquid glass": martwe selektory, tokeny powierzchni i czytelność ---
    Testy trzymają trzy rzeczy, na których polega nowy styl: każdy selektor dociera do
@@ -382,7 +415,15 @@ assert.ok(sheetSource.includes('data-ui-scope') && sheetSource.includes('<UiHint
 assert.ok(!/<select|HTMLSelectElement.*selectedIndex/.test(sheetSource), 'Sheet nie cyklinuje już opcji — zrobiłby to dwa razy');
 assert.ok(/setAttr\(collar, 'd'/.test(plamekSource) && /setAttr\(blobEl, 'd'/.test(plamekSource)
   && plamekSource.includes('cancelAnimationFrame') && plamekSource.includes('if (el && el.getAttribute(name) !== value)'),
-  'Plamek animuje ŚCIEŻKĘ (`d` pisany tylko gdy się zmieniła) i zasypia, gdy nic się nie dzieje');
+  'Plamek animuje ŚCIEŻKĘ (`d` pisany tylko gdy się zmieniła) i nie pisze atrybutów bez zmiany');
+// Runda 22: „zwykła otoczka z buźką” brała się z ZASTYGANIA — w bezruchu pętla gasła,
+// kropla znikała (`wrap === 1` → `null`) i zostawał równy, nieruchomy pierścień. Teraz
+// farba oddycha, ale tanio: kadencja ~12 fps (~5 fps po zaśnięciu), a nie pełna pętla.
+assert.ok(plamekSource.includes('PLAMEK_IDLE.frameMs') && plamekSource.includes('PLAMEK_IDLE.napFrameMs'),
+  'oddech farby ma własną kadencję (i wolniejszą po zaśnięciu) — liczby z modelu, nie z kopii w widoku');
+assert.ok(/const breathing = !reduced && phase === 'hug'/.test(plamekSource)
+  && /\|\| breathing\) raf = requestAnimationFrame\(frame\)/.test(plamekSource),
+  'farba oddycha tylko w spoczynku i tylko przy pełnym ruchu, ale pętla wtedy nie gaśnie');
 assert.ok(!/className="plamek-(halo|shell|body|front|neck|drip|anchor)"/.test(plamekSource),
   'farba nie wraca do zestawu `<div>`-ów: dopóki główka jest osobnym elementem, będzie STAĆ na pierścieniu, a nie wnikać w niego');
 assert.ok(!/mask-image: conic-gradient/.test(liquidCss),
@@ -580,7 +621,66 @@ for (const [name, src] of [['Plamek', plamekSource], ['uiControl', engineSource]
 assert.ok(appSource.includes(".boot-splash'") && appSource.includes('joypad-dialog-command'), 'ekran startowy nadal pomija się pilotem z telefonu');
 assert.ok(padSource.includes('NavStick') && padSource.includes("command=\"x\""), 'telefon ma gałkę nawigacji i skróty X/Y');
 assert.ok(padSource.includes("send('fullscreen')"), 'admin rozkłada pełny ekran telewizora z telefonu');
-for (const selector of ['.plamek', '.plamek-liquid', '.plamek-glow', '.plamek-collar', '.plamek-src', '.plamek-blob', '.plamek-sheen', '.plamek-echo', '.plamek-face', '.plamek-mini', '.ui-hints', '.ui-hint kbd']) {
+// iPhone w poziomie ma wycięcie z boku: bez marginesów skrajne przyciski są pod nim.
+const indexHtml = readFileSync('index.html', 'utf8');
+assert.ok(indexHtml.includes('viewport-fit=cover'),
+  'iOS oddaje `env(safe-area-inset-*)` tylko z `viewport-fit=cover` — bez tego każdy margines wynosi zero');
+assert.ok(/safe-area-inset-left/.test(padSource) && /safe-area-inset-right/.test(padSource),
+  'poziomy pad odsuwa pasek i kolumnę przycisków od wycięcia z obu stron');
+// Znak startowy w HTML-u: widać system zanim React przejmie `#root`, ale nie wolno mu
+// dotykać układu kontenera (biblioteka jest na całą wysokość) ani czytnika ekranu.
+assert.ok(indexHtml.includes('class="boot-mark"') && /boot-mark[^>]*aria-hidden="true"/.test(indexHtml),
+  'zastępczy znak startowy jest w HTML-u i ukryty przed czytnikiem ekranu');
+assert.ok(/\.boot-mark\s*\{[^}]*position:\s*fixed/.test(indexHtml),
+  'znak startowy jest `position: fixed` — `display: grid` na `#root` złamałby układ biblioteki');
+// Notatki wersji: test przeglądarkowy czyta treść z `WhatsNew.tsx`, więc kolejny bump
+// listy nie wywraca CI (literal 'Moments Gallery' przeżył dwie wersje i padł na 1.9.0).
+const momentsSpec = readFileSync('tests/moments.spec.ts', 'utf8');
+assert.ok(momentsSpec.includes("import { UPDATES } from '../src/platform/whatsNewNotes'")
+  && momentsSpec.includes('UPDATES[0].title.pl') && !momentsSpec.includes("toContainText('Moments Gallery')"),
+  'test notatek bierze treść z komponentu — nie przypina zdania z jednej wersji');
+const whatsNewSource = readFileSync('src/platform/WhatsNew.tsx', 'utf8');
+const whatsNewNotes = readFileSync('src/platform/whatsNewNotes.ts', 'utf8');
+assert.ok(whatsNewNotes.includes('export const UPDATES = [') && whatsNewSource.includes("from './whatsNewNotes'")
+  && !whatsNewSource.includes('export const UPDATES'),
+  'treść notatek żyje w module danych, a widok ją importuje — jedno źródło prawdy dla testu i UI');
+assert.ok(!/from '(\.\.\/)?console\/Sheet'|from 'react'/.test(whatsNewNotes),
+  'moduł notatek nie ciągnie Reacta ani `Sheet` — test importuje go w Node bez drzewa komponentów');
+// Runda 23: „stara wersja 3D" (widok z góry) brała się z dwóch przecieków kontekstów:
+// sonda WebGL2 przypinała kontekst do płótna gospodarza (fallback 2D dostawał potem
+// `getContext('2d') === null`), a sceny 3D nie oddawały swoich — limit przeglądarki (~16)
+// po kilku rundach odpowiadał „nie" i gra zrzucała się cicho. Teraz wszystko jawne.
+for (const [name, path] of [['Neonowy Pęd', 'src/arcade/neon/NeonRushScene.ts'], ['STAR CLASH', 'src/arcade/starclash/Game.ts'],
+  ['Turbo League', 'src/arcade/league-next/LeagueGame.ts'], ['WEBZA', 'src/arcade/pizza/Game.ts']] as const) {
+  const engine = readFileSync(path, 'utf8');
+  assert.ok(engine.includes('renderer.dispose()') && engine.includes('forceContextLoss()'),
+    `silnik 3D ${name} oddaje kontekst WebGL w dispose() — bez tego limit kontekstów zjada kolejne rundy`);
+}
+const arcadeViewSource = readFileSync('src/arcade/ArcadeGameView.tsx', 'utf8');
+assert.ok(arcadeViewSource.includes("document.createElement('canvas')") && arcadeViewSource.includes('WEBGL_lose_context'),
+  'sonda WebGL2 pyta jednorazowe płótno i od razu oddaje kontekst');
+assert.ok(!arcadeViewSource.includes('canvas.getContext('),
+  'płótno gospodarza nie jest sondowane — fallback 2D musi dostać czysty kontekst');
+assert.ok(arcadeViewSource.includes('joypadRenderReport') && arcadeViewSource.includes('TRYB 2D')
+  && arcadeViewSource.includes('readRenderReport()'),
+  'zrzut do 2D nigdy nie jest cichy: chip z powodem w oprawie rundy i `window.joypadRenderReport`');
+const smokeSource = readFileSync('scripts/preview-smoke.mjs', 'utf8');
+assert.ok(/!window\.document\.querySelector\('\.boot-mark'\)/.test(smokeSource),
+  'harness preview czeka na drzewo Reacta, a nie na zastępczy znak startowy');
+// Telefon nie jest pomniejszonym komputerem: profil handheld ma własny układ
+// (zawijany pasek, jedna kolumna, cele ≥44 px, bez skrótów klawiszowych), bo bez
+// tego przyciski wypadały poza ramkę fit-frame i znikały razem z nadmiarem.
+const viewportCss = readFileSync('src/console/viewport.css', 'utf8');
+const handheldRules = (viewportCss.match(/html\[data-profile="handheld"\][^{]*\{/g) || []).length;
+assert.ok(handheldRules >= 24, `profil handheld ma własny układ biblioteki i menu (reguł: ${handheldRules})`);
+assert.ok(viewportCss.includes('html[data-profile="handheld"] .ui-hints { display:none; }'),
+  'telefon nie pokazuje skrótów klawiszowych — nie ma klawiatury');
+assert.ok((viewportCss.match(/html\[data-profile="handheld"\][^{]*\{[^}]*min-height:(4[4-9]|[5-9]\d)px/g) || []).length >= 4,
+  'cele dotyku na telefonie mają co najmniej 44 px');
+const stickSource = readFileSync('src/pad/Joystick.tsx', 'utf8');
+assert.ok(/safe-area-inset-\$\{side\}/.test(stickSource) && /calc\(\$\{zoneWidthPct\}% - env/.test(stickSource),
+  'strefa gałki zaczyna się za wycięciem i jest o nie węższa — gałka liczy pozycję z pomiaru strefy');
+for (const selector of ['.plamek', '.plamek-liquid', '.plamek-glow', '.plamek-collar', '.plamek-src', '.plamek-blob', '.plamek-sheen', '.plamek-gleam', '.plamek-echo', '.plamek-face', '.plamek-mini', '.ui-hints', '.ui-hint kbd']) {
   assert.ok(liquidCss.includes(selector) && markup.includes(selector.slice(1).split(' ')[0]), `${selector} istnieje w warstwie szkła i w markupie`);
 }
 for (const list of liquidCss.matchAll(/@media\(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n\}/g)) {
@@ -632,10 +732,10 @@ assert.ok(PLAMEK_TRAIL.every((echo, index) => echo.tau > 0
 assert.ok(ORBIT_ECHOS.every((lag, index) => index === 0 || lag > ORBIT_ECHOS[index - 1]), 'ogon ładowarki cofa się w czasie coraz bardziej');
 
 // Runda 3–7: fizyka cieczy w modelu (bez DOM-u — te same liczki widzi przeglądarka).
-const { bandEdges, blobPath, crownFor, dripTail, flightCurve, gazeBiasFor, gooStrength, lobeAtFor, paintWeightFor,
-  gripOffset, landFor, neckPath, perchFor, PERCH_SINK, pourEdges, ribbonPath, rimPerimeter,
-  rimPoint, smoothLoop, strandFor, teardropPath, wobbleKick, wobbleValue, wrapCurve, wrapFor,
-  burstCount: burst, splatsFor } = plamekModel;
+const { bandEdges, blobPath, crownFor, dripTail, flightCurve, gazeBiasFor, gooStrength, idleDrip, idlePool,
+  idleWave, lobeAtFor, paintWeightFor, gripOffset, landFor, neckPath, perchFor, PERCH_SINK, PLAMEK_IDLE,
+  pourEdges, ribbonPath, rimPerimeter, rimPoint, smoothLoop, strandFor, teardropPath, wobbleKick,
+  wobbleValue, wrapCurve, wrapFor, burstCount: burst, splatsFor } = plamekModel;
 // Główka ZAWSZE nad przyciskiem (awaryjnie pod, gdy nie ma światła) i sklejona z obwódką.
 {
   const wide = { left: 200, top: 300, width: 180, height: 44, radius: 16 };
@@ -736,6 +836,59 @@ const { bandEdges, blobPath, crownFor, dripTail, flightCurve, gazeBiasFor, gooSt
   assert.ok(gooStrength(1, 'pour') > .9 && gooStrength(.4, 'fly') > .9, 'w rytuale ciecz jest pełna niezależnie od napięcia');
   assert.ok(gooStrength(1, 'pour', false, 1) < .35 && gooStrength(1, 'pour', false, 1) >= .3, 'na końcu rozlewu zostaje tylko miękkość, nie rozmycie: farba stygnie w kształt przycisku');
   assert.ok(PLAMEK.gooPad >= 24, 'region maski ma zapas na rozmycie, bryzgi i smugę');
+}
+
+// Runda 22: farba nie wysycha w spoczynku. Mokrości podnieść nie wolno (goo .3 i próg
+// alfa 18/-6 są przypięte powyżej — przy większym rozmyciu znikała cienka górna krawędź
+// taśmy), więc ciecz wraca ruchem: oddech kałuży, wisząca kropla i odblask na rancie.
+{
+  // Fala jest ciągła i domknięta: skok na końcu okresu czytałby się jak tik, nie oddech.
+  assert.ok(Math.abs(idleWave(0, 1000)) < 1e-9, 'oddech zaczyna się od zera');
+  assert.equal(idleWave(500, 1000), 1, 'w połowie okresu jest szczyt');
+  assert.ok(Math.abs(idleWave(1000, 1000) - idleWave(0, 1000)) < 1e-9, 'koniec okresu wraca do początku');
+  assert.ok(Math.abs(idleWave(999, 1000) - idleWave(1001, 1000)) < .02, 'i nie ma w tym miejscu skoku');
+  for (const now of [0, 321, 4200, 9000, 12_345, 60_000]) {
+    const pool = idlePool(now), drip = idleDrip(now);
+    assert.ok(pool >= 0 && pool <= 1, `kałuża w zakresie 0..1 (${now})`);
+    assert.ok(drip >= PLAMEK_IDLE.dripFloor - 1e-9 && drip <= 1, `kropla nigdy nie znika do zera (${now})`);
+    assert.equal(pool, idlePool(now), 'oddech jest deterministyczny: ta sama chwila, ta sama fala');
+    assert.equal(drip, idleDrip(now), 'kropla też — w widoku obowiązuje zakaz `Math.random`');
+  }
+  // Sen: kulka śpi, farba ledwo drży — płycej i wolniej, ale nie zastyga.
+  assert.ok(idlePool(PLAMEK_IDLE.poolMs / 2, true) <= PLAMEK_IDLE.napFactor + 1e-9,
+    'we śnie oddech kałuży jest płytszy');
+  assert.ok(idleDrip(1234, true) < PLAMEK_IDLE.dripFloor, 'we śnie kropla jest wciągnięta');
+  assert.ok(PLAMEK_IDLE.napFrameMs > PLAMEK_IDLE.frameMs, 'śpiąca maskotka rysuje rzadziej');
+  assert.ok(PLAMEK_IDLE.frameMs >= 50 && PLAMEK_IDLE.frameMs <= 140,
+    'kadencja oddechu to ~7-20 fps: poniżej widać klatkowanie, powyżej to znowu pełna pętla');
+  // Pęcznienie taśmy musi zostawać w klamrze „napis wolny”: oddech pogrubia farbę, ale
+  // nie ma prawa wejść w treść przycisku — zwłaszcza na chipie, gdzie taśma jest najcieńsza.
+  for (const box of [{ left: 0, top: 0, width: 96, height: 26, radius: 13 },
+    { left: 0, top: 0, width: 300, height: 54, radius: 14 },
+    { left: 0, top: 0, width: 320, height: 168, radius: 24 }]) {
+    const swelled = paintWeightFor(box) * (1 + PLAMEK_IDLE.poolSwell) * (1 + PLAMEK_IDLE.poolAmp);
+    assert.ok(swelled < box.height * .18,
+      `spuchnięta farba wciąż mieści się w ~1/6 krótszego boku (${swelled.toFixed(2)} < ${(box.height * .18).toFixed(2)})`);
+  }
+  assert.ok(/spread = lerp\(blobR \* \.62, weight, settle\) \* \(1 \+ PLAMEK_IDLE\.poolSwell \* pool\)/.test(plamekSource),
+    'pęcznienie wchodzi w `spread` z liczbami z modelu — widok nie ma własnych kopii');
+  // Kropla w spoczynku: jest, ale krótsza i węższa od tej z rozlewu — wyrasta z kałuży,
+  // nie konkuruje z nią.
+  const wet = { left: 100, top: 200, width: 220, height: 64, radius: 18 };
+  const pour = dripTail(wet, .72, 9)!;
+  const rest = dripTail(wet, 1, 9, 0, 1)!;
+  assert.ok(pour && rest, 'kropla istnieje i w rozlewie, i w spoczynku');
+  assert.ok(rest.height < pour.height, `spoczynkowa kropla jest krótsza (${rest.height.toFixed(1)} < ${pour.height.toFixed(1)})`);
+  assert.ok(rest.width <= pour.width, 'i nie szersza — inaczej to kałuża, nie kropla');
+  assert.ok(rest.height <= wet.height * .34 + 1e-9, 'nie wisi niżej niż trzecia część przycisku');
+  assert.ok(rest.alpha < pour.alpha && rest.alpha > .3, 'jest delikatniejsza, ale widoczna');
+  assert.equal(dripTail(wet, 1, 9), null, 'bez oddechu (`rest` = 0) spoczynek zostaje suchy — stara ścieżka bez zmian');
+  // Odblask jedzie po rancie farby, nie po środku przycisku.
+  assert.ok(/rimPoint\(host, u\)/.test(plamekSource) && plamekSource.includes('className="plamek-gleam"')
+    && liquidCss.includes('.plamek-gleam'), 'odblask na rancie jest w modelu, w znacznikach i w CSS');
+  assert.ok(/u = \.885 \+ \.035 \* pool/.test(plamekSource), 'odblask siedzi na górnym lewym rąbku i przesuwa się z oddechem');
+  assert.ok(!/\.plamek-gleam[^{}]*\{[^}]*animation:/.test(liquidCss),
+    'odblask nie ma własnej animacji w CSS — żyje z klatki farby, więc nie rozjeżdża się z oddechem');
 }
 // Grubość farby idzie za rozmiarem elementu. Stała była jednocześnie za gruba na chipie
 // (zamieniała się w ramkę) i za cienka na kaflu (znikała z kanapy) — dwa zarzuty, jedna przyczyna.
@@ -1025,8 +1178,14 @@ console.log('UI CONTROL SELFTEST: OK (martwa strefa, rytm powtórzeń, wybór ce
     assert.ok(/<FitScreen/.test(source) && /minScale=\{\.\d+\}/.test(source),
       `${screen} korzysta z dopasowania do okna (menu gry i wyniki miały ten sam problem)`);
   }
-  assert.ok(/\.os-game-rail\s*\{[^}]*grid-template-columns:\s*repeat\(4/.test(viewportCss),
-    'cztery dostępne gry stoją w jednym rzędzie — siatka 3-kolumnowa łamała je na dwa i to pchało stronę w dół');
+  // Stała siatka czterech kolumn była poprawna przy czterech grach; gdy doszły dwie,
+  // drugi rząd miał sieroty (4 + 2) i biblioteka przestała być jednym ekranem.
+  assert.ok(/\.os-game-rail\s*\{[^}]*grid-template-columns:\s*repeat\(var\(--tile-columns/.test(viewportCss),
+    'półka bierze liczbę kolumn ze zmiennej — stała siatka zostawia rząd-sierotę, gdy dochodzi gra');
+  assert.ok(/\.os-game-rail\[data-rows="1"\] \.os-game-tile/.test(viewportCss),
+    'pojedynczy rząd dostaje wyższą okładkę, inaczej telewizor ma pustą półkę pod spodem');
+  assert.ok(/--tile-columns/.test(librarySource) && /data-rows=\{/.test(librarySource) && /railColumns\(/.test(librarySource),
+    'biblioteka liczy kolumny z liczby gier i szerokości okna (`libraryRail.ts`)');
   for (const profile of ['tv', 'desktop', 'tablet']) {
     assert.ok(viewportCss.includes(`html[data-profile="${profile}"]`), `arkusz ma reguły dla profilu ${profile}`);
   }
@@ -1038,4 +1197,113 @@ console.log('UI CONTROL SELFTEST: OK (martwa strefa, rytm powtórzeń, wybór ce
     'podpowiedzi zależne od urządzenia są w markupie (widoczność rozstrzyga profil)');
 }
 console.log('VIEWPORT SELFTEST: OK (profile TV/komputer/tablet/telefon, układ jednego ekranu i podpowiedzi urządzeń)');
+
+
+/* --- PÓŁKA Z GRAMI (runda 20): kolumny bez rzędów-sierot ---------------------
+   Biblioteka ma sześć grywalnych pozycji, a siatka CSS miała cztery kolumny — drugi
+   rząd wyglądał jak urwany. Liczenie kolumn musi być czystą funkcją, żeby dało się
+   przejrzeć całą tabelę przypadków (od 2 do 24 gier, na czterech szerokościach). */
+{
+  const { RAIL_BREAKPOINTS, RAIL_MAX_COLUMNS, maxRailColumns, railColumns, railRows } = await import('../src/console/libraryRail');
+  assert.equal(railColumns(6, 6), 6, 'telewizor: sześć gier stoi w jednym rzędzie');
+  assert.equal(railColumns(6, 4), 3, 'komputer: sześć gier to dwa równe rzędy po 3, nie 4 + 2');
+  assert.equal(railColumns(4, 4), 4, 'cztery gry mieszczą się w jednym rzędzie');
+  assert.equal(railColumns(8, 4), 4, 'osiem gier dzieli się bez reszty');
+  assert.equal(railColumns(5, 4), 3, 'pięć gier: 3 + 2 zamiast 4 + 1');
+  assert.equal(railColumns(7, 6), 4, 'siedem gier: 4 + 3 — najmniej rzędów i najpełniejszy ostatni');
+  assert.equal(railColumns(1, 6), 1, 'jedna gra to jeden kafelek');
+  assert.equal(railColumns(0, 6), 1, 'pusta półka nie dzieli przez zero');
+  assert.equal(railRows(6, 3), 2, 'liczba rzędów idzie z liczby kolumn (CSS czyta ją z `data-rows`)');
+  assert.equal(railRows(6, 0), 0, 'zero kolumn nie wywraca rzędów');
+  for (let count = 2; count <= 24; count++) {
+    for (const max of [2, 3, 4, RAIL_MAX_COLUMNS]) {
+      const columns = railColumns(count, max);
+      assert.ok(Number.isInteger(columns) && columns >= 1 && columns <= Math.min(max, RAIL_MAX_COLUMNS),
+        `${count} gier przy ${max} kolumnach: liczba kolumn w zakresie`);
+      if (count <= max) {
+        assert.equal(columns, count, `${count} gier mieści się w jednym rzędzie`);
+        continue;
+      }
+      const rows = railRows(count, columns);
+      const options: Array<{ columns: number; rows: number; fill: number }> = [];
+      for (let c = max; c >= 2; c--) options.push({ columns: c, rows: Math.ceil(count / c), fill: (count % c || c) / c });
+      const exact = options.find(option => count % option.columns === 0);
+      if (exact) {
+        assert.equal(columns, exact.columns, `${count} gier przy ${max} kolumnach dzieli się bez reszty na ${exact.columns}`);
+        continue;
+      }
+      const minRows = Math.min(...options.map(option => option.rows));
+      assert.equal(rows, minRows, `${count} gier przy ${max} kolumnach: najmniej rzędów`);
+      const bestFill = Math.max(...options.filter(option => option.rows === minRows).map(option => option.fill));
+      assert.ok(Math.abs(((count % columns) || columns) / columns - bestFill) < 1e-9,
+        `${count} gier przy ${max} kolumnach: najpełniejszy ostatni rząd`);
+    }
+  }
+  assert.equal(maxRailColumns(1920), 6, 'telewizor ma najszerszą półkę');
+  assert.equal(maxRailColumns(2560), 6, 'duży monitor nie dostaje więcej niż sufit kolumn');
+  assert.equal(maxRailColumns(1440), 4, 'komputer: cztery kolumny');
+  assert.equal(maxRailColumns(1024), 3, 'tablet: trzy kolumny');
+  assert.equal(maxRailColumns(390), 2, 'telefon: dwie kolumny (w pionie i tak rządzi przewijacz)');
+  assert.equal(maxRailColumns(Number.NaN), RAIL_BREAKPOINTS[RAIL_BREAKPOINTS.length - 1].maxColumns,
+    'brak pomiaru okna nie wywraca półki');
+  assert.ok(RAIL_BREAKPOINTS.every((step, i) => i === 0 || step.minWidth < RAIL_BREAKPOINTS[i - 1].minWidth),
+    'progi są malejące — pierwszy pasujący wygrywa');
+}
+console.log('RAIL SELFTEST: OK (kolumny półki bez rzędów-sierot: 2–24 gry na czterech szerokościach ekranu)');
+/* --- Runda 24: karta pilota i osiągnięcia ----------------------------------
+   Rdzeń ćwiczymy w Node na wstrzykniętym storage (mapa zamiast localStorage):
+   trofea wpadają raz, liczniki karty rosną, a postęp pasków jest prawdziwy.
+   Kontrakty źródła pilnują, żeby okno, kafelki i runda nie rozeszły się z rdzeniem. */
+const achievements = await import('../src/platform/achievements');
+{
+  const mem = new Map<string, string>();
+  const store = { getItem: (key: string) => mem.get(key) ?? null, setItem: (key: string, value: string) => { mem.set(key, value); } };
+  const signal = (over: Partial<achievements.RoundSignal> = {}): achievements.RoundSignal => ({
+    game: 'snake', winnerSlot: 0, humans: 1, fx: { 0: {} },
+    scores: [{ slot: 0, isBot: false, score: 12 }, { slot: 1, isBot: true, score: 7 }],
+    ...over,
+  });
+  let fresh = achievements.recordRound(signal(), store);
+  assert.ok(fresh.includes('first-win') && fresh.includes('untouchable'), 'pierwsze zwycięstwo i nienaruszalność wpadają od razu');
+  assert.ok(!fresh.includes('photo-finish'), 'przewaga pięciu punktów to nie fotofinisz');
+  fresh = achievements.recordRound(signal(), store);
+  assert.ok(!fresh.includes('first-win'), 'trofeum nie wpada drugi raz');
+  achievements.recordRound(signal({ game: 'race', scores: [{ slot: 0, isBot: false, score: 4 }, { slot: 1, isBot: true, score: 3 }] }), store);
+  assert.ok(achievements.readState(store).unlocked['photo-finish'], 'fotofinisz: przewaga dokładnie jednego punktu');
+  for (let i = 0; i < 8; i++) achievements.recordRound(signal({ game: (['race', 'orbit', 'tanks'] as const)[i % 3] }), store);
+  const midState = achievements.readState(store);
+  assert.ok(midState.unlocked.marathon && midState.unlocked['hat-trick'] && midState.unlocked['triple-crown'], 'maraton, hat-trick i korona rosną z liczników karty');
+  assert.deepEqual(achievements.progressFor('marathon', midState), { value: 10, goal: 10 }, 'pasek maratonu domyka się na celu');
+  assert.ok(!midState.unlocked['full-couch'], 'bez czterech ludzi nie ma pełnej kanapy');
+  achievements.recordRound(signal({
+    humans: 4,
+    scores: [{ slot: 0, isBot: false, score: 9 }, { slot: 1, isBot: false, score: 8 }, { slot: 2, isBot: true, score: 2 }, { slot: 3, isBot: true, score: 1 }],
+  }), store);
+  assert.ok(achievements.readState(store).unlocked['full-couch'], 'pełna kanapa po rundzie we czwórkę');
+  assert.ok(achievements.noteLanguageSwitched(store)[0] === 'polyglot' && achievements.noteLanguageSwitched(store).length === 0, 'poliglota wpada raz, nie co przełączenie');
+  assert.ok(!achievements.recordRound(signal({ fx: { 0: { dead: 1 } } }), store).includes('comeback'), 'eliminacja bez zwycięstwa to nie powrót');
+  achievements.recordRound(signal({ fx: { 0: { pickup: 25, shield: 1 } } }), store);
+  achievements.recordRound(signal({ fx: { 0: { dead: 1, respawn: 1 } } }), store);
+  assert.ok(achievements.readState(store).unlocked.comeback, 'powrót: zwycięstwo po własnym respawnie');
+  assert.equal(achievements.countUnlockedByGame(achievements.readState(store)).snake, 4, 'cztery trofea węża wiszą na jego kafelku');
+}
+assert.ok(achievements.ACHIEVEMENTS.length === 12, 'dwanaście osiągnięć w definicjach');
+for (const def of achievements.ACHIEVEMENTS) {
+  assert.ok(def.pl.name && def.pl.desc && def.en.name && def.en.desc, `osiągnięcie ${def.id} mówi po polsku i po angielsku`);
+}
+const librarySource = readFileSync('src/console/ConsoleLibrary.tsx', 'utf8');
+assert.ok(librarySource.includes("'trophies'") && librarySource.includes('AchievementsSheet') && librarySource.includes('os-tile-trophy'),
+  'biblioteka ma okno trofeów i trofea na kafelkach');
+const arcadeViewSource2 = readFileSync('src/arcade/ArcadeGameView.tsx', 'utf8');
+assert.ok(arcadeViewSource2.includes('recordRound(') && arcadeViewSource2.includes('announceUnlocked('),
+  'runda zapisuje się w karcie pilota i ogłasza trofea toastem');
+const i18nSource = readFileSync('src/platform/i18n.ts', 'utf8');
+assert.ok(i18nSource.includes("'library.achievements'") && i18nSource.includes("'achievements.title'"),
+  'osiągnięcia mają klucze PL i EN w słowniku');
+// Numer wydania żyje w dwóch miejscach i muszą się zgadzać: `package.json` oraz
+// `whatsNewState.ts` (jedno źródło prawdy dla „Co nowego?”) — bez literału wersji,
+// żeby bramka nie wymagała ręcznej edycji przy każdym bumpie.
+const pkgVersion = JSON.parse(readFileSync('package.json', 'utf8')).version as string;
+assert.ok(readFileSync('src/platform/whatsNewState.ts', 'utf8').includes(`'${pkgVersion}'`), `wydanie ${pkgVersion} w jednym źródle prawdy`);
+console.log('PILOT CARD SELFTEST: OK (12 trofeów z sygnałów rundy, karta pilota, postęp pasków, okno i kafelki biblioteki)');
 

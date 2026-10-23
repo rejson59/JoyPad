@@ -1,6 +1,7 @@
 import type { FloatText, GameMode, KillEvent, Light, MapId, Particle, PlayerConfig, PowerUpState, ShellState, TankState, WallState } from './types';
 import { MAPS, WORLD_H, WORLD_W } from './maps';
 import { gameAudio } from './audio';
+import { hudFont } from '../arcade/hudKit';
 import type { PadFx, PadInput } from '../net/protocol';
 import type { Language } from '../platform/i18n';
 import { uiOwnsKeyboard } from '../lib/inputOwnership';
@@ -1300,7 +1301,7 @@ export class TankGame {
       const a = clamp(t.life / t.maxLife, 0, 1);
       ctx.save();
       ctx.globalAlpha = a;
-      ctx.font = `700 ${t.size}px "Chakra Petch", sans-serif`;
+      ctx.font = hudFont(700, t.size);
       ctx.textAlign = 'center';
       ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.8)';
       ctx.strokeText(t.text, t.x, t.y);
@@ -1314,7 +1315,7 @@ export class TankGame {
       const n = Math.ceil(this.countdown - 0.6);
       ctx.save();
       ctx.textAlign = 'center';
-      ctx.font = '400 150px "Black Ops One", sans-serif';
+      ctx.font = hudFont(900, 150, 'heading');
       ctx.lineWidth = 10; ctx.strokeStyle = 'rgba(0,0,0,0.85)';
       const label = n > 3 ? (this.language === 'en' ? 'READY?' : 'GOTOWI?') : n <= 0 ? 'START' : String(n);
       ctx.strokeText(label, WORLD_W / 2, WORLD_H / 2 + 40);
@@ -1880,7 +1881,7 @@ export class TankGame {
       ctx.fill();
     }
     // name
-    ctx.font = '700 13px "Chakra Petch", sans-serif';
+    ctx.font = hudFont(700, 13);
     ctx.textAlign = 'center';
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.75)';
     const label = `${t.cfg.name}${t.cfg.isBot ? ' • BOT' : ''}`;
@@ -1893,7 +1894,7 @@ export class TankGame {
       ctx.fillStyle = 'rgba(0,0,0,0.7)';
       ctx.beginPath(); ctx.arc(px, 30, 9, 0, 7); ctx.fill();
       ctx.fillStyle = color;
-      ctx.font = '800 10px "JetBrains Mono", monospace';
+      ctx.font = hudFont(800, 10, 'mono');
       ctx.fillText(txt, px, 33.5);
       px += 20;
     };
@@ -1964,7 +1965,7 @@ export class TankGame {
     ctx.fill(); ctx.stroke();
     // icon
     ctx.fillStyle = '#86efac';
-    ctx.font = '800 17px "JetBrains Mono", monospace';
+    ctx.font = hudFont(800, 17, 'mono');
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const icons: Record<string, string> = { repair: '+', shield: '◈', rapid: '≋', big: '●', speed: '»' };
     ctx.fillText(icons[p.kind], 0, 1);

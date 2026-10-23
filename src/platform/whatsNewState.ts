@@ -5,8 +5,8 @@
  * napis końcowy filmu, `package.json`) i rozjeżdżał się przy każdej aktualizacji —
  * teraz wszystkie czytają tę stałą, więc bump wersji to jedna linia.
  */
-export const WHATS_NEW_VERSION = '1.8.0';
-/** Krótka forma do grafik i napisów (`1.8`). */
+export const WHATS_NEW_VERSION = '2.1.0';
+/** Krótka forma do grafik i napisów (`1.9`). */
 export const APP_VERSION_SHORT = WHATS_NEW_VERSION.split('.').slice(0, 2).join('.');
 const STORAGE_KEY = 'joypad.whats-new-version';
 
